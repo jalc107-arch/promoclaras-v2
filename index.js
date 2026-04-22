@@ -300,5 +300,5 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(\`Servidor corriendo en puerto \${PORT}\`);
+  console.log(`Servidor corriendo en puerto ${PORT}`);
 });
