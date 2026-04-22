@@ -258,6 +258,52 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
       return res.status(404).send("Organizador no encontrado");
     }
 
+    let verificationHtml = "";
+
+if (organizer.verification_status === "verified") {
+  verificationHtml = `
+    <div style="margin-top:18px;padding:14px;background:#ecfdf5;border-radius:12px;color:#166534;font-weight:700;">
+      ✔ Verificación aprobada
+    </div>
+  `;
+} else if (organizer.verification_status === "rejected") {
+  verificationHtml = `
+    <div style="margin-top:18px;">
+      <a
+        href="/organizers/${organizer.id}/verificacion"
+        style="display:inline-block;padding:12px 18px;background:#dc2626;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
+      >
+        Corregir verificación
+      </a>
+    </div>
+  `;
+} else if (
+  organizer.document_number ||
+  organizer.id_front_url ||
+  organizer.id_back_url ||
+  organizer.selfie_id_url ||
+  organizer.payout_method ||
+  organizer.account_number ||
+  organizer.terms_accepted
+) {
+  verificationHtml = `
+    <div style="margin-top:18px;padding:14px;background:#fff7ed;border-radius:12px;color:#9a3412;font-weight:700;">
+      ⏳ Verificación enviada. Pendiente de revisión.
+    </div>
+  `;
+} else {
+  verificationHtml = `
+    <div style="margin-top:18px;">
+      <a
+        href="/organizers/${organizer.id}/verificacion"
+        style="display:inline-block;padding:12px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
+      >
+        Completar verificación
+      </a>
+    </div>
+  `;
+}
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
       <!DOCTYPE html>
@@ -291,14 +337,7 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
   Módulo 4 activo: ya puedes completar la verificación del organizador.
 </div>
 
-<div style="margin-top:18px;">
-  <a
-    href="/organizers/${organizer.id}/verificacion"
-    style="display:inline-block;padding:12px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
-  >
-    Completar verificación
-  </a>
-</div>
+${verificationHtml}
         </div>
       </body>
       </html>
