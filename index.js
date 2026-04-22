@@ -288,8 +288,17 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
           </div>
 
           <div style="margin-top:24px;padding:16px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-            Módulo 3 funcionando: registro, login y panel básico del organizador.
-          </div>
+  Módulo 4 activo: ya puedes completar la verificación del organizador.
+</div>
+
+<div style="margin-top:18px;">
+  <a
+    href="/organizers/${organizer.id}/verificacion"
+    style="display:inline-block;padding:12px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
+  >
+    Completar verificación
+  </a>
+</div>
         </div>
       </body>
       </html>
