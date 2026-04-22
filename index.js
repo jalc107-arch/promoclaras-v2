@@ -299,6 +299,179 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
   }
 });
 
+app.get("/organizers/:organizerId/verificacion", async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (error || !organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Verificación del organizador</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
+        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Verificación del organizador</h1>
+
+          <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+            Completa esta información para continuar con el proceso de validación.
+          </div>
+
+          <form method="POST" action="/organizers/${organizer.id}/verificacion">
+            <div style="margin-bottom:12px;">
+              <label>Número de cédula</label><br/>
+              <input type="text" name="document_number" required value="${organizer.document_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Link foto cédula frente</label><br/>
+              <input type="text" name="id_front_url" value="${organizer.id_front_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Link foto cédula reverso</label><br/>
+              <input type="text" name="id_back_url" value="${organizer.id_back_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Link selfie con cédula</label><br/>
+              <input type="text" name="selfie_id_url" value="${organizer.selfie_id_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Método de pago</label><br/>
+              <select name="payout_method" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+                <option value="">Seleccionar</option>
+                <option value="bank_transfer" ${organizer.payout_method === "bank_transfer" ? "selected" : ""}>Transferencia bancaria</option>
+                <option value="nequi" ${organizer.payout_method === "nequi" ? "selected" : ""}>Nequi</option>
+                <option value="daviplata" ${organizer.payout_method === "daviplata" ? "selected" : ""}>Daviplata</option>
+              </select>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Banco</label><br/>
+              <input type="text" name="bank_name" value="${organizer.bank_name || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Tipo de cuenta</label><br/>
+              <input type="text" name="account_type" value="${organizer.account_type || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Número de cuenta</label><br/>
+              <input type="text" name="account_number" value="${organizer.account_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Titular de la cuenta</label><br/>
+              <input type="text" name="account_holder" value="${organizer.account_holder || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:16px;">
+              <label>Link soporte del premio</label><br/>
+              <input type="text" name="prize_proof_url" value="${organizer.prize_proof_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:18px;">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" name="terms_accepted" value="true" ${organizer.terms_accepted ? "checked" : ""}>
+                Acepto términos y confirmo que la información es real
+              </label>
+            </div>
+
+            <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;">
+              Guardar verificación
+            </button>
+          </form>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/verificacion", async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const documentNumber = String(req.body.document_number || "").trim();
+    const idFrontUrl = String(req.body.id_front_url || "").trim();
+    const idBackUrl = String(req.body.id_back_url || "").trim();
+    const selfieIdUrl = String(req.body.selfie_id_url || "").trim();
+    const payoutMethod = String(req.body.payout_method || "").trim();
+    const bankName = String(req.body.bank_name || "").trim();
+    const accountType = String(req.body.account_type || "").trim();
+    const accountNumber = String(req.body.account_number || "").trim();
+    const accountHolder = String(req.body.account_holder || "").trim();
+    const prizeProofUrl = String(req.body.prize_proof_url || "").trim();
+    const termsAccepted = req.body.terms_accepted === "true";
+
+    if (!documentNumber) {
+      return res.status(400).send("Falta el número de cédula");
+    }
+
+    if (!termsAccepted) {
+      return res.status(400).send("Debes aceptar los términos");
+    }
+
+    const { error } = await supabase
+      .from("organizers")
+      .update({
+        document_number: documentNumber,
+        id_front_url: idFrontUrl || null,
+        id_back_url: idBackUrl || null,
+        selfie_id_url: selfieIdUrl || null,
+        payout_method: payoutMethod || null,
+        bank_name: bankName || null,
+        account_type: accountType || null,
+        account_number: accountNumber || null,
+        account_holder: accountHolder || null,
+        prize_proof_url: prizeProofUrl || null,
+        terms_accepted: termsAccepted,
+        verification_status: "pending"
+      })
+      .eq("id", organizerId);
+
+    if (error) throw error;
+
+    return res.redirect(`/organizers/${organizerId}/panel`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
