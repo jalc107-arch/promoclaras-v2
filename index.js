@@ -791,66 +791,99 @@ app.get("/campanas/:slug", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>${campaign.title}</title>
-      </head>
-      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-          <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#e5e7eb;font-weight:700;margin-bottom:12px;">
-            Estado: ${campaign.status}
-          </div>
-
-          <h1 style="margin-top:0;">${campaign.title}</h1>
-
-          <div style="margin-bottom:10px;font-size:18px;">
-            <b>Premio:</b> ${campaign.prize}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Descripción:</b> ${campaign.description || "-"}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Proveedor de sorteo:</b> ${campaign.draw_provider}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Modalidad:</b> ${campaign.draw_mode}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Precio por cupón:</b> $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Máximo de cupones:</b> ${campaign.max_tickets}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Vendidos:</b> ${campaign.sold_tickets}
-          </div>
-
-          <div style="margin-bottom:10px;">
-            <b>Disponibles:</b> ${campaign.available_tickets}
-          </div>
-
-          <div style="margin-bottom:18px;">
-            <b>Fecha del sorteo:</b> ${campaign.draw_date}
-          </div>
-
-          <div style="padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-            Vista pública básica lista. En el siguiente módulo conectaremos la compra.
-          </div>
+res.setHeader("Content-Type", "text/html; charset=utf-8");
+res.send(`
+  <!DOCTYPE html>
+  <html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${campaign.title}</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
+    <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:20px;">
+      <div style="background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+        <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#e5e7eb;font-weight:700;margin-bottom:12px;">
+          Estado: ${campaign.status}
         </div>
-      </body>
-      </html>
-    `);
+
+        <h1 style="margin-top:0;">${campaign.title}</h1>
+
+        <div style="margin-bottom:10px;font-size:18px;">
+          <b>Premio:</b> ${campaign.prize}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Descripción:</b> ${campaign.description || "-"}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Proveedor de sorteo:</b> ${campaign.draw_provider}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Modalidad:</b> ${campaign.draw_mode}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Precio por cupón:</b> $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Máximo de cupones:</b> ${campaign.max_tickets}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Vendidos:</b> ${campaign.sold_tickets}
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <b>Disponibles:</b> ${campaign.available_tickets}
+        </div>
+
+        <div style="margin-bottom:18px;">
+          <b>Fecha del sorteo:</b> ${campaign.draw_date}
+        </div>
+      </div>
+
+      <div style="background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+        <h2 style="margin-top:0;">Participar en esta campaña</h2>
+
+        <form method="POST" action="/campanas/${campaign.slug}/comprar">
+          <div style="margin-bottom:12px;">
+            <label>Nombre completo</label><br/>
+            <input type="text" name="buyer_name" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label>Teléfono</label><br/>
+            <input type="text" name="buyer_phone" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label>Correo electrónico</label><br/>
+            <input type="email" name="buyer_email" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label>Cantidad de cupones</label><br/>
+            <input type="number" name="qty" min="1" max="20" value="1" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          </div>
+
+          <button type="submit" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;">
+            Continuar compra
+          </button>
+        </form>
+
+        <div style="margin-top:14px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+          Módulo 6 activo: aquí empezamos el flujo limpio de compra.
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>
+`);
+    
   } catch (error) {
     return res.status(500).send(error.message);
   }
