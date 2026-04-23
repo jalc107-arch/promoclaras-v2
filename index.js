@@ -316,6 +316,25 @@ if (organizer.verification_status === "verified") {
   `;
 }
 
+    const { data: campaigns, error: campaignsError } = await supabase
+  .from("rifas")
+  .select("*")
+  .eq("owner_id", organizer.profile_id)
+  .order("created_at", { ascending: false });
+
+if (campaignsError) throw campaignsError;
+
+const campaignRows = (campaigns || []).map(c => `
+  <tr>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_provider}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_mode}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">${c.status}</td>
+  </tr>
+`).join("");
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
       <!DOCTYPE html>
@@ -361,6 +380,28 @@ ${organizer.verification_status === "verified" ? `
     </a>
   </div>
 ` : ""}
+
+<div style="margin-top:28px;">
+  <h2 style="margin-bottom:12px;">Mis campañas</h2>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:760px;">
+      <thead style="background:#0f172a;color:white;">
+        <tr>
+          <th style="padding:12px;text-align:left;">Título</th>
+          <th style="padding:12px;text-align:left;">Premio</th>
+          <th style="padding:12px;text-align:left;">Proveedor</th>
+          <th style="padding:12px;text-align:left;">Modalidad</th>
+          <th style="padding:12px;text-align:right;">Precio</th>
+          <th style="padding:12px;text-align:center;">Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${campaignRows || `<tr><td colspan="6" style="padding:16px;">Aún no tienes campañas creadas.</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+</div>
 
         </div>
       </body>
