@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import session from "express-session";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 const app = express();
 app.use(express.json());
@@ -40,6 +41,11 @@ function slugify(text) {
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+}
+
+function generateWompiIntegritySignature(reference, amountInCents, currency, integritySecret) {
+  const raw = `${reference}${amountInCents}${currency}${integritySecret}`;
+  return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
 app.get("/", (req, res) => {
