@@ -26,6 +26,9 @@ const PORT = process.env.PORT || 3000;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
+const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
+
 const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
