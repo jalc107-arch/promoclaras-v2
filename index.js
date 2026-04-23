@@ -777,6 +777,89 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
   }
 });
 
+app.get("/campanas/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const { data: campaign, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("slug", slug)
+      .single();
+
+    if (error || !campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${campaign.title}</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
+        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#e5e7eb;font-weight:700;margin-bottom:12px;">
+            Estado: ${campaign.status}
+          </div>
+
+          <h1 style="margin-top:0;">${campaign.title}</h1>
+
+          <div style="margin-bottom:10px;font-size:18px;">
+            <b>Premio:</b> ${campaign.prize}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Descripción:</b> ${campaign.description || "-"}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Proveedor de sorteo:</b> ${campaign.draw_provider}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Modalidad:</b> ${campaign.draw_mode}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Precio por cupón:</b> $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Máximo de cupones:</b> ${campaign.max_tickets}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Vendidos:</b> ${campaign.sold_tickets}
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <b>Disponibles:</b> ${campaign.available_tickets}
+          </div>
+
+          <div style="margin-bottom:18px;">
+            <b>Fecha del sorteo:</b> ${campaign.draw_date}
+          </div>
+
+          <div style="padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+            Vista pública básica lista. En el siguiente módulo conectaremos la compra.
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/r/:slug", async (req, res) => {
+  return res.redirect(`/campanas/${req.params.slug}`);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
