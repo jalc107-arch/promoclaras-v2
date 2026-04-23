@@ -893,6 +893,162 @@ app.get("/r/:slug", async (req, res) => {
   return res.redirect(`/campanas/${req.params.slug}`);
 });
 
+app.post("/campanas/:slug/comprar", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const buyerName = String(req.body.buyer_name || "").trim();
+    const buyerPhone = String(req.body.buyer_phone || "").trim();
+    const buyerEmail = String(req.body.buyer_email || "").trim();
+    const qty = Number(req.body.qty || 0);
+
+    if (!buyerName || !buyerPhone) {
+      return res.status(400).send("Faltan nombre o teléfono");
+    }
+
+    if (!Number.isInteger(qty) || qty <= 0 || qty > 20) {
+      return res.status(400).send("Cantidad inválida");
+    }
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("slug", slug)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    let buyer = null;
+
+    const { data: existingBuyer, error: existingBuyerError } = await supabase
+      .from("buyers")
+      .select("*")
+      .eq("phone", buyerPhone)
+      .maybeSingle();
+
+    if (existingBuyerError) throw existingBuyerError;
+
+    if (existingBuyer) {
+      buyer = existingBuyer;
+    } else {
+      const { data: newBuyer, error: newBuyerError } = await supabase
+        .from("buyers")
+        .insert({
+          full_name: buyerName,
+          phone: buyerPhone,
+          email: buyerEmail || null
+        })
+        .select()
+        .single();
+
+      if (newBuyerError) throw newBuyerError;
+      buyer = newBuyer;
+    }
+
+    const subtotal = qty * Number(campaign.price_per_ticket || 0);
+    const totalPaid = subtotal;
+    const commission = 0;
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        rifa_id: campaign.id,
+        buyer_id: buyer.id,
+        qty,
+        subtotal,
+        total_paid: totalPaid,
+        commission,
+        payment_status: "created"
+      })
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    const externalReference = `ord_${Date.now()}_${order.id.slice(0, 8)}`;
+
+    const { error: paymentError } = await supabase
+      .from("payments")
+      .insert({
+        order_id: order.id,
+        provider: "manual",
+        external_reference: externalReference,
+        amount: totalPaid,
+        status: "pending"
+      });
+
+    if (paymentError) throw paymentError;
+
+    return res.redirect(`/orden/${order.id}`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/orden/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        rifas(*),
+        buyers(*)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) {
+      return res.status(404).send("Orden no encontrada");
+    }
+
+    const { data: payment, error: paymentError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (paymentError) throw paymentError;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Orden ${order.id}</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
+        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1 style="margin-top:0;">Resumen de tu orden</h1>
+
+          <div style="margin-bottom:10px;"><b>Campaña:</b> ${order.rifas?.title || "-"}</div>
+          <div style="margin-bottom:10px;"><b>Comprador:</b> ${order.buyers?.full_name || "-"}</div>
+          <div style="margin-bottom:10px;"><b>Teléfono:</b> ${order.buyers?.phone || "-"}</div>
+          <div style="margin-bottom:10px;"><b>Cantidad:</b> ${order.qty}</div>
+          <div style="margin-bottom:10px;"><b>Subtotal:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}</div>
+          <div style="margin-bottom:10px;"><b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}</div>
+          <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
+          <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment?.status || "-"}</div>
+
+          <div style="padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+            Módulo 6 funcionando: comprador, orden y pago inicial creados correctamente.
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
