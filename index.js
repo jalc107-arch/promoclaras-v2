@@ -28,6 +28,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
 const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
+const WOMPI_EVENTS_SECRET = process.env.WOMPI_EVENTS_SECRET;
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -49,6 +50,17 @@ function slugify(text) {
 function generateWompiIntegritySignature(reference, amountInCents, currency, integritySecret) {
   const raw = `${reference}${amountInCents}${currency}${integritySecret}`;
   return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+function safeCompare(a, b) {
+  const valueA = String(a || "");
+  const valueB = String(b || "");
+
+  if (valueA.length !== valueB.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
 }
 
 app.get("/", (req, res) => {
@@ -1087,6 +1099,120 @@ app.get("/orden/:orderId", async (req, res) => {
       </body>
       </html>
     `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/webhooks/wompi", async (req, res) => {
+  try {
+    const payload = req.body || {};
+
+    const event = payload.event;
+    const data = payload.data || {};
+    const transaction = data.transaction || {};
+    const signature = payload.signature || {};
+
+    if (!event || !transaction.id) {
+      return res.status(200).send("Evento ignorado");
+    }
+
+    if (event !== "transaction.updated") {
+      return res.status(200).send("Evento no manejado");
+    }
+
+    const signatureProperties = Array.isArray(signature.properties)
+      ? signature.properties
+      : [];
+
+    const expectedChecksum = signature.checksum || "";
+    const timestamp = signature.timestamp || "";
+
+    if (!WOMPI_EVENTS_SECRET) {
+      return res.status(500).send("Falta WOMPI_EVENTS_SECRET");
+    }
+
+    const valuesToSign = signatureProperties.map((property) => {
+      const path = String(property || "").split(".");
+      let current = payload.data;
+
+      for (const key of path) {
+        if (current && typeof current === "object" && key in current) {
+          current = current[key];
+        } else {
+          current = "";
+          break;
+        }
+      }
+
+      return String(current ?? "");
+    });
+
+    const rawSignature = `${valuesToSign.join("")}${timestamp}${WOMPI_EVENTS_SECRET}`;
+    const calculatedChecksum = crypto
+      .createHash("sha256")
+      .update(rawSignature)
+      .digest("hex");
+
+    if (!safeCompare(calculatedChecksum, expectedChecksum)) {
+      return res.status(401).send("Firma inválida");
+    }
+
+    const reference = transaction.reference || "";
+    const transactionStatus = transaction.status || "";
+    const transactionId = transaction.id || "";
+
+    if (!reference) {
+      return res.status(200).send("Sin referencia");
+    }
+
+    const { data: payment, error: paymentLookupError } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("external_reference", reference)
+      .maybeSingle();
+
+    if (paymentLookupError) throw paymentLookupError;
+
+    if (!payment) {
+      return res.status(200).send("Pago no encontrado");
+    }
+
+    let localPaymentStatus = "pending";
+    let localOrderStatus = "created";
+
+    if (transactionStatus === "APPROVED") {
+      localPaymentStatus = "approved";
+      localOrderStatus = "paid";
+    } else if (transactionStatus === "DECLINED" || transactionStatus === "ERROR" || transactionStatus === "VOIDED") {
+      localPaymentStatus = "failed";
+      localOrderStatus = "failed";
+    } else if (transactionStatus === "PENDING") {
+      localPaymentStatus = "pending";
+      localOrderStatus = "created";
+    }
+
+    const { error: updatePaymentError } = await supabase
+      .from("payments")
+      .update({
+        status: localPaymentStatus,
+        provider: "wompi",
+        provider_transaction_id: transactionId
+      })
+      .eq("id", payment.id);
+
+    if (updatePaymentError) throw updatePaymentError;
+
+    const { error: updateOrderError } = await supabase
+      .from("orders")
+      .update({
+        payment_status: localOrderStatus
+      })
+      .eq("id", payment.order_id);
+
+    if (updateOrderError) throw updateOrderError;
+
+    return res.status(200).send("ok");
   } catch (error) {
     return res.status(500).send(error.message);
   }
