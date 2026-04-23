@@ -532,6 +532,198 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
   }
 });
 
+app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (error || !organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
+    if (organizer.verification_status !== "verified") {
+      return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Nueva campaña</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
+        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Crear nueva campaña</h1>
+
+          <form method="POST" action="/organizers/${organizer.id}/campanas/nueva">
+            <div style="margin-bottom:12px;">
+              <label>Título</label><br/>
+              <input type="text" name="title" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Premio</label><br/>
+              <input type="text" name="prize" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Descripción</label><br/>
+              <textarea name="description" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;min-height:100px;"></textarea>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Proveedor de sorteo</label><br/>
+              <select name="draw_provider" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+                <option value="baloto">Baloto</option>
+                <option value="loteria_meta">Lotería del Meta</option>
+                <option value="loteria_bogota">Lotería de Bogotá</option>
+              </select>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Modalidad</label><br/>
+              <select name="draw_mode" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+                <option value="baloto_2">2 balotas</option>
+                <option value="baloto_3">3 balotas</option>
+                <option value="loteria_2_primeras">2 primeras cifras</option>
+                <option value="loteria_3_primeras">3 primeras cifras</option>
+              </select>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label>Precio por cupón</label><br/>
+              <input type="number" name="price_per_ticket" min="1" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <div style="margin-bottom:16px;">
+              <label>Fecha del sorteo</label><br/>
+              <input type="date" name="draw_date" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+            </div>
+
+            <button type="submit" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;">
+              Guardar campaña
+            </button>
+          </form>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError || !organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
+    if (organizer.verification_status !== "verified") {
+      return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
+    }
+
+    const title = String(req.body.title || "").trim();
+    const prize = String(req.body.prize || "").trim();
+    const description = String(req.body.description || "").trim();
+    const drawProvider = String(req.body.draw_provider || "").trim();
+    const drawMode = String(req.body.draw_mode || "").trim();
+    const pricePerTicket = Number(req.body.price_per_ticket || 0);
+    const drawDate = String(req.body.draw_date || "").trim();
+
+    if (!title || !prize || !drawProvider || !drawMode || !drawDate) {
+      return res.status(400).send("Faltan campos obligatorios");
+    }
+
+    if (!Number.isFinite(pricePerTicket) || pricePerTicket <= 0) {
+      return res.status(400).send("Precio inválido");
+    }
+
+    let maxTickets = 0;
+
+    if (drawMode === "baloto_2") maxTickets = 903;
+    if (drawMode === "baloto_3") maxTickets = 12341;
+    if (drawMode === "loteria_2_primeras") maxTickets = 100;
+    if (drawMode === "loteria_3_primeras") maxTickets = 1000;
+
+    if (maxTickets <= 0) {
+      return res.status(400).send("Modalidad inválida");
+    }
+
+    let slug = slugify(title);
+    if (!slug) {
+      slug = `campana-${Date.now()}`;
+    }
+
+    const { data: existingSlug } = await supabase
+      .from("rifas")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (existingSlug) {
+      slug = `${slug}-${Date.now().toString().slice(-6)}`;
+    }
+
+    const { error: insertError } = await supabase
+      .from("rifas")
+      .insert({
+        owner_id: organizer.profile_id,
+        title,
+        prize,
+        description,
+        draw_provider: drawProvider,
+        draw_mode: drawMode,
+        modality: drawMode,
+        price_per_ticket: pricePerTicket,
+        max_tickets: maxTickets,
+        sold_tickets: 0,
+        available_tickets: maxTickets,
+        draw_date: drawDate,
+        status: "pending",
+        slug
+      });
+
+    if (insertError) throw insertError;
+
+    return res.redirect(`/organizers/${organizerId}/panel`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
