@@ -1021,6 +1021,27 @@ app.get("/orden/:orderId", async (req, res) => {
 
     if (paymentError) throw paymentError;
 
+    if (!payment) {
+      return res.status(404).send("Pago no encontrado");
+    }
+
+    if (!WOMPI_PUBLIC_KEY || !WOMPI_INTEGRITY_SECRET) {
+      return res.status(500).send("Faltan variables de Wompi");
+    }
+
+    const currency = "COP";
+    const amountInCents = Math.round(Number(order.total_paid || 0) * 100).toString();
+    const reference = payment.external_reference;
+    const signature = generateWompiIntegritySignature(
+      reference,
+      amountInCents,
+      currency,
+      WOMPI_INTEGRITY_SECRET
+    );
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const redirectUrl = `${baseUrl}/orden/${order.id}`;
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
       <!DOCTYPE html>
@@ -1031,7 +1052,7 @@ app.get("/orden/:orderId", async (req, res) => {
         <title>Orden ${order.id}</title>
       </head>
       <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-        <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+        <div style="max-width:860px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
           <h1 style="margin-top:0;">Resumen de tu orden</h1>
 
           <div style="margin-bottom:10px;"><b>Campaña:</b> ${order.rifas?.title || "-"}</div>
@@ -1041,11 +1062,24 @@ app.get("/orden/:orderId", async (req, res) => {
           <div style="margin-bottom:10px;"><b>Subtotal:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
-          <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment?.status || "-"}</div>
+          <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment.status || "-"}</div>
 
-          <div style="padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-            Módulo 6 funcionando: comprador, orden y pago inicial creados correctamente.
+          <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+            Ya puedes continuar al pago con Wompi Sandbox.
           </div>
+
+          <form action="https://checkout.wompi.co/p/" method="GET">
+            <input type="hidden" name="public-key" value="${WOMPI_PUBLIC_KEY}">
+            <input type="hidden" name="currency" value="${currency}">
+            <input type="hidden" name="amount-in-cents" value="${amountInCents}">
+            <input type="hidden" name="reference" value="${reference}">
+            <input type="hidden" name="signature:integrity" value="${signature}">
+            <input type="hidden" name="redirect-url" value="${redirectUrl}">
+
+            <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:16px;">
+              Pagar con Wompi
+            </button>
+          </form>
         </div>
       </body>
       </html>
