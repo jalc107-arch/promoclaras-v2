@@ -30,6 +30,18 @@ const supabase = createClient(
   SUPABASE_SERVICE_ROLE_KEY
 );
 
+function slugify(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ñ/g, "n")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 app.get("/", (req, res) => {
   res.send("PROMOCLARAS V2 funcionando");
 });
