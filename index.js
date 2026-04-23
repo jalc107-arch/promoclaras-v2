@@ -350,6 +350,18 @@ if (organizer.verification_status === "verified") {
 </div>
 
 ${verificationHtml}
+
+${organizer.verification_status === "verified" ? `
+  <div style="margin-top:18px;">
+    <a
+      href="/organizers/${organizer.id}/campanas/nueva"
+      style="display:inline-block;padding:12px 18px;background:#16a34a;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
+    >
+      Crear campaña
+    </a>
+  </div>
+` : ""}
+
         </div>
       </body>
       </html>
