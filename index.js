@@ -63,6 +63,120 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
 }
 
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateTicketCode(drawMode) {
+  if (drawMode === "baloto_2") {
+    const numbers = [];
+
+    while (numbers.length < 2) {
+      const n = randomInt(1, 43);
+
+      if (!numbers.includes(n)) {
+        numbers.push(n);
+      }
+    }
+
+    numbers.sort((a, b) => a - b);
+
+    return numbers.map(n => String(n).padStart(2, "0")).join("-");
+  }
+
+  if (drawMode === "baloto_3") {
+    const numbers = [];
+
+    while (numbers.length < 3) {
+      const n = randomInt(1, 43);
+
+      if (!numbers.includes(n)) {
+        numbers.push(n);
+      }
+    }
+
+    numbers.sort((a, b) => a - b);
+
+    return numbers.map(n => String(n).padStart(2, "0")).join("-");
+  }
+
+  if (drawMode === "loteria_2_primeras") {
+    return String(randomInt(0, 99)).padStart(2, "0");
+  }
+
+  if (drawMode === "loteria_3_primeras") {
+    return String(randomInt(0, 999)).padStart(3, "0");
+  }
+
+  return crypto.randomUUID().slice(0, 8);
+}
+
+async function assignTicketsToOrder(orderId) {
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      rifas(*)
+    `)
+    .eq("id", orderId)
+    .single();
+
+  if (orderError || !order) {
+    throw new Error("Orden no encontrada para asignar tickets");
+  }
+
+  const campaign = order.rifas;
+
+  const generatedTickets = [];
+
+  for (let i = 0; i < order.qty; i++) {
+    let created = false;
+    let attempts = 0;
+
+    while (!created && attempts < 100) {
+      attempts++;
+
+      const ticketCode = generateTicketCode(campaign.draw_mode);
+
+      const { data: existingTicket } = await supabase
+        .from("tickets")
+        .select("id")
+        .eq("rifa_id", campaign.id)
+        .eq("ticket_code", ticketCode)
+        .maybeSingle();
+
+      if (existingTicket) {
+        continue;
+      }
+
+      const { data: ticket, error: ticketError } = await supabase
+        .from("tickets")
+        .insert({
+          rifa_id: campaign.id,
+          order_id: order.id,
+          buyer_id: order.buyer_id,
+          ticket_code: ticketCode,
+          status: "active"
+        })
+        .select()
+        .single();
+
+      if (ticketError) {
+        continue;
+      }
+
+      generatedTickets.push(ticket.ticket_code);
+      created = true;
+    }
+
+    if (!created) {
+      throw new Error("No fue posible generar ticket único");
+    }
+  }
+
+  return generatedTickets;
+}
+
 app.get("/", (req, res) => {
   res.send("PROMOCLARAS V2 funcionando");
 });
