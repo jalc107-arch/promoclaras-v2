@@ -1126,7 +1126,7 @@ app.post("/webhooks/wompi", async (req, res) => {
       : [];
 
     const expectedChecksum = signature.checksum || "";
-    const timestamp = signature.timestamp || "";
+    const timestamp = payload.timestamp || "";
 
     if (!WOMPI_EVENTS_SECRET) {
       return res.status(500).send("Falta WOMPI_EVENTS_SECRET");
