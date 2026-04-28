@@ -1229,14 +1229,15 @@ app.post("/webhooks/wompi", async (req, res) => {
       localOrderStatus = "failed";
     }
 
-    await supabase
-      .from("payments")
-      .update({
-        status: localPaymentStatus,
-        provider: "wompi",
-        provider_transaction_id: transactionId
-      })
-      .eq("id", payment.id);
+   const { error: updatePaymentError } = await supabase
+  .from("payments")
+  .update({
+    status: localPaymentStatus,
+    provider: "wompi"
+  })
+  .eq("id", payment.id);
+
+if (updatePaymentError) throw updatePaymentError;
 
     await supabase
       .from("orders")
