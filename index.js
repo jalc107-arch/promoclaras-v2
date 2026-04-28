@@ -1218,52 +1218,6 @@ app.post("/webhooks/wompi", async (req, res) => {
   }
 });
 
-app.post("/webhooks/wompi", async (req, res) => {
-  try {
-    console.log("Webhook Wompi recibido");
-
-    const evento = req.body;
-    console.log(JSON.stringify(evento, null, 2));
-
-    const data = evento.data || {};
-    const transaction = data.transaction || {};
-
-    const referencia = transaction.reference;
-    const estado = transaction.status;
-
-    console.log("Referencia:", referencia);
-    console.log("Estado:", estado);
-
-    if (estado === "APPROVED") {
-
-      await supabase
-        .from("orders")
-        .update({
-          payment_status: "paid",
-          order_status: "completed"
-        })
-        .eq("reference", referencia);
-
-      await supabase
-        .from("payments")
-        .insert({
-          reference: referencia,
-          provider: "wompi",
-          status: estado,
-          raw_response: evento
-        });
-
-      console.log("Pago aprobado actualizado");
-    }
-
-    res.status(200).send("ok");
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("error");
-  }
-});
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
