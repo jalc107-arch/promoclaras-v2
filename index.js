@@ -1302,9 +1302,45 @@ app.post("/webhooks/wompi", async (req, res) => {
     let localPaymentStatus = "pending";
     let localOrderStatus = "created";
 
-    if (transactionStatus === "APPROVED") {
+   if (transactionStatus === "APPROVED") {
   localPaymentStatus = "approved";
   localOrderStatus = "paid";
+
+  const { data: existingTickets } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("order_id", payment.order_id);
+
+  if (!existingTickets || existingTickets.length === 0) {
+    await assignTicketsToOrder(payment.order_id);
+
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        rifas(*)
+      `)
+      .eq("id", payment.order_id)
+      .single();
+
+    if (orderData?.rifas) {
+      const soldTickets =
+        Number(orderData.rifas.sold_tickets || 0) + Number(orderData.qty || 0);
+
+      const availableTickets =
+        Number(orderData.rifas.max_tickets || 0) - soldTickets;
+
+      await supabase
+        .from("rifas")
+        .update({
+          sold_tickets: soldTickets,
+          available_tickets: availableTickets,
+          status: "active"
+        })
+        .eq("id", orderData.rifas.id);
+    }
+  }
+}
 
   const { data: orderData } = await supabase
     .from("orders")
