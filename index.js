@@ -28,7 +28,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
 const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
-const WOMPI_EVENTS_SECRET = process.env.WOMPI_EVENTS_SECRET;
+const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim();
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -1107,55 +1107,61 @@ app.get("/orden/:orderId", async (req, res) => {
 app.post("/webhooks/wompi", async (req, res) => {
   try {
     const payload = req.body || {};
-
     const event = payload.event;
     const data = payload.data || {};
     const transaction = data.transaction || {};
     const signature = payload.signature || {};
 
-    if (!event || !transaction.id) {
-      return res.status(200).send("Evento ignorado");
-    }
-
-    if (event !== "transaction.updated") {
-      return res.status(200).send("Evento no manejado");
-    }
-
-    const signatureProperties = Array.isArray(signature.properties)
-      ? signature.properties
-      : [];
-
-    const expectedChecksum = String(signature.checksum || "").toLowerCase();
-    const timestamp = payload.timestamp || "";
-
     if (!WOMPI_EVENTS_SECRET) {
       return res.status(500).send("Falta WOMPI_EVENTS_SECRET");
     }
 
-const valuesToSign = signatureProperties.map((property) => {
-  const path = String(property || "").split(".");
-  let current = payload.data;
-
-  for (const key of path) {
-    if (current && typeof current === "object" && key in current) {
-      current = current[key];
-    } else {
-      current = "";
-      break;
+    if (event !== "transaction.updated" || !transaction.id) {
+      return res.status(200).send("Evento ignorado");
     }
-  }
 
-  return String(current ?? "");
-});
+    const properties = Array.isArray(signature.properties) ? signature.properties : [];
+    const expectedChecksum = String(signature.checksum || "").toLowerCase();
+    const timestamp = String(payload.timestamp || "").trim();
 
-    const rawSignature = `${valuesToSign.join("")}${timestamp}${WOMPI_EVENTS_SECRET}`;
-    const calculatedChecksum = crypto
-  .createHash("sha256")
-  .update(rawSignature)
-  .digest("hex")
-  .toLowerCase();
+    const getValue = (base, property) => {
+      const path = String(property || "").split(".");
+      let current = base;
 
-    if (!safeCompare(calculatedChecksum, expectedChecksum)) {
+      for (const key of path) {
+        if (current && typeof current === "object" && key in current) {
+          current = current[key];
+        } else {
+          return "";
+        }
+      }
+
+      return String(current ?? "");
+    };
+
+    const valuesFromData = properties.map((p) => getValue(data, p)).join("");
+    const valuesFromPayload = properties.map((p) => getValue(payload, p)).join("");
+
+    const checksumFromData = crypto
+      .createHash("sha256")
+      .update(`${valuesFromData}${timestamp}${WOMPI_EVENTS_SECRET}`)
+      .digest("hex")
+      .toLowerCase();
+
+    const checksumFromPayload = crypto
+      .createHash("sha256")
+      .update(`${valuesFromPayload}${timestamp}${WOMPI_EVENTS_SECRET}`)
+      .digest("hex")
+      .toLowerCase();
+
+    const validSignature =
+      safeCompare(checksumFromData, expectedChecksum) ||
+      safeCompare(checksumFromPayload, expectedChecksum);
+
+    if (!validSignature) {
+      console.log("Firma Wompi inválida");
+      console.log("properties:", properties);
+      console.log("timestamp:", timestamp);
       return res.status(401).send("Firma inválida");
     }
 
@@ -1185,15 +1191,14 @@ const valuesToSign = signatureProperties.map((property) => {
     if (transactionStatus === "APPROVED") {
       localPaymentStatus = "approved";
       localOrderStatus = "paid";
-    } else if (transactionStatus === "DECLINED" || transactionStatus === "ERROR" || transactionStatus === "VOIDED") {
-      localPaymentStatus = "failed";
-      localOrderStatus = "failed";
-    } else if (transactionStatus === "PENDING") {
-      localPaymentStatus = "pending";
-      localOrderStatus = "created";
     }
 
-    const { error: updatePaymentError } = await supabase
+    if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
+      localPaymentStatus = "failed";
+      localOrderStatus = "failed";
+    }
+
+    await supabase
       .from("payments")
       .update({
         status: localPaymentStatus,
@@ -1202,19 +1207,16 @@ const valuesToSign = signatureProperties.map((property) => {
       })
       .eq("id", payment.id);
 
-    if (updatePaymentError) throw updatePaymentError;
-
-    const { error: updateOrderError } = await supabase
+    await supabase
       .from("orders")
       .update({
         payment_status: localOrderStatus
       })
       .eq("id", payment.order_id);
 
-    if (updateOrderError) throw updateOrderError;
-
     return res.status(200).send("ok");
   } catch (error) {
+    console.error("Webhook Wompi error:", error);
     return res.status(500).send(error.message);
   }
 });
