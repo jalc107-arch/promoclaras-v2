@@ -1125,16 +1125,16 @@ app.post("/webhooks/wompi", async (req, res) => {
       ? signature.properties
       : [];
 
-    const expectedChecksum = signature.checksum || "";
+    const expectedChecksum = String(signature.checksum || "").toLowerCase();
     const timestamp = payload.timestamp || "";
 
     if (!WOMPI_EVENTS_SECRET) {
       return res.status(500).send("Falta WOMPI_EVENTS_SECRET");
     }
 
- const valuesToSign = signatureProperties.map((property) => {
+const valuesToSign = signatureProperties.map((property) => {
   const path = String(property || "").split(".");
-  let current = payload;
+  let current = payload.data;
 
   for (const key of path) {
     if (current && typeof current === "object" && key in current) {
@@ -1150,9 +1150,10 @@ app.post("/webhooks/wompi", async (req, res) => {
 
     const rawSignature = `${valuesToSign.join("")}${timestamp}${WOMPI_EVENTS_SECRET}`;
     const calculatedChecksum = crypto
-      .createHash("sha256")
-      .update(rawSignature)
-      .digest("hex");
+  .createHash("sha256")
+  .update(rawSignature)
+  .digest("hex")
+  .toLowerCase();
 
     if (!safeCompare(calculatedChecksum, expectedChecksum)) {
       return res.status(401).send("Firma inválida");
