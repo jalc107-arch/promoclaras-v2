@@ -1132,21 +1132,21 @@ app.post("/webhooks/wompi", async (req, res) => {
       return res.status(500).send("Falta WOMPI_EVENTS_SECRET");
     }
 
-    const valuesToSign = signatureProperties.map((property) => {
-      const path = String(property || "").split(".");
-      let current = payload.data;
+ const valuesToSign = signatureProperties.map((property) => {
+  const path = String(property || "").split(".");
+  let current = payload;
 
-      for (const key of path) {
-        if (current && typeof current === "object" && key in current) {
-          current = current[key];
-        } else {
-          current = "";
-          break;
-        }
-      }
+  for (const key of path) {
+    if (current && typeof current === "object" && key in current) {
+      current = current[key];
+    } else {
+      current = "";
+      break;
+    }
+  }
 
-      return String(current ?? "");
-    });
+  return String(current ?? "");
+});
 
     const rawSignature = `${valuesToSign.join("")}${timestamp}${WOMPI_EVENTS_SECRET}`;
     const calculatedChecksum = crypto
