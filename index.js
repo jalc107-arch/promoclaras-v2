@@ -1228,18 +1228,41 @@ app.get("/orden/:orderId", async (req, res) => {
             Ya puedes continuar al pago con Wompi Sandbox.
           </div>
 
-          <form action="https://checkout.wompi.co/p/" method="GET">
-            <input type="hidden" name="public-key" value="${WOMPI_PUBLIC_KEY}">
-            <input type="hidden" name="currency" value="${currency}">
-            <input type="hidden" name="amount-in-cents" value="${amountInCents}">
-            <input type="hidden" name="reference" value="${reference}">
-            <input type="hidden" name="signature:integrity" value="${signature}">
-            <input type="hidden" name="redirect-url" value="${redirectUrl}">
+         ${payment.status !== "approved" ? `
+<div style="margin-top:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+Ya puedes continuar al pago con Wompi Sandbox.
+</div>
 
-            <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:16px;">
-              Pagar con Wompi
-            </button>
-          </form>
+<form action="https://checkout.wompi.co/p/" method="GET">
+
+  <input type="hidden" name="public-key" value="${WOMPI_PUBLIC_KEY}">
+  <input type="hidden" name="currency" value="${currency}">
+  <input type="hidden" name="amount-in-cents" value="${amountInCents}">
+  <input type="hidden" name="reference" value="${reference}">
+  <input type="hidden" name="signature:integrity" value="${signature}">
+  <input type="hidden" name="redirect-url" value="${redirectUrl}">
+
+  <button
+    type="submit"
+    style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">
+    Pagar con Wompi
+  </button>
+
+</form>
+` : `
+<div style="
+margin-top:20px;
+padding:16px;
+background:#ecfdf5;
+border:1px solid #10b981;
+border-radius:12px;
+color:#065f46;
+font-weight:bold;
+text-align:center;
+">
+✅ Pago aprobado correctamente
+</div>
+`}
         </div>
       </body>
       </html>
