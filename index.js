@@ -153,13 +153,14 @@ async function assignTicketsToOrder(orderId) {
 
     if (!usedCodes.has(ticketCode)) {
       assignedTickets.push({
-        rifa_id: orderData.rifa_id,
-        order_id: orderData.id,
-        buyer_id: orderData.buyer_id,
-        ticket_code: ticketCode,
-        status: "active"
-      });
-
+  rifa_id: orderData.rifa_id,
+  order_id: orderData.id,
+  buyer_id: orderData.buyer_id,
+  ticket_code: ticketCode,
+  combination: ticketCode,
+  status: "active"
+});
+      
       usedCodes.add(ticketCode);
     }
 
