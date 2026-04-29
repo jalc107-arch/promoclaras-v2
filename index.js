@@ -1157,6 +1157,11 @@ app.get("/orden/:orderId", async (req, res) => {
       return res.status(404).send("Pago no encontrado");
     }
 
+    const { data: tickets } = await supabase
+  .from("tickets")
+  .select("*")
+  .eq("order_id", orderId);
+
     if (!WOMPI_PUBLIC_KEY || !WOMPI_INTEGRITY_SECRET) {
       return res.status(500).send("Faltan variables de Wompi");
     }
@@ -1195,6 +1200,29 @@ app.get("/orden/:orderId", async (req, res) => {
           <div style="margin-bottom:10px;"><b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
           <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment.status || "-"}</div>
+
+          ${
+  tickets && tickets.length
+    ? `
+    <div style="margin-bottom:18px;">
+      <b>Boletas asignadas:</b>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+        ${tickets.map(t => `
+          <div style="
+            background:#1e3a8a;
+            color:white;
+            padding:10px 14px;
+            border-radius:10px;
+            font-weight:bold;
+          ">
+            ${t.combination}
+          </div>
+        `).join("")}
+      </div>
+    </div>
+    `
+    : ""
+}
 
           <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
             Ya puedes continuar al pago con Wompi Sandbox.
