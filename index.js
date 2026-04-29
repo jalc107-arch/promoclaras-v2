@@ -117,6 +117,7 @@ async function assignTicketsToOrder(orderId) {
     .select(`
       id,
       qty,
+      buyer_id,
       rifa_id,
       rifas (
         id,
@@ -128,42 +129,38 @@ async function assignTicketsToOrder(orderId) {
     .single();
 
   if (orderError) throw orderError;
-
-  if (!orderData) {
-    throw new Error("Orden no encontrada");
-  }
+  if (!orderData) throw new Error("Orden no encontrada");
 
   const qty = Number(orderData.qty || 0);
-
-  if (qty <= 0) {
-    return [];
-  }
-
   const maxTickets = Number(orderData.rifas?.max_tickets || 0);
 
-  const { data: existingTickets } = await supabase
+  const { data: existingTickets, error: existingError } = await supabase
     .from("tickets")
-    .select("ticket_number")
+    .select("ticket_code")
     .eq("rifa_id", orderData.rifa_id);
 
-  const usedNumbers = new Set(
-    (existingTickets || []).map(t => Number(t.ticket_number))
+  if (existingError) throw existingError;
+
+  const usedCodes = new Set(
+    (existingTickets || []).map(t => String(t.ticket_code))
   );
 
   const assignedTickets = [];
-
   let current = 1;
 
   while (assignedTickets.length < qty && current <= maxTickets) {
-    if (!usedNumbers.has(current)) {
+    const ticketCode = String(current).padStart(4, "0");
+
+    if (!usedCodes.has(ticketCode)) {
       assignedTickets.push({
-        order_id: orderId,
         rifa_id: orderData.rifa_id,
-        ticket_number: current,
-        status: "assigned"
+        order_id: orderData.id,
+        buyer_id: orderData.buyer_id,
+        ticket_code: ticketCode,
+        status: "active"
       });
 
-      usedNumbers.add(current);
+      usedCodes.add(ticketCode);
     }
 
     current++;
@@ -177,9 +174,7 @@ async function assignTicketsToOrder(orderId) {
     .from("tickets")
     .insert(assignedTickets);
 
-  if (insertError) {
-    throw insertError;
-  }
+  if (insertError) throw insertError;
 
   return assignedTickets;
 }
