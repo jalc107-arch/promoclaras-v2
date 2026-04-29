@@ -1224,10 +1224,7 @@ app.get("/orden/:orderId", async (req, res) => {
     : ""
 }
 
-          <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-            Ya puedes continuar al pago con Wompi Sandbox.
-          </div>
-
+          
          ${payment.status !== "approved" ? `
 <div style="margin-top:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
 Ya puedes continuar al pago con Wompi Sandbox.
