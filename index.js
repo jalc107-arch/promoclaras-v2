@@ -112,69 +112,76 @@ function generateTicketCode(drawMode) {
 }
 
 async function assignTicketsToOrder(orderId) {
-  const { data: order, error: orderError } = await supabase
+  const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(`
-      *,
-      rifas(*)
+      id,
+      qty,
+      rifa_id,
+      rifas (
+        id,
+        draw_mode,
+        max_tickets
+      )
     `)
     .eq("id", orderId)
     .single();
 
-  if (orderError || !order) {
-    throw new Error("Orden no encontrada para asignar tickets");
+  if (orderError) throw orderError;
+
+  if (!orderData) {
+    throw new Error("Orden no encontrada");
   }
 
-  const campaign = order.rifas;
+  const qty = Number(orderData.qty || 0);
 
-  const generatedTickets = [];
-
-  for (let i = 0; i < order.qty; i++) {
-    let created = false;
-    let attempts = 0;
-
-    while (!created && attempts < 100) {
-      attempts++;
-
-      const ticketCode = generateTicketCode(campaign.draw_mode);
-
-      const { data: existingTicket } = await supabase
-        .from("tickets")
-        .select("id")
-        .eq("rifa_id", campaign.id)
-        .eq("ticket_code", ticketCode)
-        .maybeSingle();
-
-      if (existingTicket) {
-        continue;
-      }
-
-      const { data: ticket, error: ticketError } = await supabase
-        .from("tickets")
-        .insert({
-          rifa_id: campaign.id,
-          order_id: order.id,
-          buyer_id: order.buyer_id,
-          ticket_code: ticketCode,
-          status: "active"
-        })
-        .select()
-        .single();
-
-      if (ticketError) {
-        continue;
-      }
-
-      generatedTickets.push(ticket.ticket_code);
-      created = true;
-    }
-
-    if (!created) {
-      throw new Error("No fue posible generar ticket único");
-    }
+  if (qty <= 0) {
+    return [];
   }
 
-  return generatedTickets;
+  const maxTickets = Number(orderData.rifas?.max_tickets || 0);
+
+  const { data: existingTickets } = await supabase
+    .from("tickets")
+    .select("ticket_number")
+    .eq("rifa_id", orderData.rifa_id);
+
+  const usedNumbers = new Set(
+    (existingTickets || []).map(t => Number(t.ticket_number))
+  );
+
+  const assignedTickets = [];
+
+  let current = 1;
+
+  while (assignedTickets.length < qty && current <= maxTickets) {
+    if (!usedNumbers.has(current)) {
+      assignedTickets.push({
+        order_id: orderId,
+        rifa_id: orderData.rifa_id,
+        ticket_number: current,
+        status: "assigned"
+      });
+
+      usedNumbers.add(current);
+    }
+
+    current++;
+  }
+
+  if (assignedTickets.length < qty) {
+    throw new Error("No hay suficientes tickets disponibles");
+  }
+
+  const { error: insertError } = await supabase
+    .from("tickets")
+    .insert(assignedTickets);
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return assignedTickets;
 }
 
 app.get("/", (req, res) => {
