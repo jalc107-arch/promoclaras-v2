@@ -474,77 +474,219 @@ const campaignRows = (campaigns || []).map(c => `
 `).join("");
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Panel organizador</title>
-      </head>
-      <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-        <div style="max-width:900px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-          <h1>Panel del organizador</h1>
+res.send(`
+<!DOCTYPE html>
+<html lang="es">
 
-          <div style="margin-top:10px;font-size:18px;">
-            <b>Nombre:</b> ${organizer.full_name}
-          </div>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-          <div style="margin-top:10px;font-size:18px;">
-            <b>Correo:</b> ${organizer.email}
-          </div>
+<title>Panel Organizador</title>
 
-          <div style="margin-top:10px;font-size:18px;">
-            <b>Teléfono:</b> ${organizer.phone || "-"}
-          </div>
+<style>
 
-          <div style="margin-top:10px;font-size:18px;">
-            <b>Estado de verificación:</b> ${organizer.verification_status}
-          </div>
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#f3f6fb;
+color:#111827;
+}
 
-          <div style="margin-top:24px;padding:16px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-  Módulo 4 activo: ya puedes completar la verificación del organizador.
+.header{
+background:linear-gradient(135deg,#1d4ed8,#2563eb);
+padding:30px;
+color:white;
+}
+
+.header h1{
+margin:0;
+font-size:34px;
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+padding:30px 20px;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:20px;
+margin-bottom:30px;
+}
+
+.card{
+background:white;
+padding:24px;
+border-radius:18px;
+box-shadow:0 10px 30px rgba(0,0,0,.06);
+}
+
+.metric{
+font-size:38px;
+font-weight:bold;
+color:#2563eb;
+margin-bottom:10px;
+}
+
+.label{
+color:#6b7280;
+font-size:15px;
+}
+
+.table-card{
+background:white;
+border-radius:18px;
+padding:24px;
+box-shadow:0 10px 30px rgba(0,0,0,.06);
+overflow:auto;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th{
+text-align:left;
+padding:14px;
+background:#eff6ff;
+color:#1e3a8a;
+font-size:14px;
+}
+
+td{
+padding:14px;
+border-bottom:1px solid #f1f5f9;
+font-size:14px;
+}
+
+.badge{
+padding:6px 10px;
+border-radius:999px;
+font-size:12px;
+font-weight:bold;
+display:inline-block;
+}
+
+.approved{
+background:#dcfce7;
+color:#166534;
+}
+
+.pending{
+background:#fef3c7;
+color:#92400e;
+}
+
+.footer{
+text-align:center;
+padding:30px;
+color:#6b7280;
+font-size:14px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>Panel del Organizador</h1>
+<p>Resumen general de campañas y ventas</p>
 </div>
 
-${verificationHtml}
+<div class="container">
 
-${organizer.verification_status === "verified" ? `
-  <div style="margin-top:18px;">
-    <a
-      href="/organizers/${organizer.id}/campanas/nueva"
-      style="display:inline-block;padding:12px 18px;background:#16a34a;color:white;text-decoration:none;border-radius:10px;font-weight:700;"
-    >
-      Crear campaña
-    </a>
-  </div>
-` : ""}
+<div class="grid">
 
-<div style="margin-top:28px;">
-  <h2 style="margin-bottom:12px;">Mis campañas</h2>
-
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:auto;">
-    <table style="width:100%;border-collapse:collapse;min-width:760px;">
-      <thead style="background:#0f172a;color:white;">
-        <tr>
-          <th style="padding:12px;text-align:left;">Título</th>
-          <th style="padding:12px;text-align:left;">Premio</th>
-          <th style="padding:12px;text-align:left;">Proveedor</th>
-          <th style="padding:12px;text-align:left;">Modalidad</th>
-          <th style="padding:12px;text-align:right;">Precio</th>
-          <th style="padding:12px;text-align:center;">Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${campaignRows || `<tr><td colspan="6" style="padding:16px;">Aún no tienes campañas creadas.</td></tr>`}
-      </tbody>
-    </table>
-  </div>
+<div class="card">
+<div class="metric">${orders.length}</div>
+<div class="label">Órdenes Totales</div>
 </div>
 
-        </div>
-      </body>
-      </html>
-    `);
+<div class="card">
+<div class="metric">${payments.filter(p=>p.status==="approved").length}</div>
+<div class="label">Pagos Aprobados</div>
+</div>
+
+<div class="card">
+<div class="metric">${tickets.length}</div>
+<div class="label">Boletas Vendidas</div>
+</div>
+
+<div class="card">
+<div class="metric">
+$${Number(
+payments
+.filter(p=>p.status==="approved")
+.reduce((acc,p)=>acc+Number(p.amount || 0),0)
+).toLocaleString("es-CO")}
+</div>
+<div class="label">Recaudo Total</div>
+</div>
+
+</div>
+
+<div class="table-card">
+
+<h2>Últimas órdenes</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Comprador</th>
+<th>Teléfono</th>
+<th>Cantidad</th>
+<th>Pago</th>
+<th>Fecha</th>
+</tr>
+</thead>
+
+<tbody>
+
+${orders.map(order=>`
+
+<tr>
+
+<td>${order.buyers?.full_name || "-"}</td>
+
+<td>${order.buyers?.phone || "-"}</td>
+
+<td>${order.qty}</td>
+
+<td>
+<span class="badge ${order.payment_status === "approved" ? "approved" : "pending"}">
+${order.payment_status}
+</span>
+</td>
+
+<td>
+${new Date(order.created_at).toLocaleString("es-CO")}
+</td>
+
+</tr>
+
+`).join("")}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+<div class="footer">
+© CampaClick — Panel de campañas
+</div>
+
+</body>
+</html>
+`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
