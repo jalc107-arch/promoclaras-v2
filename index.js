@@ -29,6 +29,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
 const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
 const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim();
+const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -1581,6 +1582,57 @@ app.get("/orden/:orderId", async (req, res) => {
     if (!payment) {
       return res.status(404).send("Pago no encontrado");
     }
+
+    const wompiTransactionId = String(req.query.id || "").trim();
+
+if (wompiTransactionId && payment.status !== "approved") {
+  if (!WOMPI_PRIVATE_KEY) {
+    return res.status(500).send("Falta WOMPI_PRIVATE_KEY");
+  }
+
+  const wompiBaseUrl = WOMPI_PUBLIC_KEY?.startsWith("pub_test_")
+    ? "https://sandbox.wompi.co/v1"
+    : "https://production.wompi.co/v1";
+
+  const wompiResponse = await fetch(`${wompiBaseUrl}/transactions/${wompiTransactionId}`, {
+    headers: {
+      Authorization: `Bearer ${WOMPI_PRIVATE_KEY}`
+    }
+  });
+
+  const wompiJson = await wompiResponse.json();
+  const transaction = wompiJson?.data;
+  const transactionStatus = transaction?.status;
+
+  if (transactionStatus === "APPROVED") {
+    await supabase
+      .from("payments")
+      .update({
+        status: "approved",
+        provider: "wompi",
+        provider_transaction_id: wompiTransactionId
+      })
+      .eq("id", payment.id);
+
+    await supabase
+      .from("orders")
+      .update({
+        payment_status: "paid"
+      })
+      .eq("id", orderId);
+
+    const { data: existingTickets } = await supabase
+      .from("tickets")
+      .select("id")
+      .eq("order_id", orderId);
+
+    if (!existingTickets || existingTickets.length === 0) {
+      await assignTicketsToOrder(orderId);
+    }
+
+    return res.redirect(`/orden/${orderId}`);
+  }
+}
 
     const { data: tickets } = await supabase
   .from("tickets")
