@@ -142,35 +142,51 @@ async function assignTicketsToOrder(orderId) {
 
   if (existingError) throw existingError;
 
-  const usedCodes = new Set(
-    (existingTickets || []).map(t => String(t.ticket_code))
-  );
+  const usedTicketCodes = new Set(
+  (existingTickets || []).map(t => String(t.ticket_code))
+);
+
+const usedCombinations = new Set(
+  (existingTickets || []).map(t => String(t.combination))
+);
 
   const assignedTickets = [];
   let current = 1;
 
-  while (assignedTickets.length < qty && current <= maxTickets) {
-    const ticketCode = String(current).padStart(4, "0");
+while (assignedTickets.length < qty && current <= maxTickets) {
+  const ticketCode = String(current).padStart(4, "0");
 
-const combination = generateTicketCode(
-  orderData.rifas?.draw_mode
-);
-
-    if (!usedCodes.has(combination)) {
-      assignedTickets.push({
-  rifa_id: orderData.rifa_id,
-  order_id: orderData.id,
-  buyer_id: orderData.buyer_id,
-  ticket_code: ticketCode,
-  combination,
-  status: "active"
-});
-      
-      usedCodes.add(combination);
-    }
-
+  if (usedTicketCodes.has(ticketCode)) {
     current++;
+    continue;
   }
+
+  let combination = "";
+  let attempts = 0;
+
+  do {
+    combination = generateTicketCode(orderData.rifas?.draw_mode);
+    attempts++;
+  } while (usedCombinations.has(combination) && attempts < 1000);
+
+  if (!combination || usedCombinations.has(combination)) {
+    throw new Error("No fue posible generar combinación única");
+  }
+
+  assignedTickets.push({
+    rifa_id: orderData.rifa_id,
+    order_id: orderData.id,
+    buyer_id: orderData.buyer_id,
+    ticket_code: ticketCode,
+    combination,
+    status: "active"
+  });
+
+  usedTicketCodes.add(ticketCode);
+  usedCombinations.add(combination);
+
+  current++;
+}
 
   if (assignedTickets.length < qty) {
     throw new Error("No hay suficientes tickets disponibles");
