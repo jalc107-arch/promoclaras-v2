@@ -673,6 +673,7 @@ payments
 <div class="table-card">
 
 <h2>Últimas órdenes</h2>
+<h2 style="margin-top:40px;">Boletas asignadas</h2>
 
 <table>
 
