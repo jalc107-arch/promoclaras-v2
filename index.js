@@ -462,6 +462,46 @@ if (organizer.verification_status === "verified") {
 
 if (campaignsError) throw campaignsError;
 
+    const campaignIds = (campaigns || []).map(c => c.id);
+
+let orders = [];
+let payments = [];
+let tickets = [];
+
+if (campaignIds.length > 0) {
+  const { data: ordersData, error: ordersError } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      buyers(*)
+    `)
+    .in("rifa_id", campaignIds)
+    .order("created_at", { ascending: false });
+
+  if (ordersError) throw ordersError;
+  orders = ordersData || [];
+
+  const orderIds = orders.map(o => o.id);
+
+  if (orderIds.length > 0) {
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from("payments")
+      .select("*")
+      .in("order_id", orderIds);
+
+    if (paymentsError) throw paymentsError;
+    payments = paymentsData || [];
+
+    const { data: ticketsData, error: ticketsError } = await supabase
+      .from("tickets")
+      .select("*")
+      .in("order_id", orderIds);
+
+    if (ticketsError) throw ticketsError;
+    tickets = ticketsData || [];
+  }
+}
+
 const campaignRows = (campaigns || []).map(c => `
   <tr>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
@@ -659,9 +699,8 @@ ${orders.map(order=>`
 <td>${order.qty}</td>
 
 <td>
-<span class="badge ${order.payment_status === "approved" ? "approved" : "pending"}">
-${order.payment_status}
-</span>
+<span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
+${order.payment_status === "paid" ? "approved" : order.payment_status}</span>
 </td>
 
 <td>
