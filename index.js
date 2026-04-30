@@ -718,6 +718,41 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 </div>
 
+<div class="table-card" style="margin-top:30px;">
+
+<h2>Boletas asignadas</h2>
+
+<table>
+<thead>
+<tr>
+<th>Comprador</th>
+<th>Teléfono</th>
+<th>Boleta</th>
+<th>Estado</th>
+</tr>
+</thead>
+
+<tbody>
+${tickets.map(ticket => {
+  const order = orders.find(o => o.id === ticket.order_id);
+  return `
+    <tr>
+      <td>${order?.buyers?.full_name || "-"}</td>
+      <td>${order?.buyers?.phone || "-"}</td>
+      <td>
+        <span class="badge approved">
+          ${ticket.combination || ticket.ticket_code || "-"}
+        </span>
+      </td>
+      <td>${ticket.status || "-"}</td>
+    </tr>
+  `;
+}).join("")}
+</tbody>
+</table>
+
+</div>
+
 </div>
 
 <div class="footer">
