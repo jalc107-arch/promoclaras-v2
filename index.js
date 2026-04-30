@@ -1335,6 +1335,127 @@ app.get("/r/:slug", async (req, res) => {
   return res.redirect(`/campanas/${req.params.slug}`);
 });
 
+app.get("/campanas/:slug/comprar", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const { data: campaign, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("slug", slug)
+      .single();
+
+    if (error || !campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+        <title>Comprar - ${campaign.title}</title>
+      </head>
+
+      <body style="
+        font-family:Arial,sans-serif;
+        background:#f3f6fb;
+        padding:40px;
+      ">
+
+      <div style="
+        max-width:700px;
+        margin:auto;
+        background:white;
+        padding:30px;
+        border-radius:18px;
+        box-shadow:0 10px 30px rgba(0,0,0,.08);
+      ">
+
+      <h1>${campaign.title}</h1>
+
+      <div style="margin-bottom:20px;color:#16a34a;font-size:28px;font-weight:bold;">
+        $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+      </div>
+
+      <form method="POST" action="/campanas/${campaign.slug}/comprar">
+
+        <div style="margin-bottom:14px;">
+          <label>Nombre completo</label><br/>
+          <input
+            type="text"
+            name="buyer_name"
+            required
+            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+          >
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label>Teléfono</label><br/>
+          <input
+            type="text"
+            name="buyer_phone"
+            required
+            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+          >
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label>Correo electrónico</label><br/>
+          <input
+            type="email"
+            name="buyer_email"
+            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+          >
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label>Cantidad de boletas</label><br/>
+          <input
+            type="number"
+            name="qty"
+            min="1"
+            max="20"
+            value="1"
+            required
+            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+          >
+        </div>
+
+        <button
+          type="submit"
+          style="
+            width:100%;
+            padding:16px;
+            background:#2563eb;
+            color:white;
+            border:none;
+            border-radius:12px;
+            font-size:18px;
+            font-weight:bold;
+            cursor:pointer;
+          "
+        >
+          Continuar al pago
+        </button>
+
+      </form>
+
+      </div>
+
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.post("/campanas/:slug/comprar", async (req, res) => {
   try {
     const { slug } = req.params;
