@@ -151,17 +151,21 @@ async function assignTicketsToOrder(orderId) {
   while (assignedTickets.length < qty && current <= maxTickets) {
     const ticketCode = String(current).padStart(4, "0");
 
-    if (!usedCodes.has(ticketCode)) {
+const combination = generateTicketCode(
+  orderData.rifas?.draw_mode
+);
+
+    if (!usedCodes.has(combination)) {
       assignedTickets.push({
   rifa_id: orderData.rifa_id,
   order_id: orderData.id,
   buyer_id: orderData.buyer_id,
   ticket_code: ticketCode,
-  combination: ticketCode,
+  combination,
   status: "active"
 });
       
-      usedCodes.add(ticketCode);
+      usedCodes.add(combination);
     }
 
     current++;
