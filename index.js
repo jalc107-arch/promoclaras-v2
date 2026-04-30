@@ -1056,7 +1056,7 @@ font-size:14px;
 <div class="grid">
 
 <div class="metric">
-<h2>${campaign.total_tickets || 0}</h2>
+<h2>${campaign.max_tickets || 0}</h2>
 <span>Boletas Totales</span>
 </div>
 
@@ -1084,7 +1084,7 @@ font-size:14px;
 <h2 style="margin-top:0;">Valor por boleta</h2>
 
 <div class="price">
-$${Number(campaign.ticket_price || 0).toLocaleString("es-CO")}
+$${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
 </div>
 
 <a
@@ -1168,7 +1168,7 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
       buyer = newBuyer;
     }
 
-    const subtotal = qty * Number(campaign.price_per_ticket || 0);
+const subtotal = qty * Number(campaign.price_per_ticket || 0);
     const totalPaid = subtotal;
     const commission = 0;
 
