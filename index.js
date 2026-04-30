@@ -931,95 +931,178 @@ app.get("/campanas/:slug", async (req, res) => {
 
 res.setHeader("Content-Type", "text/html; charset=utf-8");
 res.send(`
-  <!DOCTYPE html>
-  <html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${campaign.title}</title>
-  </head>
-  <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-    <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:20px;">
-      <div style="background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-        <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#e5e7eb;font-weight:700;margin-bottom:12px;">
-          Estado: ${campaign.status}
-        </div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-        <h1 style="margin-top:0;">${campaign.title}</h1>
+<title>${campaign.title}</title>
 
-        <div style="margin-bottom:10px;font-size:18px;">
-          <b>Premio:</b> ${campaign.prize}
-        </div>
+<style>
 
-        <div style="margin-bottom:10px;">
-          <b>Descripción:</b> ${campaign.description || "-"}
-        </div>
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#f3f6fb;
+color:#111827;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Proveedor de sorteo:</b> ${campaign.draw_provider}
-        </div>
+.header{
+background:linear-gradient(135deg,#1d4ed8,#2563eb);
+padding:60px 20px;
+color:white;
+text-align:center;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Modalidad:</b> ${campaign.draw_mode}
-        </div>
+.header h1{
+margin:0;
+font-size:42px;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Precio por cupón:</b> $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
-        </div>
+.header p{
+margin-top:10px;
+font-size:18px;
+opacity:.9;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Máximo de cupones:</b> ${campaign.max_tickets}
-        </div>
+.container{
+max-width:1100px;
+margin:auto;
+padding:30px 20px;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Vendidos:</b> ${campaign.sold_tickets}
-        </div>
+.card{
+background:white;
+border-radius:18px;
+padding:28px;
+box-shadow:0 10px 30px rgba(0,0,0,.08);
+margin-bottom:24px;
+}
 
-        <div style="margin-bottom:10px;">
-          <b>Disponibles:</b> ${campaign.available_tickets}
-        </div>
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:18px;
+}
 
-        <div style="margin-bottom:18px;">
-          <b>Fecha del sorteo:</b> ${campaign.draw_date}
-        </div>
-      </div>
+.metric{
+background:#f9fbff;
+border:1px solid #e5e7eb;
+border-radius:14px;
+padding:20px;
+text-align:center;
+}
 
-      <div style="background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-        <h2 style="margin-top:0;">Participar en esta campaña</h2>
+.metric h2{
+margin:0;
+font-size:30px;
+color:#2563eb;
+}
 
-        <form method="POST" action="/campanas/${campaign.slug}/comprar">
-          <div style="margin-bottom:12px;">
-            <label>Nombre completo</label><br/>
-            <input type="text" name="buyer_name" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-          </div>
+.metric span{
+display:block;
+margin-top:8px;
+color:#6b7280;
+font-size:14px;
+}
 
-          <div style="margin-bottom:12px;">
-            <label>Teléfono</label><br/>
-            <input type="text" name="buyer_phone" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-          </div>
+.price{
+font-size:42px;
+font-weight:bold;
+color:#16a34a;
+margin-top:10px;
+}
 
-          <div style="margin-bottom:12px;">
-            <label>Correo electrónico</label><br/>
-            <input type="email" name="buyer_email" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-          </div>
+.button{
+display:inline-block;
+width:100%;
+padding:18px;
+background:#2563eb;
+color:white;
+text-decoration:none;
+text-align:center;
+border-radius:14px;
+font-size:20px;
+font-weight:bold;
+margin-top:20px;
+}
 
-          <div style="margin-bottom:16px;">
-            <label>Cantidad de cupones</label><br/>
-            <input type="number" name="qty" min="1" max="20" value="1" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-          </div>
+.button:hover{
+opacity:.92;
+}
 
-          <button type="submit" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;">
-            Continuar compra
-          </button>
-        </form>
+.footer{
+text-align:center;
+padding:30px;
+color:#6b7280;
+font-size:14px;
+}
 
-        <div style="margin-top:14px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
-          Módulo 6 activo: aquí empezamos el flujo limpio de compra.
-        </div>
-      </div>
-    </div>
-  </body>
-  </html>
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>${campaign.title}</h1>
+<p>Participa fácilmente desde cualquier lugar</p>
+</div>
+
+<div class="container">
+
+<div class="card">
+
+<div class="grid">
+
+<div class="metric">
+<h2>${campaign.total_tickets || 0}</h2>
+<span>Boletas Totales</span>
+</div>
+
+<div class="metric">
+<h2>${campaign.sold_tickets || 0}</h2>
+<span>Boletas Vendidas</span>
+</div>
+
+<div class="metric">
+<h2>${campaign.available_tickets || 0}</h2>
+<span>Disponibles</span>
+</div>
+
+<div class="metric">
+<h2>${campaign.status || "active"}</h2>
+<span>Estado</span>
+</div>
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h2 style="margin-top:0;">Valor por boleta</h2>
+
+<div class="price">
+$${Number(campaign.ticket_price || 0).toLocaleString("es-CO")}
+</div>
+
+<a
+class="button"
+href="/campanas/${campaign.slug}/comprar">
+Participar ahora
+</a>
+
+</div>
+
+</div>
+
+<div class="footer">
+© CampaClick — Plataforma de campañas promocionales
+</div>
+
+</body>
+</html>
 `);
     
   } catch (error) {
