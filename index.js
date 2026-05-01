@@ -1916,6 +1916,168 @@ if (updatePaymentError) throw updatePaymentError;
   }
 });
 
+app.get("/organizers/:organizerId/campanas/:rifaId/resultado", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId || String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: rifa, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (error || !rifa) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Cargar resultado</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Cargar resultado</h1>
+          <p><b>Campaña:</b> ${rifa.title}</p>
+          <p><b>Modalidad:</b> ${rifa.draw_mode}</p>
+
+          <form method="POST" action="/organizers/${organizerId}/campanas/${rifaId}/resultado">
+            <label>Resultado ganador</label><br/>
+            <input
+              type="text"
+              name="result_value"
+              required
+              placeholder="Ej: 08-14 o 583"
+              style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 18px;"
+            />
+
+            <button type="submit" style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;">
+              Guardar resultado
+            </button>
+          </form>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/campanas/:rifaId/resultado", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId || String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const resultValue = String(req.body.result_value || "").trim();
+
+    if (!resultValue) {
+      return res.status(400).send("Falta el resultado");
+    }
+
+    const { data: winnerTicket, error: ticketError } = await supabase
+      .from("tickets")
+      .select("*")
+      .eq("rifa_id", rifaId)
+      .eq("combination", resultValue)
+      .maybeSingle();
+
+    if (ticketError) throw ticketError;
+
+    const { error: updateError } = await supabase
+      .from("rifas")
+      .update({
+        result_value: resultValue,
+        winner_ticket_id: winnerTicket?.id || null,
+        status: "finished"
+      })
+      .eq("id", rifaId);
+
+    if (updateError) throw updateError;
+
+    return res.redirect(`/resultado/${rifaId}`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/resultado/:rifaId", async (req, res) => {
+  try {
+    const { rifaId } = req.params;
+
+    const { data: rifa, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (error || !rifa) {
+      return res.status(404).send("Resultado no encontrado");
+    }
+
+    let winnerHtml = `
+      <div style="padding:16px;background:#fee2e2;color:#991b1b;border-radius:12px;font-weight:bold;">
+        No hubo ganador con ese resultado.
+      </div>
+    `;
+
+    if (rifa.winner_ticket_id) {
+      const { data: ticket } = await supabase
+        .from("tickets")
+        .select(`
+          *,
+          buyers(*)
+        `)
+        .eq("id", rifa.winner_ticket_id)
+        .single();
+
+      if (ticket) {
+        winnerHtml = `
+          <div style="padding:16px;background:#dcfce7;color:#166534;border-radius:12px;font-weight:bold;">
+            🎉 Ganador encontrado<br/><br/>
+            Nombre: ${ticket.buyers?.full_name || "-"}<br/>
+            Teléfono: ${ticket.buyers?.phone || "-"}<br/>
+            Boleta: ${ticket.combination || ticket.ticket_code}
+          </div>
+        `;
+      }
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Resultado</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:700px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Resultado de campaña</h1>
+          <p><b>Campaña:</b> ${rifa.title}</p>
+          <p><b>Resultado:</b> ${rifa.result_value || "Pendiente"}</p>
+          ${winnerHtml}
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
