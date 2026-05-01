@@ -30,6 +30,7 @@ const WOMPI_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY;
 const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
 const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim();
 const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -2073,6 +2074,227 @@ app.get("/resultado/:rifaId", async (req, res) => {
       </body>
       </html>
     `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/admin/login", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Admin</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:420px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+        <h1>Ingreso administrador</h1>
+
+        <form method="POST" action="/admin/login">
+          <label>Clave administrador</label><br/>
+          <input
+            type="password"
+            name="password"
+            required
+            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 18px;"
+          />
+
+          <button
+            type="submit"
+            style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;">
+            Ingresar
+          </button>
+        </form>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.post("/admin/login", (req, res) => {
+  const password = String(req.body.password || "").trim();
+
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).send("Falta ADMIN_PASSWORD en Railway");
+  }
+
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).send("Clave incorrecta");
+  }
+
+  req.session.isAdmin = true;
+  return res.redirect("/admin/resultados");
+});
+
+app.get("/admin/resultados", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { data: campaigns, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Resultados Admin</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:900px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Administrador de resultados</h1>
+
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#eff6ff;">
+                <th style="padding:12px;text-align:left;">Campaña</th>
+                <th style="padding:12px;text-align:left;">Modalidad</th>
+                <th style="padding:12px;text-align:left;">Resultado</th>
+                <th style="padding:12px;text-align:left;">Estado</th>
+                <th style="padding:12px;text-align:left;">Acción</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${(campaigns || []).map(c => `
+                <tr>
+                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.title}</td>
+                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.draw_mode}</td>
+                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.result_value || "Pendiente"}</td>
+                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.status}</td>
+                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                    <a href="/admin/campanas/${c.id}/resultado" style="color:#2563eb;font-weight:bold;">
+                      Cargar resultado
+                    </a>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+
+    const { data: rifa, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (error || !rifa) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Cargar resultado</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Cargar resultado</h1>
+
+          <p><b>Campaña:</b> ${rifa.title}</p>
+          <p><b>Modalidad:</b> ${rifa.draw_mode}</p>
+
+          <form method="POST" action="/admin/campanas/${rifa.id}/resultado">
+            <label>Resultado ganador</label><br/>
+
+            <input
+              type="text"
+              name="result_value"
+              required
+              placeholder="Ej: 08-14 o 583"
+              value="${rifa.result_value || ""}"
+              style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 18px;"
+            />
+
+            <button
+              type="submit"
+              style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;">
+              Guardar resultado
+            </button>
+          </form>
+
+          <div style="margin-top:18px;">
+            <a href="/admin/resultados">Volver</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/campanas/:rifaId/resultado", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+    const resultValue = String(req.body.result_value || "").trim();
+
+    if (!resultValue) {
+      return res.status(400).send("Falta el resultado");
+    }
+
+    const { data: winnerTicket, error: ticketError } = await supabase
+      .from("tickets")
+      .select("*")
+      .eq("rifa_id", rifaId)
+      .eq("combination", resultValue)
+      .maybeSingle();
+
+    if (ticketError) throw ticketError;
+
+    const { error: updateError } = await supabase
+      .from("rifas")
+      .update({
+        result_value: resultValue,
+        winner_ticket_id: winnerTicket?.id || null,
+        status: "finished"
+      })
+      .eq("id", rifaId);
+
+    if (updateError) throw updateError;
+
+    return res.redirect(`/resultado/${rifaId}`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
