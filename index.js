@@ -69,6 +69,21 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function campaignStatusLabel(status) {
+  if (status === "active") return "Activa";
+  if (status === "pending") return "Pendiente";
+  if (status === "finished") return "Finalizada";
+  if (status === "cancelled") return "Cancelada";
+  return status || "-";
+}
+
+function campaignStatusClass(status) {
+  if (status === "finished") return "approved";
+  if (status === "active") return "approved";
+  if (status === "pending") return "pending";
+  return "pending";
+}
+
 function generateTicketCode(drawMode) {
   if (drawMode === "baloto_2") {
     const numbers = [];
@@ -534,9 +549,9 @@ const campaignRows = (campaigns || []).map(c => `
       $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
     </td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
-      <span class="badge ${c.status === "finished" ? "approved" : "pending"}">
-        ${c.status || "-"}
-      </span>
+      <span class="badge ${campaignStatusClass(c.status)}">
+  ${campaignStatusLabel(c.status)}
+</span>
     </td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
       <a
