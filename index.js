@@ -423,6 +423,12 @@ app.post("/organizers/login", async (req, res) => {
   }
 });
 
+app.get("/organizers/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/organizers/login");
+  });
+});
+
 app.get("/organizers/:organizerId/panel", async (req, res) => {
   try {
     const { organizerId } = req.params;
@@ -2484,6 +2490,12 @@ app.post("/admin/login", (req, res) => {
 
   req.session.isAdmin = true;
   return res.redirect("/admin/resultados");
+});
+
+app.get("/admin/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/admin/login");
+  });
 });
 
 app.get("/admin/resultados", async (req, res) => {
