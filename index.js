@@ -1305,20 +1305,34 @@ app.get("/campanas/:slug", async (req, res) => {
     }
 
     const totalCoupons = Number(campaign.max_tickets || 0);
-const soldCoupons = Number(campaign.sold_tickets || 0);
-const availableCoupons = Number(campaign.available_tickets || 0);
+    const soldCoupons = Number(campaign.sold_tickets || 0);
+    const availableCoupons = Number(campaign.available_tickets || 0);
 
-const soldPercentage = totalCoupons > 0
-  ? Math.min(100, Math.round((soldCoupons / totalCoupons) * 100))
-  : 0;
+    const soldPercentage = totalCoupons > 0
+      ? Math.min(100, Math.round((soldCoupons / totalCoupons) * 100))
+      : 0;
 
-let publicStatusLabel = "Pendiente";
-if (campaign.status === "active") publicStatusLabel = "Activa";
-if (campaign.status === "finished") publicStatusLabel = "Finalizada";
-if (campaign.status === "cancelled") publicStatusLabel = "Cancelada";
+    let publicStatusLabel = "Pendiente";
+    let publicStatusColor = "#f59e0b";
 
-res.setHeader("Content-Type", "text/html; charset=utf-8");
-res.send(`
+    if (campaign.status === "active") {
+      publicStatusLabel = "Activa";
+      publicStatusColor = "#16a34a";
+    }
+
+    if (campaign.status === "finished") {
+      publicStatusLabel = "Finalizada";
+      publicStatusColor = "#111827";
+    }
+
+    if (campaign.status === "cancelled") {
+      publicStatusLabel = "Cancelada";
+      publicStatusColor = "#dc2626";
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1328,234 +1342,365 @@ res.send(`
 <title>${campaign.title}</title>
 
 <style>
-
-body{
-margin:0;
-font-family:Arial,sans-serif;
-background:#f3f6fb;
-color:#111827;
+* {
+  box-sizing: border-box;
 }
 
-.header{
-background:linear-gradient(135deg,#1d4ed8,#2563eb);
-padding:60px 20px;
-color:white;
-text-align:center;
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f6fb;
+  color: #111827;
 }
 
-.header h1{
-margin:0;
-font-size:42px;
+.header {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  padding: 58px 20px 70px;
+  color: white;
+  text-align: center;
 }
 
-.header p{
-margin-top:10px;
-font-size:18px;
-opacity:.9;
+.header h1 {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: .5px;
 }
 
-.container{
-max-width:1100px;
-margin:auto;
-padding:30px 20px;
+.header p {
+  margin-top: 12px;
+  font-size: 18px;
+  opacity: .92;
 }
 
-.card{
-background:white;
-border-radius:18px;
-padding:28px;
-box-shadow:0 10px 30px rgba(0,0,0,.08);
-margin-bottom:24px;
+.container {
+  max-width: 1050px;
+  margin: -45px auto 0;
+  padding: 0 20px 35px;
 }
 
-.progress-card{
-background:#f9fbff;
-border:1px solid #e5e7eb;
-border-radius:16px;
-padding:24px;
+.card {
+  background: white;
+  border-radius: 22px;
+  padding: 28px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.10);
+  margin-bottom: 24px;
 }
 
-.progress-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-gap:16px;
-flex-wrap:wrap;
-margin-bottom:16px;
+.progress-card {
+  background: #f9fbff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 26px;
 }
 
-.progress-title{
-margin:0;
-font-size:24px;
-color:#111827;
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
 
-.progress-percent{
-font-size:34px;
-font-weight:bold;
-color:#2563eb;
+.progress-title {
+  margin: 0;
+  font-size: 25px;
+  color: #111827;
 }
 
-.progress-bar-wrap{
-width:100%;
-height:18px;
-background:#e5e7eb;
-border-radius:999px;
-overflow:hidden;
-margin-bottom:14px;
+.progress-description {
+  margin-top: 7px;
+  color: #6b7280;
+  font-size: 15px;
 }
 
-.progress-bar{
-height:100%;
-background:linear-gradient(90deg,#16a34a,#22c55e);
-border-radius:999px;
+.progress-right {
+  text-align: right;
 }
 
-.progress-meta{
-display:flex;
-justify-content:space-between;
-gap:12px;
-flex-wrap:wrap;
-font-size:15px;
-color:#374151;
+.progress-percent {
+  font-size: 42px;
+  font-weight: 900;
+  color: #2563eb;
+  line-height: 1;
 }
 
-.progress-meta strong{
-color:#111827;
+.status-chip {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: bold;
+  background: ${publicStatusColor};
+  color: white;
 }
 
-.status-chip{
-display:inline-block;
-padding:8px 14px;
-border-radius:999px;
-font-size:13px;
-font-weight:bold;
-background:#dbeafe;
-color:#1d4ed8;
+.progress-bar-wrap {
+  width: 100%;
+  height: 20px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 16px;
 }
 
-.price{
-font-size:42px;
-font-weight:bold;
-color:#16a34a;
-margin-top:10px;
+.progress-bar {
+  height: 100%;
+  width: ${soldPercentage}%;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 999px;
 }
 
-.button{
-display:inline-block;
-width:100%;
-padding:18px;
-background:#2563eb;
-color:white;
-text-decoration:none;
-text-align:center;
-border-radius:14px;
-font-size:20px;
-font-weight:bold;
-margin-top:20px;
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 15px;
+  color: #374151;
 }
 
-.button:hover{
-opacity:.92;
+.progress-meta div {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px 16px;
+  flex: 1;
+  min-width: 180px;
+  text-align: center;
 }
 
-.footer{
-text-align:center;
-padding:30px;
-color:#6b7280;
-font-size:14px;
+.progress-meta strong {
+  color: #111827;
+  font-size: 20px;
 }
 
+.info-grid {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: 22px;
+}
+
+.section-title {
+  margin: 0 0 14px;
+  font-size: 24px;
+  color: #111827;
+}
+
+.description {
+  color: #4b5563;
+  line-height: 1.6;
+  margin: 0;
+  font-size: 16px;
+}
+
+.price-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.price-label {
+  color: #6b7280;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.price {
+  font-size: 44px;
+  font-weight: 900;
+  color: #16a34a;
+  margin-bottom: 18px;
+}
+
+.button {
+  display: block;
+  width: 100%;
+  padding: 17px;
+  background: #2563eb;
+  color: white;
+  text-decoration: none;
+  text-align: center;
+  border-radius: 14px;
+  font-size: 19px;
+  font-weight: bold;
+}
+
+.button:hover {
+  opacity: .93;
+}
+
+.button-dark {
+  background: #111827;
+}
+
+.finished-box {
+  margin-top: 15px;
+  padding: 16px;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.small-note {
+  margin-top: 12px;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+}
+
+.footer {
+  text-align: center;
+  padding: 28px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+@media (max-width: 800px) {
+  .header h1 {
+    font-size: 34px;
+  }
+
+  .container {
+    margin-top: -35px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-right {
+    text-align: left;
+  }
+
+  .progress-percent {
+    font-size: 36px;
+  }
+
+  .price {
+    font-size: 38px;
+  }
+}
 </style>
 </head>
 
 <body>
 
 <div class="header">
-<h1>${campaign.title}</h1>
-<p>Participa fácilmente desde cualquier lugar</p>
+  <h1>${campaign.title}</h1>
+  <p>Participa fácilmente desde cualquier lugar</p>
 </div>
 
 <div class="container">
 
-<div class="card">
+  <div class="card">
+    <div class="progress-card">
 
-  <div class="progress-card">
-    <div class="progress-header">
-      <div>
-        <h2 class="progress-title">Avance de la campaña</h2>
-        <div style="margin-top:6px;color:#6b7280;font-size:15px;">
-          Sigue el progreso de venta de cupones en tiempo real
+      <div class="progress-header">
+        <div>
+          <h2 class="progress-title">Avance de la campaña</h2>
+          <div class="progress-description">
+            Sigue el progreso de venta de cupones en tiempo real.
+          </div>
+        </div>
+
+        <div class="progress-right">
+          <div class="progress-percent">${soldPercentage}%</div>
+          <div class="status-chip">${publicStatusLabel}</div>
         </div>
       </div>
 
-      <div>
-        <div class="progress-percent">${soldPercentage}%</div>
-        <div class="status-chip">${publicStatusLabel}</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar"></div>
+      </div>
+
+      <div class="progress-meta">
+        <div>
+          <strong>${soldCoupons}</strong><br/>
+          cupones vendidos
+        </div>
+
+        <div>
+          <strong>${availableCoupons}</strong><br/>
+          cupones disponibles
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="info-grid">
+
+    <div class="card">
+      <h2 class="section-title">Información de la campaña</h2>
+
+      <p class="description">
+        ${campaign.description || "Campaña promocional disponible para participar de forma rápida y segura."}
+      </p>
+
+      <div style="margin-top:20px;color:#374151;line-height:1.7;">
+        <div><b>Premio:</b> ${campaign.prize || "-"}</div>
+        <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+        <div><b>Modalidad:</b> ${campaign.draw_mode || "-"}</div>
       </div>
     </div>
 
-    <div class="progress-bar-wrap">
-      <div class="progress-bar" style="width:${soldPercentage}%;"></div>
+    <div class="card">
+      <div class="price-card">
+        <div class="price-label">Valor por cupón</div>
+
+        <div class="price">
+          $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+        </div>
+
+        ${
+          campaign.status === "finished"
+            ? `
+              <div class="finished-box">
+                Esta campaña ya finalizó.<br/>
+                No se permiten más compras.
+              </div>
+
+              <a
+                class="button button-dark"
+                style="margin-top:16px;"
+                href="/resultado/${campaign.id}">
+                Ver resultado
+              </a>
+            `
+            : `
+              <a
+                class="button"
+                href="/campanas/${campaign.slug}/comprar">
+                Participar ahora
+              </a>
+
+              <div class="small-note">
+                Tu cupón se asigna automáticamente después del pago aprobado.
+              </div>
+            `
+        }
+      </div>
     </div>
 
-    <div class="progress-meta">
-      <div><strong>${soldCoupons}</strong> cupones vendidos</div>
-      <div><strong>${availableCoupons}</strong> cupones disponibles</div>
-      <div><strong>${totalCoupons}</strong> cupones totales</div>
-    </div>
   </div>
-
-</div>
-
-<div class="card">
-
-<h2 style="margin-top:0;">Valor por cupón</h2>
-
-<div class="price">
-$${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
-</div>
-
-${campaign.status === "finished" ? `
-  <div style="
-    margin-top:20px;
-    padding:18px;
-    background:#fee2e2;
-    color:#991b1b;
-    border:1px solid #fecaca;
-    border-radius:14px;
-    font-weight:bold;
-    text-align:center;
-  ">
-    Esta campaña ya finalizó. No se permiten más compras.
-  </div>
-
-  <a
-    class="button"
-    style="background:#111827;"
-    href="/resultado/${campaign.id}">
-    Ver resultado
-  </a>
-` : `
-  <a
-    class="button"
-    href="/campanas/${campaign.slug}/comprar">
-    Participar ahora
-  </a>
-`}
-
-</div>
 
 </div>
 
 <div class="footer">
-© CampaClick — Plataforma de campañas promocionales
+  © CampaClick — Plataforma de campañas promocionales
 </div>
 
 </body>
 </html>
 `);
-    
   } catch (error) {
     return res.status(500).send(error.message);
   }
