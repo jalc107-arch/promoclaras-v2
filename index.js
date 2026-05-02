@@ -4007,6 +4007,21 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
 
     const { rifaId } = req.params;
 
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select(`
+        *,
+        profiles(*)
+      `)
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
     const { error } = await supabase
       .from("rifas")
       .update({
@@ -4016,6 +4031,31 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
       .eq("status", "pending");
 
     if (error) throw error;
+
+    const { data: organizer } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("profile_id", campaign.owner_id)
+      .maybeSingle();
+
+    if (organizer?.phone) {
+      await sendWhatsAppMessage(
+        organizer.phone,
+        [
+          `Hola ${organizer.full_name || ""}.`,
+          ``,
+          `Tu campaña fue aprobada en CampaClick.`,
+          ``,
+          `Campaña: ${campaign.title || "-"}`,
+          `Premio: ${campaign.prize || "-"}`,
+          ``,
+          `Ya puedes compartirla y recibir participantes.`,
+          ``,
+          `Link de la campaña:`,
+          `https://promoclaras-v2-production.up.railway.app/campanas/${campaign.slug}`
+        ].join("\n")
+      );
+    }
 
     return res.redirect("/admin/resultados");
   } catch (error) {
