@@ -557,7 +557,16 @@ const totalCampaignCoupons = (campaigns || []).reduce(
     
 const baseUrl = `${req.protocol}://${req.get("host")}`;
     
-const campaignRows = (campaigns || []).map(c => `
+const campaignRows = (campaigns || []).map(c => {
+  const sold = Number(c.sold_tickets || 0);
+  const total = Number(c.max_tickets || 0);
+
+  const percent = total > 0
+    ? Math.min(100, Math.round((sold / total) * 100))
+    : 0;
+
+  return `
+  
   <tr>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
@@ -566,6 +575,19 @@ const campaignRows = (campaigns || []).map(c => `
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">
       $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
     </td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:160px;">
+  <div style="font-weight:bold;color:#111827;">
+    ${sold} / ${total}
+  </div>
+
+  <div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:6px;">
+    <div style="height:100%;width:${percent}%;background:#16a34a;border-radius:999px;"></div>
+  </div>
+
+  <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+    ${percent}% vendido
+  </div>
+</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
       <span class="badge ${campaignStatusClass(c.status)}">
   ${campaignStatusLabel(c.status)}
@@ -624,7 +646,8 @@ const campaignRows = (campaigns || []).map(c => `
   </a>
 </td>
       </tr>
-`).join("");
+`;
+}).join("");
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 res.send(`
@@ -832,6 +855,7 @@ payments
 <th>Sorteo</th>
 <th>Modalidad</th>
 <th>Precio</th>
+<th>Avance</th>
 <th>Estado</th>
 <th>Acciones</th>
 </tr>
@@ -840,7 +864,7 @@ payments
 <tbody>
 ${campaignRows || `
 <tr>
-<td colspan="7" style="padding:18px;text-align:center;color:#6b7280;">
+<td colspan="8" style="padding:18px;text-align:center;color:#6b7280;">
 Aún no tienes campañas creadas.
 </td>
 </tr>
