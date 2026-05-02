@@ -1882,11 +1882,12 @@ if (wompiTransactionId && payment.status !== "approved") {
           <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
           <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment.status || "-"}</div>
 
-          ${
+       ${
   tickets && tickets.length
     ? `
     <div style="margin-bottom:18px;">
       <b>Boletas asignadas:</b>
+
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
         ${tickets.map(t => `
           <div style="
@@ -1896,10 +1897,30 @@ if (wompiTransactionId && payment.status !== "approved") {
             border-radius:10px;
             font-weight:bold;
           ">
-            ${t.combination}
+            ${t.combination || t.ticket_code || "-"}
           </div>
         `).join("")}
       </div>
+
+      <a
+        target="_blank"
+        href="https://wa.me/?text=${encodeURIComponent(
+          `Hola, estas son mis boletas de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}`
+        )}"
+        style="
+          display:block;
+          margin-top:18px;
+          padding:14px;
+          background:#16a34a;
+          color:white;
+          text-align:center;
+          text-decoration:none;
+          border-radius:12px;
+          font-weight:bold;
+        "
+      >
+        Compartir mis boletas por WhatsApp
+      </a>
     </div>
     `
     : ""
@@ -1941,6 +1962,24 @@ text-align:center;
 ✅ Pago aprobado correctamente
 </div>
 `}
+
+<div style="margin-top:18px;">
+  <a
+    href="/campanas/${order.rifas?.slug || ""}"
+    style="
+      display:block;
+      padding:14px;
+      background:#111827;
+      color:white;
+      text-align:center;
+      text-decoration:none;
+      border-radius:12px;
+      font-weight:bold;
+    "
+  >
+    Volver a la campaña
+  </a>
+</div>
         </div>
       </body>
       </html>
