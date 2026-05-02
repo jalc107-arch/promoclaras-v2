@@ -1872,46 +1872,73 @@ body {
           $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
         </div>
 
-        ${
-          campaign.status === "finished"
-            ? `
-              <div class="finished-box">
-                Esta campaña ya finalizó.<br/>
-                No se permiten más compras.
-              </div>
+       ${
+  campaign.status === "active"
+    ? `
+      <a
+        class="button"
+        href="/campanas/${campaign.slug}/comprar">
+        Participar ahora
+      </a>
 
-              <a
-                class="button button-dark"
-                style="margin-top:16px;"
-                href="/resultado/${campaign.id}">
-                Ver resultado
-              </a>
-            `
-            : `
-              <a
-  class="button"
-  href="/campanas/${campaign.slug}/comprar">
-  Participar ahora
-</a>
+      <a
+        class="button button-secondary"
+        href="/consultar">
+        Consultar mis cupones
+      </a>
 
-<a
-  class="button button-secondary"
-  href="/consultar">
-  Consultar mis cupones
-</a>
+      <a
+        class="button button-whatsapp"
+        target="_blank"
+        href="https://wa.me/?text=${whatsappShareText}">
+        Compartir por WhatsApp
+      </a>
 
-<a
-  class="button button-whatsapp"
-  target="_blank"
-  href="https://wa.me/?text=${whatsappShareText}">
-  Compartir por WhatsApp
-</a>
+      <div class="small-note">
+        Tu cupón se asigna automáticamente después del pago aprobado.
+      </div>
+    `
+    : campaign.status === "finished"
+      ? `
+        <div class="finished-box">
+          Esta campaña ya finalizó.<br/>
+          No se permiten más compras.
+        </div>
 
-<div class="small-note">
-  Tu cupón se asigna automáticamente después del pago aprobado.
-</div>
-            `
-        }
+        <a
+          class="button button-dark"
+          style="margin-top:16px;"
+          href="/resultado/${campaign.id}">
+          Ver resultado
+        </a>
+      `
+      : campaign.status === "cancelled"
+        ? `
+          <div class="finished-box">
+            Esta campaña no se encuentra disponible.
+          </div>
+
+          <a
+            class="button button-secondary"
+            style="margin-top:16px;"
+            href="/consultar">
+            Consultar mis cupones
+          </a>
+        `
+        : `
+          <div class="finished-box" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
+            Esta campaña está pendiente de aprobación por el administrador.<br/>
+            Aún no se permiten compras.
+          </div>
+
+          <a
+            class="button button-secondary"
+            style="margin-top:16px;"
+            href="/consultar">
+            Consultar mis cupones
+          </a>
+        `
+}
       </div>
     </div>
 
