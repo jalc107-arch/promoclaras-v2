@@ -1905,8 +1905,8 @@ if (wompiTransactionId && payment.status !== "approved") {
       <a
         target="_blank"
         href="https://wa.me/?text=${encodeURIComponent(
-          `Hola, estas son mis boletas de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}`
-        )}"
+  `Hola, estas son mis boletas de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+)}"
         style="
           display:block;
           margin-top:18px;
