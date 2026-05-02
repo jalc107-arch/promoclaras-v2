@@ -3780,6 +3780,20 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
 
     if (error) throw error;
 
+    await sendWhatsAppMessage(
+  organizer.phone,
+  [
+    `Hola ${organizer.full_name || ""}.`,
+    ``,
+    `Tu cuenta de organizador en CampaClick fue aprobada correctamente.`,
+    ``,
+    `Ya puedes ingresar al panel y crear campañas para revisión del administrador.`,
+    ``,
+    `Ingreso organizador:`,
+    `https://promoclaras-v2-production.up.railway.app/organizers/login`
+  ].join("\n")
+);
+
     return res.redirect("/admin/organizadores");
   } catch (error) {
     return res.status(500).send(error.message);
@@ -3794,6 +3808,18 @@ app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
 
     const { organizerId } = req.params;
 
+    const { data: organizer, error: organizerLookupError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerLookupError) throw organizerLookupError;
+
+    if (!organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
     const { error } = await supabase
       .from("organizers")
       .update({
@@ -3802,6 +3828,20 @@ app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
       .eq("id", organizerId);
 
     if (error) throw error;
+
+    await sendWhatsAppMessage(
+      organizer.phone,
+      [
+        `Hola ${organizer.full_name || ""}.`,
+        ``,
+        `Tu verificación como organizador en CampaClick fue rechazada.`,
+        ``,
+        `Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
+        ``,
+        `Ingreso organizador:`,
+        `https://promoclaras-v2-production.up.railway.app/organizers/login`
+      ].join("\n")
+    );
 
     return res.redirect("/admin/organizadores");
   } catch (error) {
