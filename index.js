@@ -1965,7 +1965,12 @@ app.get("/consultar", async (req, res) => {
 
         if (ordersError) throw ordersError;
 
-        orders = ordersData || [];
+        orders = (ordersData || []).sort((a, b) => {
+  const aPaid = a.payment_status === "paid" ? 1 : 0;
+  const bPaid = b.payment_status === "paid" ? 1 : 0;
+
+  return bPaid - aPaid;
+});
       }
     }
 
