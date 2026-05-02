@@ -544,6 +544,12 @@ if (campaignIds.length > 0) {
     tickets = ticketsData || [];
   }
 }
+
+const totalCampaignCoupons = (campaigns || []).reduce(
+  (acc, c) => acc + Number(c.max_tickets || 0),
+  0
+);
+    
 const baseUrl = `${req.protocol}://${req.get("host")}`;
     
 const campaignRows = (campaigns || []).map(c => `
@@ -783,7 +789,12 @@ font-size:14px;
 
 <div class="card">
 <div class="metric">${tickets.length}</div>
-<div class="label">Boletas Vendidas</div>
+<div class="label">Cupones Vendidos</div>
+</div>
+
+<div class="card">
+<div class="metric">${totalCampaignCoupons}</div>
+<div class="label">Cupones Totales</div>
 </div>
 
 <div class="card">
@@ -878,7 +889,7 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 <div class="table-card" style="margin-top:30px;">
 
-<h2>Boletas asignadas</h2>
+<h2>Cupones asignadas</h2>
 
 <table>
 <thead>
@@ -1777,7 +1788,7 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
         </div>
 
         <div style="margin-bottom:20px;">
-          <label>Cantidad de boletas</label><br/>
+          <label>Cantidad de Cupones</label><br/>
           <input
             type="number"
             name="qty"
@@ -2088,7 +2099,7 @@ if (wompiTransactionId && payment.status !== "approved") {
       <a
         target="_blank"
         href="https://wa.me/?text=${encodeURIComponent(
-  `Hola, estas son mis boletas de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+  `Hola, estas son mis cupones de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
 )}"
         style="
           display:block;
@@ -2102,7 +2113,7 @@ if (wompiTransactionId && payment.status !== "approved") {
           font-weight:bold;
         "
       >
-        Compartir mis boletas por WhatsApp
+        Compartir mis cupones por WhatsApp
       </a>
     </div>
     `
