@@ -2001,13 +2001,21 @@ app.get("/resultado/:rifaId", async (req, res) => {
       return res.status(404).send("Resultado no encontrado");
     }
 
-    let winnerHtml = `
-      <div style="padding:16px;background:#fee2e2;color:#991b1b;border-radius:12px;font-weight:bold;">
-        No hubo ganador con ese resultado.
-      </div>
-    `;
+    let winnerHtml = "";
+    let statusBoxHtml = "";
 
-    if (rifa.winner_ticket_id) {
+    if (!rifa.result_value) {
+      statusBoxHtml = `
+        <div class="status-box pending-box">
+          <div class="status-icon">⏳</div>
+          <h2>Resultado pendiente</h2>
+          <p>
+            El resultado oficial aún no ha sido cargado por el administrador.
+            Cuando esté disponible, podrás consultarlo en esta misma página.
+          </p>
+        </div>
+      `;
+    } else if (rifa.winner_ticket_id) {
       const { data: ticket } = await supabase
         .from("tickets")
         .select(`
@@ -2018,33 +2026,322 @@ app.get("/resultado/:rifaId", async (req, res) => {
         .single();
 
       if (ticket) {
+        statusBoxHtml = `
+          <div class="status-box winner-box">
+            <div class="status-icon">🎉</div>
+            <h2>¡Tenemos ganador!</h2>
+            <p>La campaña ya cuenta con una boleta ganadora registrada.</p>
+          </div>
+        `;
+
         winnerHtml = `
-          <div style="padding:16px;background:#dcfce7;color:#166534;border-radius:12px;font-weight:bold;">
-            🎉 Ganador encontrado<br/><br/>
-            Nombre: ${ticket.buyers?.full_name || "-"}<br/>
-            Teléfono: ${ticket.buyers?.phone || "-"}<br/>
-            Boleta: ${ticket.combination || ticket.ticket_code}
+          <div class="winner-card">
+            <h3>Datos del ganador</h3>
+
+            <div class="winner-row">
+              <span>Nombre</span>
+              <strong>${ticket.buyers?.full_name || "-"}</strong>
+            </div>
+
+            <div class="winner-row">
+              <span>Teléfono</span>
+              <strong>${ticket.buyers?.phone || "-"}</strong>
+            </div>
+
+            <div class="winner-row">
+              <span>Boleta ganadora</span>
+              <strong class="ticket-badge">${ticket.combination || ticket.ticket_code || "-"}</strong>
+            </div>
           </div>
         `;
       }
+    } else {
+      statusBoxHtml = `
+        <div class="status-box no-winner-box">
+          <div class="status-icon">🔎</div>
+          <h2>No hubo ganador</h2>
+          <p>
+            El resultado fue cargado correctamente, pero ninguna boleta vendida
+            coincide con la combinación ganadora.
+          </p>
+        </div>
+      `;
     }
 
+    const publicCampaignUrl = rifa.slug ? `/campanas/${rifa.slug}` : "/";
+    const shareText = encodeURIComponent(
+      `Resultado de la campaña ${rifa.title}: ${rifa.result_value || "pendiente"}`
+    );
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+
     res.send(`
       <!DOCTYPE html>
       <html lang="es">
       <head>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Resultado</title>
+
+        <title>Resultado - ${rifa.title}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f6fb;
+            color: #111827;
+          }
+
+          .hero {
+            background: linear-gradient(135deg, #1d4ed8, #2563eb);
+            color: white;
+            padding: 50px 20px;
+            text-align: center;
+          }
+
+          .hero h1 {
+            margin: 0;
+            font-size: 38px;
+          }
+
+          .hero p {
+            margin: 10px 0 0;
+            opacity: .9;
+            font-size: 17px;
+          }
+
+          .container {
+            max-width: 850px;
+            margin: -35px auto 0;
+            padding: 0 20px 40px;
+          }
+
+          .main-card {
+            background: white;
+            border-radius: 22px;
+            padding: 30px;
+            box-shadow: 0 14px 40px rgba(0,0,0,.10);
+          }
+
+          .campaign-title {
+            margin: 0 0 8px;
+            font-size: 28px;
+            color: #111827;
+          }
+
+          .campaign-subtitle {
+            margin: 0 0 24px;
+            color: #6b7280;
+          }
+
+          .result-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 18px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+          }
+
+          .result-label {
+            color: #1e3a8a;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+          }
+
+          .result-value {
+            margin-top: 10px;
+            font-size: 46px;
+            color: #2563eb;
+            font-weight: 900;
+          }
+
+          .status-box {
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 24px;
+            text-align: center;
+          }
+
+          .status-icon {
+            font-size: 42px;
+            margin-bottom: 8px;
+          }
+
+          .status-box h2 {
+            margin: 0 0 8px;
+            font-size: 26px;
+          }
+
+          .status-box p {
+            margin: 0;
+            line-height: 1.5;
+          }
+
+          .winner-box {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+          }
+
+          .no-winner-box {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+          }
+
+          .pending-box {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+          }
+
+          .winner-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            padding: 22px;
+            margin-bottom: 24px;
+          }
+
+          .winner-card h3 {
+            margin-top: 0;
+            color: #111827;
+          }
+
+          .winner-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 13px 0;
+            border-bottom: 1px solid #e5e7eb;
+          }
+
+          .winner-row:last-child {
+            border-bottom: none;
+          }
+
+          .winner-row span {
+            color: #6b7280;
+          }
+
+          .winner-row strong {
+            color: #111827;
+            text-align: right;
+          }
+
+          .ticket-badge {
+            background: #1d4ed8;
+            color: white !important;
+            padding: 8px 12px;
+            border-radius: 999px;
+            display: inline-block;
+          }
+
+          .actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+          }
+
+          .btn {
+            display: block;
+            padding: 15px;
+            border-radius: 14px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: bold;
+          }
+
+          .btn-primary {
+            background: #2563eb;
+            color: white;
+          }
+
+          .btn-whatsapp {
+            background: #16a34a;
+            color: white;
+          }
+
+          .footer {
+            text-align: center;
+            color: #6b7280;
+            padding: 24px;
+            font-size: 14px;
+          }
+
+          @media (max-width: 600px) {
+            .hero h1 {
+              font-size: 30px;
+            }
+
+            .result-value {
+              font-size: 38px;
+            }
+
+            .winner-row {
+              flex-direction: column;
+            }
+
+            .winner-row strong {
+              text-align: left;
+            }
+          }
+        </style>
       </head>
-      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:700px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+      <body>
+
+        <div class="hero">
           <h1>Resultado de campaña</h1>
-          <p><b>Campaña:</b> ${rifa.title}</p>
-          <p><b>Resultado:</b> ${rifa.result_value || "Pendiente"}</p>
-          ${winnerHtml}
+          <p>CampaClick — Consulta pública del resultado</p>
         </div>
+
+        <div class="container">
+          <div class="main-card">
+
+            <h2 class="campaign-title">${rifa.title}</h2>
+            <p class="campaign-subtitle">
+              Premio: ${rifa.prize || "-"}
+            </p>
+
+            <div class="result-box">
+              <div class="result-label">Resultado oficial</div>
+              <div class="result-value">${rifa.result_value || "Pendiente"}</div>
+            </div>
+
+            ${statusBoxHtml}
+
+            ${winnerHtml}
+
+            <div class="actions">
+              <a class="btn btn-primary" href="${publicCampaignUrl}">
+                Volver a la campaña
+              </a>
+
+              <a
+                class="btn btn-whatsapp"
+                target="_blank"
+                href="https://wa.me/?text=${shareText}"
+              >
+                Compartir por WhatsApp
+              </a>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="footer">
+          © CampaClick — Plataforma de campañas promocionales
+        </div>
+
       </body>
       </html>
     `);
