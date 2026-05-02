@@ -1395,11 +1395,33 @@ font-size:14px;
 $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
 </div>
 
-<a
-class="button"
-href="/campanas/${campaign.slug}/comprar">
-Participar ahora
-</a>
+${campaign.status === "finished" ? `
+  <div style="
+    margin-top:20px;
+    padding:18px;
+    background:#fee2e2;
+    color:#991b1b;
+    border:1px solid #fecaca;
+    border-radius:14px;
+    font-weight:bold;
+    text-align:center;
+  ">
+    Esta campaña ya finalizó. No se permiten más compras.
+  </div>
+
+  <a
+    class="button"
+    style="background:#111827;"
+    href="/resultado/${campaign.id}">
+    Ver resultado
+  </a>
+` : `
+  <a
+    class="button"
+    href="/campanas/${campaign.slug}/comprar">
+    Participar ahora
+  </a>
+`}
 
 </div>
 
@@ -1435,6 +1457,10 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
     if (error || !campaign) {
       return res.status(404).send("Campaña no encontrada");
     }
+
+    if (campaign.status === "finished") {
+  return res.redirect(`/resultado/${campaign.id}`);
+}
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -1569,6 +1595,31 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
     if (campaignError || !campaign) {
       return res.status(404).send("Campaña no encontrada");
     }
+
+    if (campaign.status === "finished") {
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Campaña finalizada</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Campaña finalizada</h1>
+        <p>Esta campaña ya tiene resultado cargado y no permite nuevas compras.</p>
+
+        <a
+          href="/resultado/${campaign.id}"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Ver resultado
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
 
     let buyer = null;
 
