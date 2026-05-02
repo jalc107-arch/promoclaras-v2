@@ -1750,6 +1750,11 @@ body {
   background: #111827;
 }
 
+.button-secondary {
+  background: #111827;
+  margin-top: 12px;
+}
+
 .button-whatsapp {
   background: #16a34a;
   margin-top: 12px;
@@ -1890,6 +1895,12 @@ body {
 </a>
 
 <a
+  class="button button-secondary"
+  href="/consultar">
+  Consultar mis cupones
+</a>
+
+<a
   class="button button-whatsapp"
   target="_blank"
   href="https://wa.me/?text=${whatsappShareText}">
@@ -1922,6 +1933,167 @@ body {
 
 app.get("/r/:slug", async (req, res) => {
   return res.redirect(`/campanas/${req.params.slug}`);
+});
+
+app.get("/consultar", async (req, res) => {
+  try {
+    const phone = String(req.query.phone || "").trim();
+
+    let orders = [];
+
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, "");
+
+      const { data: buyer, error: buyerError } = await supabase
+        .from("buyers")
+        .select("*")
+        .eq("phone", cleanPhone)
+        .maybeSingle();
+
+      if (buyerError) throw buyerError;
+
+      if (buyer) {
+        const { data: ordersData, error: ordersError } = await supabase
+          .from("orders")
+          .select(`
+            *,
+            rifas(*),
+            tickets(*)
+          `)
+          .eq("buyer_id", buyer.id)
+          .order("created_at", { ascending: false });
+
+        if (ordersError) throw ordersError;
+
+        orders = ordersData || [];
+      }
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Consultar mis cupones</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:850px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+          <h1 style="margin-top:0;">Consultar mis cupones</h1>
+
+          <p style="color:#6b7280;">
+            Ingresa el número de teléfono usado en la compra para consultar tus órdenes y cupones asignados.
+          </p>
+
+          <form method="GET" action="/consultar" style="margin-top:20px;margin-bottom:28px;">
+            <label>Teléfono</label><br/>
+
+            <input
+              type="text"
+              name="phone"
+              value="${phone}"
+              placeholder="Ej: 3238123392"
+              required
+              style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 14px;"
+            />
+
+            <button
+              type="submit"
+              style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">
+              Consultar
+            </button>
+          </form>
+
+          ${
+            phone && orders.length === 0
+              ? `
+                <div style="padding:16px;background:#fef3c7;color:#92400e;border-radius:12px;font-weight:bold;">
+                  No encontramos órdenes asociadas a ese teléfono.
+                </div>
+              `
+              : ""
+          }
+
+          ${
+            orders.length > 0
+              ? `
+                <h2>Órdenes encontradas</h2>
+
+                <div style="display:grid;gap:16px;">
+                  ${orders.map(order => {
+                    const coupons = (order.tickets || [])
+                      .map(t => t.combination || t.ticket_code || "-")
+                      .join(", ");
+
+                    const paid = order.payment_status === "paid";
+
+                    return `
+                      <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#f9fafb;">
+                        <div style="font-size:18px;font-weight:bold;color:#111827;">
+                          ${order.rifas?.title || "Campaña"}
+                        </div>
+
+                        <div style="margin-top:8px;color:#374151;">
+                          <b>Estado:</b> ${paid ? "Pago aprobado" : order.payment_status}
+                        </div>
+
+                        <div style="margin-top:8px;color:#374151;">
+                          <b>Cantidad:</b> ${order.qty}
+                        </div>
+
+                        <div style="margin-top:8px;color:#374151;">
+                          <b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}
+                        </div>
+
+                        ${
+                          coupons
+                            ? `
+                              <div style="margin-top:12px;">
+                                <b>Cupones:</b>
+                                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                                  ${(order.tickets || []).map(t => `
+                                    <span style="background:#1e3a8a;color:white;padding:8px 12px;border-radius:999px;font-weight:bold;">
+                                      ${t.combination || t.ticket_code || "-"}
+                                    </span>
+                                  `).join("")}
+                                </div>
+                              </div>
+                            `
+                            : `
+                              <div style="margin-top:12px;color:#92400e;">
+                                Aún no hay cupones asignados. Si ya pagaste, espera unos segundos y vuelve a consultar.
+                              </div>
+                            `
+                        }
+
+                        <a
+                          href="/orden/${order.id}"
+                          style="display:block;margin-top:16px;padding:13px;background:#16a34a;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+                          Ver orden
+                        </a>
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              `
+              : ""
+          }
+
+          <div style="margin-top:24px;">
+            <a href="/" style="color:#2563eb;font-weight:bold;">Volver al inicio</a>
+          </div>
+
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
 });
 
 app.get("/campanas/:slug/comprar", async (req, res) => {
