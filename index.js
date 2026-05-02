@@ -3395,7 +3395,7 @@ app.get("/admin/resultados", async (req, res) => {
                 <button
                   type="submit"
                   style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
-                  Cancelar
+                  Rechazar
                 </button>
               </form>
             `
