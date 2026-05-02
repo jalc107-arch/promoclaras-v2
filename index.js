@@ -1202,17 +1202,17 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
 
             <div style="margin-bottom:12px;">
               <label>Link foto cédula frente</label><br/>
-              <input type="text" name="id_front_url" value="${organizer.id_front_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="id_front_url" required value="${organizer.id_front_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
               <label>Link foto cédula reverso</label><br/>
-              <input type="text" name="id_back_url" value="${organizer.id_back_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="id_back_url" required value="${organizer.id_back_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
               <label>Link selfie con cédula</label><br/>
-              <input type="text" name="selfie_id_url" value="${organizer.selfie_id_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="selfie_id_url" required value="${organizer.selfie_id_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
@@ -1301,6 +1301,41 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
     if (!termsAccepted) {
       return res.status(400).send("Debes aceptar los términos");
     }
+
+    if (!idFrontUrl || !idBackUrl || !selfieIdUrl) {
+  return res.status(400).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Soportes obligatorios</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Soportes obligatorios</h1>
+        <p>
+          Para enviar la verificación debes cargar todos los soportes:
+        </p>
+
+        <div style="text-align:left;display:inline-block;line-height:1.8;">
+          <div>✅ Link foto cédula frente</div>
+          <div>✅ Link foto cédula reverso</div>
+          <div>✅ Link selfie con cédula</div>
+          </div>
+
+        <br/>
+
+        <a
+          href="/organizers/${organizerId}/verificacion"
+          style="display:inline-block;margin-top:22px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver a completar verificación
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
 
     const { error } = await supabase
       .from("organizers")
@@ -3477,6 +3512,59 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
     }
 
     const { organizerId } = req.params;
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    if (!organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
+    const missingSupports = [];
+
+    if (!organizer.document_number) missingSupports.push("Número de cédula");
+    if (!organizer.id_front_url) missingSupports.push("Cédula frente");
+    if (!organizer.id_back_url) missingSupports.push("Cédula reverso");
+    if (!organizer.selfie_id_url) missingSupports.push("Selfie con cédula");
+    
+    if (missingSupports.length > 0) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <title>No se puede aprobar</title>
+        </head>
+        <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+          <div style="max-width:700px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+            <h1>No se puede aprobar este organizador</h1>
+
+            <p>
+              Faltan los siguientes soportes obligatorios:
+            </p>
+
+            <div style="display:inline-block;text-align:left;line-height:1.8;color:#991b1b;font-weight:bold;">
+              ${missingSupports.map(item => `<div>• ${item}</div>`).join("")}
+            </div>
+
+            <br/>
+
+            <a
+              href="/admin/organizadores"
+              style="display:inline-block;margin-top:22px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+              Volver a organizadores
+            </a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
 
     const { error } = await supabase
       .from("organizers")
