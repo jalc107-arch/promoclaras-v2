@@ -2156,8 +2156,33 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
-    if (campaign.status === "finished") {
-  return res.redirect(`/resultado/${campaign.id}`);
+   if (campaign.status !== "active") {
+  if (campaign.status === "finished") {
+    return res.redirect(`/resultado/${campaign.id}`);
+  }
+
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Campaña no disponible</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Campaña no disponible</h1>
+        <p>Esta campaña aún no está habilitada para compras.</p>
+
+        <a
+          href="/campanas/${campaign.slug}"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver a la campaña
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
 }
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
