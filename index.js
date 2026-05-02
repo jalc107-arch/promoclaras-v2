@@ -2038,6 +2038,20 @@ app.get("/consultar", async (req, res) => {
 
 const paid = order.payment_status === "paid";
 
+                    let paymentStatusLabel = order.payment_status || "created";
+
+if (order.payment_status === "paid") {
+  paymentStatusLabel = "Pago aprobado";
+}
+
+if (order.payment_status === "created") {
+  paymentStatusLabel = "Pago pendiente";
+}
+
+if (order.payment_status === "failed") {
+  paymentStatusLabel = "Pago fallido";
+}
+
 const shareText = encodeURIComponent(
   `Hola, estos son mis cupones de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
 );
@@ -2049,7 +2063,7 @@ return `
                         </div>
 
                         <div style="margin-top:8px;color:#374151;">
-                          <b>Estado:</b> ${paid ? "Pago aprobado" : order.payment_status}
+                          <b>Estado:</b> ${paymentStatusLabel}
                         </div>
 
                         <div style="margin-top:8px;color:#374151;">
