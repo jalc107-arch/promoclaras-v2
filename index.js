@@ -3345,6 +3345,7 @@ app.get("/admin/organizadores", async (req, res) => {
                 <th style="padding:12px;text-align:left;">Teléfono</th>
                 <th style="padding:12px;text-align:left;">Documento</th>
                 <th style="padding:12px;text-align:left;">Método pago</th>
+                <th style="padding:12px;text-align:left;">Soportes</th>
                 <th style="padding:12px;text-align:left;">Estado</th>
                 <th style="padding:12px;text-align:left;">Acción</th>
               </tr>
@@ -3384,14 +3385,42 @@ app.get("/admin/organizadores", async (req, res) => {
                     </td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
-                      ${o.payout_method || "-"}
-                    </td>
+  ${o.payout_method || "-"}
+</td>
 
-                    <td style="padding:12px;border-bottom:1px solid #eee;">
-                      <span style="display:inline-block;padding:7px 11px;border-radius:999px;font-weight:bold;font-size:12px;${statusStyle}">
-                        ${statusLabel}
-                      </span>
-                    </td>
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  <div style="display:flex;flex-direction:column;gap:6px;min-width:140px;">
+    ${
+      o.id_front_url
+        ? `<a href="${o.id_front_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Cédula frente</a>`
+        : `<span style="color:#9ca3af;">Sin cédula frente</span>`
+    }
+
+    ${
+      o.id_back_url
+        ? `<a href="${o.id_back_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Cédula reverso</a>`
+        : `<span style="color:#9ca3af;">Sin cédula reverso</span>`
+    }
+
+    ${
+      o.selfie_id_url
+        ? `<a href="${o.selfie_id_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Selfie</a>`
+        : `<span style="color:#9ca3af;">Sin selfie</span>`
+    }
+
+    ${
+      o.prize_proof_url
+        ? `<a href="${o.prize_proof_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Soporte premio</a>`
+        : `<span style="color:#9ca3af;">Sin soporte premio</span>`
+    }
+  </div>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  <span style="display:inline-block;padding:7px 11px;border-radius:999px;font-weight:bold;font-size:12px;${statusStyle}">
+    ${statusLabel}
+  </span>
+</td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
   <div style="display:flex;flex-direction:column;gap:8px;min-width:150px;">
