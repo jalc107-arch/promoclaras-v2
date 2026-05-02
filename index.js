@@ -2084,6 +2084,12 @@ return `
   </a>
 
   <a
+    href="/campanas/${order.rifas?.slug || ""}"
+    style="display:block;padding:13px;background:#111827;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+    Ver campaña
+  </a>
+
+  <a
     target="_blank"
     href="https://wa.me/?text=${shareText}"
     style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
