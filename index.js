@@ -3346,6 +3346,7 @@ app.get("/admin/organizadores", async (req, res) => {
                 <th style="padding:12px;text-align:left;">Documento</th>
                 <th style="padding:12px;text-align:left;">Método pago</th>
                 <th style="padding:12px;text-align:left;">Estado</th>
+                <th style="padding:12px;text-align:left;">Acción</th>
               </tr>
             </thead>
 
@@ -3391,6 +3392,40 @@ app.get("/admin/organizadores", async (req, res) => {
                         ${statusLabel}
                       </span>
                     </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+  <div style="display:flex;flex-direction:column;gap:8px;min-width:150px;">
+
+    ${
+      o.verification_status !== "verified"
+        ? `
+          <form method="POST" action="/admin/organizadores/${o.id}/aprobar">
+            <button
+              type="submit"
+              style="width:100%;padding:9px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+              Aprobar
+            </button>
+          </form>
+        `
+        : ""
+    }
+
+    ${
+      o.verification_status !== "rejected"
+        ? `
+          <form method="POST" action="/admin/organizadores/${o.id}/rechazar">
+            <button
+              type="submit"
+              style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+              Rechazar
+            </button>
+          </form>
+        `
+        : ""
+    }
+
+  </div>
+</td>
                   </tr>
                 `;
               }).join("")}
