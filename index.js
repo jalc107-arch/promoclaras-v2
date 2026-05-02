@@ -1969,6 +1969,8 @@ app.get("/consultar", async (req, res) => {
       }
     }
 
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -2026,12 +2028,16 @@ app.get("/consultar", async (req, res) => {
                 <div style="display:grid;gap:16px;">
                   ${orders.map(order => {
                     const coupons = (order.tickets || [])
-                      .map(t => t.combination || t.ticket_code || "-")
-                      .join(", ");
+  .map(t => t.combination || t.ticket_code || "-")
+  .join(", ");
 
-                    const paid = order.payment_status === "paid";
+const paid = order.payment_status === "paid";
 
-                    return `
+const shareText = encodeURIComponent(
+  `Hola, estos son mis cupones de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+);
+
+return `
                       <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#f9fafb;">
                         <div style="font-size:18px;font-weight:bold;color:#111827;">
                           ${order.rifas?.title || "Campaña"}
@@ -2070,11 +2076,20 @@ app.get("/consultar", async (req, res) => {
                             `
                         }
 
-                        <a
-                          href="/orden/${order.id}"
-                          style="display:block;margin-top:16px;padding:13px;background:#16a34a;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-                          Ver orden
-                        </a>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">
+  <a
+    href="/orden/${order.id}"
+    style="display:block;padding:13px;background:#16a34a;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+    Ver orden
+  </a>
+
+  <a
+    target="_blank"
+    href="https://wa.me/?text=${shareText}"
+    style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+    Compartir cupones
+  </a>
+</div>
                       </div>
                     `;
                   }).join("")}
