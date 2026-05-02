@@ -549,6 +549,11 @@ const totalCampaignCoupons = (campaigns || []).reduce(
   (acc, c) => acc + Number(c.max_tickets || 0),
   0
 );
+
+    const availableCampaignCoupons = (campaigns || []).reduce(
+  (acc, c) => acc + Number(c.available_tickets || 0),
+  0
+);
     
 const baseUrl = `${req.protocol}://${req.get("host")}`;
     
@@ -790,6 +795,11 @@ font-size:14px;
 <div class="card">
 <div class="metric">${tickets.length}</div>
 <div class="label">Cupones Vendidos</div>
+</div>
+
+<div class="card">
+<div class="metric">${availableCampaignCoupons}</div>
+<div class="label">Cupones Disponibles</div>
 </div>
 
 <div class="card">
