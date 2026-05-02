@@ -530,8 +530,48 @@ const campaignRows = (campaigns || []).map(c => `
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_provider}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_mode}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">$${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">${c.status}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">
+      $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
+    </td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
+      <span class="badge ${c.status === "finished" ? "approved" : "pending"}">
+        ${c.status || "-"}
+      </span>
+    </td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
+      <a
+        href="/resultado/${c.id}"
+        style="
+          display:inline-block;
+          padding:8px 12px;
+          background:#2563eb;
+          color:white;
+          text-decoration:none;
+          border-radius:10px;
+          font-weight:bold;
+          font-size:13px;
+          margin-bottom:6px;
+        "
+      >
+        Ver resultado
+      </a>
+      <br/>
+      <a
+        href="/campanas/${c.slug}"
+        style="
+          display:inline-block;
+          padding:8px 12px;
+          background:#16a34a;
+          color:white;
+          text-decoration:none;
+          border-radius:10px;
+          font-weight:bold;
+          font-size:13px;
+        "
+      >
+        Ver campaña
+      </a>
+    </td>
   </tr>
 `).join("");
     
@@ -694,8 +734,37 @@ payments
 
 <div class="table-card">
 
+<h2>Mis campañas</h2>
+
+<table>
+<thead>
+<tr>
+<th>Campaña</th>
+<th>Premio</th>
+<th>Sorteo</th>
+<th>Modalidad</th>
+<th>Precio</th>
+<th>Estado</th>
+<th>Acciones</th>
+</tr>
+</thead>
+
+<tbody>
+${campaignRows || `
+<tr>
+<td colspan="7" style="padding:18px;text-align:center;color:#6b7280;">
+Aún no tienes campañas creadas.
+</td>
+</tr>
+`}
+</tbody>
+</table>
+
+</div>
+
+<div class="table-card" style="margin-top:30px;">
+
 <h2>Últimas órdenes</h2>
-<h2 style="margin-top:40px;">Boletas asignadas</h2>
 
 <table>
 
