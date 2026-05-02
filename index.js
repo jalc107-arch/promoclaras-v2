@@ -736,8 +736,35 @@ font-size:14px;
 <body>
 
 <div class="header">
-<h1>Panel del Organizador</h1>
-<p>Resumen general de campañas y ventas</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h1>Panel del Organizador</h1>
+      <p>Resumen general de campañas y ventas</p>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a
+        href="/organizers/${organizer.id}/campanas/nueva"
+        style="background:#16a34a;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+      >
+        Nueva campaña
+      </a>
+
+      <a
+        href="/organizers/${organizer.id}/verificacion"
+        style="background:white;color:#1d4ed8;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+      >
+        Mi verificación
+      </a>
+
+      <a
+        href="/organizers/logout"
+        style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+      >
+        Cerrar sesión
+      </a>
+    </div>
+  </div>
 </div>
 
 <div class="container">
@@ -2524,7 +2551,16 @@ app.get("/admin/resultados", async (req, res) => {
 
       <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
         <div style="max-width:900px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-          <h1>Administrador de resultados</h1>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+  <h1>Administrador de resultados</h1>
+
+  <a
+    href="/admin/logout"
+    style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+  >
+    Cerrar sesión
+  </a>
+</div>
 
           <table style="width:100%;border-collapse:collapse;">
             <thead>
