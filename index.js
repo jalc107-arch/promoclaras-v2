@@ -183,14 +183,18 @@ async function sendOrderCouponsWhatsApp(orderId) {
     const baseUrl = "https://promoclaras-v2-production.up.railway.app";
 
     const couponList = tickets
-      .map(t => t.combination || t.ticket_code || "-")
-      .join(", ");
+  .map(t => t.combination || t.ticket_code || "-")
+  .join(", ");
 
-    const message = [
-      `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
-      ``,
-      `Campaña: ${order.rifas?.title || "-"}`,
-      `Cupones asignados: ${couponList}`,
+const couponLabel = tickets.length === 1
+  ? "Cupón asignado"
+  : "Cupones asignados";
+
+const message = [
+  `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
+  ``,
+  `Campaña: ${order.rifas?.title || "-"}`,
+  `${couponLabel}: ${couponList}`,
       ``,
       `Consulta tu orden aquí:`,
       `${baseUrl}/orden/${order.id}`,
