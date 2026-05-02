@@ -1330,6 +1330,13 @@ app.get("/campanas/:slug", async (req, res) => {
       publicStatusColor = "#dc2626";
     }
 
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const campaignPublicUrl = `${baseUrl}/campanas/${campaign.slug}`;
+    
+    const whatsappShareText = encodeURIComponent(
+  `Participa en esta campaña: ${campaign.title}. Link: ${campaignPublicUrl}`
+);
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -1537,6 +1544,11 @@ body {
   background: #111827;
 }
 
+.button-whatsapp {
+  background: #16a34a;
+  margin-top: 12px;
+}
+
 .finished-box {
   margin-top: 15px;
   padding: 16px;
@@ -1621,18 +1633,7 @@ body {
         <div class="progress-bar"></div>
       </div>
 
-      <div class="progress-meta">
-        <div>
-          <strong>${soldCoupons}</strong><br/>
-          cupones vendidos
-        </div>
-
-        <div>
-          <strong>${availableCoupons}</strong><br/>
-          cupones disponibles
-        </div>
-      </div>
-
+      
     </div>
   </div>
 
@@ -1677,14 +1678,21 @@ body {
             `
             : `
               <a
-                class="button"
-                href="/campanas/${campaign.slug}/comprar">
-                Participar ahora
-              </a>
+  class="button"
+  href="/campanas/${campaign.slug}/comprar">
+  Participar ahora
+</a>
 
-              <div class="small-note">
-                Tu cupón se asigna automáticamente después del pago aprobado.
-              </div>
+<a
+  class="button button-whatsapp"
+  target="_blank"
+  href="https://wa.me/?text=${whatsappShareText}">
+  Compartir por WhatsApp
+</a>
+
+<div class="small-note">
+  Tu cupón se asigna automáticamente después del pago aprobado.
+</div>
             `
         }
       </div>
