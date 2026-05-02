@@ -3332,6 +3332,7 @@ app.get("/admin/resultados", async (req, res) => {
                 <th style="padding:12px;text-align:left;">Descripción</th>
                 <th style="padding:12px;text-align:left;">Modalidad</th>
                 <th style="padding:12px;text-align:left;">Precio</th>
+                <th style="padding:12px;text-align:left;">Fecha sorteo</th>
                 <th style="padding:12px;text-align:left;">Resultado</th>
                 <th style="padding:12px;text-align:left;">Estado</th>
                 <th style="padding:12px;text-align:left;">Acción</th>
@@ -3362,6 +3363,10 @@ app.get("/admin/resultados", async (req, res) => {
 
 <td style="padding:12px;border-bottom:1px solid #eee;">
   $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  ${c.draw_date || "-"}
 </td>
 
 <td style="padding:12px;border-bottom:1px solid #eee;">
