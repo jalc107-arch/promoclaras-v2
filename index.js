@@ -3343,10 +3343,45 @@ app.get("/admin/resultados", async (req, res) => {
                   <td style="padding:12px;border-bottom:1px solid #eee;">${c.result_value || "Pendiente"}</td>
                   <td style="padding:12px;border-bottom:1px solid #eee;">${c.status}</td>
                   <td style="padding:12px;border-bottom:1px solid #eee;">
-                    <a href="/admin/campanas/${c.id}/resultado" style="color:#2563eb;font-weight:bold;">
-                      Cargar resultado
-                    </a>
-                  </td>
+  <div style="display:flex;flex-direction:column;gap:8px;">
+
+    ${
+      c.status === "pending"
+        ? `
+          <form method="POST" action="/admin/campanas/${c.id}/aprobar">
+            <button
+              type="submit"
+              style="width:100%;padding:9px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+              Aprobar
+            </button>
+          </form>
+
+          <form method="POST" action="/admin/campanas/${c.id}/cancelar">
+            <button
+              type="submit"
+              style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+              Cancelar
+            </button>
+          </form>
+        `
+        : ""
+    }
+
+    <a
+      href="/campanas/${c.slug}"
+      target="_blank"
+      style="display:block;text-align:center;padding:9px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+      Ver campaña
+    </a>
+
+    <a
+      href="/admin/campanas/${c.id}/resultado"
+      style="display:block;text-align:center;padding:9px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+      Cargar resultado
+    </a>
+
+  </div>
+</td>
                 </tr>
               `).join("")}
             </tbody>
