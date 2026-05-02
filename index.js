@@ -3287,6 +3287,125 @@ app.get("/admin/logout", (req, res) => {
   });
 });
 
+app.get("/admin/organizadores", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { data: organizers, error } = await supabase
+      .from("organizers")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Admin - Organizadores</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:1200px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);overflow-x:auto;">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <div>
+              <h1 style="margin:0;">Administrador de organizadores</h1>
+              <p style="margin:8px 0 0;color:#6b7280;">
+                Revisa el estado de verificación de los organizadores registrados.
+              </p>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <a
+                href="/admin/resultados"
+                style="background:#2563eb;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
+                Campañas
+              </a>
+
+              <a
+                href="/admin/logout"
+                style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
+                Cerrar sesión
+              </a>
+            </div>
+          </div>
+
+          <table style="width:100%;min-width:1000px;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#eff6ff;">
+                <th style="padding:12px;text-align:left;">Nombre</th>
+                <th style="padding:12px;text-align:left;">Correo</th>
+                <th style="padding:12px;text-align:left;">Teléfono</th>
+                <th style="padding:12px;text-align:left;">Documento</th>
+                <th style="padding:12px;text-align:left;">Método pago</th>
+                <th style="padding:12px;text-align:left;">Estado</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${(organizers || []).map(o => {
+                let statusLabel = "Pendiente";
+                let statusStyle = "background:#fef3c7;color:#92400e;";
+
+                if (o.verification_status === "verified") {
+                  statusLabel = "Aprobado";
+                  statusStyle = "background:#dcfce7;color:#166534;";
+                }
+
+                if (o.verification_status === "rejected") {
+                  statusLabel = "Rechazado";
+                  statusStyle = "background:#fee2e2;color:#991b1b;";
+                }
+
+                return `
+                  <tr>
+                    <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
+                      ${o.full_name || "-"}
+                    </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+                      ${o.email || "-"}
+                    </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+                      ${o.phone || "-"}
+                    </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+                      ${o.document_number || "-"}
+                    </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+                      ${o.payout_method || "-"}
+                    </td>
+
+                    <td style="padding:12px;border-bottom:1px solid #eee;">
+                      <span style="display:inline-block;padding:7px 11px;border-radius:999px;font-weight:bold;font-size:12px;${statusStyle}">
+                        ${statusLabel}
+                      </span>
+                    </td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.get("/admin/resultados", async (req, res) => {
   try {
     if (!req.session.isAdmin) {
