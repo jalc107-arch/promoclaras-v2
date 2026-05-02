@@ -1306,8 +1306,7 @@ app.get("/campanas/:slug", async (req, res) => {
 
     const totalCoupons = Number(campaign.max_tickets || 0);
     const soldCoupons = Number(campaign.sold_tickets || 0);
-    const availableCoupons = Number(campaign.available_tickets || 0);
-
+    
     const soldPercentage = totalCoupons > 0
       ? Math.min(100, Math.round((soldCoupons / totalCoupons) * 100))
       : 0;
@@ -1460,29 +1459,6 @@ body {
   border-radius: 999px;
 }
 
-.progress-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 15px;
-  color: #374151;
-}
-
-.progress-meta div {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 12px 16px;
-  flex: 1;
-  min-width: 180px;
-  text-align: center;
-}
-
-.progress-meta strong {
-  color: #111827;
-  font-size: 20px;
-}
 
 .info-grid {
   display: grid;
