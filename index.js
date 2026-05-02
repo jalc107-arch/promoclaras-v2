@@ -2240,10 +2240,12 @@ if (wompiTransactionId && payment.status !== "approved") {
       .eq("order_id", orderId);
 
     if (!existingTickets || existingTickets.length === 0) {
-      await assignTicketsToOrder(orderId);
-    }
+  await assignTicketsToOrder(orderId);
+}
 
-    return res.redirect(`/orden/${orderId}`);
+await sendOrderCouponsWhatsApp(orderId);
+
+return res.redirect(`/orden/${orderId}`);
   }
 }
 
