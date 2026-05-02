@@ -2567,6 +2567,25 @@ text-align:center;
     Volver a la campaña
   </a>
 </div>
+
+<div style="margin-top:12px;">
+  <a
+    href="/consultar"
+    style="
+      display:block;
+      padding:14px;
+      background:#2563eb;
+      color:white;
+      text-align:center;
+      text-decoration:none;
+      border-radius:12px;
+      font-weight:bold;
+    "
+  >
+    Consultar mis cupones
+  </a>
+</div>
+
         </div>
       </body>
       </html>
