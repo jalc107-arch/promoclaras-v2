@@ -597,7 +597,7 @@ const campaignRows = (campaigns || []).map(c => `
 
   <a
     target="_blank"
-    href="https://wa.me/?text=${encodeURIComponent(`Participa en esta campaña: ${c.title} - ${c.slug ? `/campanas/${c.slug}` : ""}`)}"
+    href="https://wa.me/?text=${encodeURIComponent(`Participa en esta campaña: ${c.title} - ${baseUrl}/campanas/${c.slug}`)}"
     style="
       display:block;
       padding:8px 12px;
@@ -612,7 +612,7 @@ const campaignRows = (campaigns || []).map(c => `
     Compartir
   </a>
 </td>
-  </tr>
+      </tr>
 `).join("");
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
