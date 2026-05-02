@@ -1237,83 +1237,166 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
               <input type="text" name="document_number" required value="${organizer.document_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
-            <div style="margin-bottom:16px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+<div style="margin-bottom:16px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
   <b>Soportes de identidad</b>
-  <p style="margin:8px 0 14px;color:#6b7280;font-size:14px;">
-    Toma las fotos directamente desde la cámara del celular. No uses imágenes de galería.
+
+  <p style="margin:8px 0 14px;color:#6b7280;font-size:14px;line-height:1.5;">
+    Las fotos deben tomarse directamente desde la cámara en esta página.
+    No se permite cargar imágenes desde galería.
   </p>
 
-  <div style="margin-bottom:14px;">
-    <label>Foto cédula frente</label><br/>
-    <input type="hidden" name="id_front_image" id="id_front_image">
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      required
-      onchange="convertImageToBase64(this, 'id_front_image', 'preview_front')"
-      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
-    >
-    <div id="preview_front" style="margin-top:8px;color:#166534;font-weight:bold;">
-      ${organizer.id_front_url ? "Foto registrada previamente" : ""}
-    </div>
-  </div>
+  <input type="hidden" name="id_front_image" id="id_front_image">
+  <input type="hidden" name="id_back_image" id="id_back_image">
+  <input type="hidden" name="selfie_id_image" id="selfie_id_image">
 
-  <div style="margin-bottom:14px;">
-    <label>Foto cédula reverso</label><br/>
-    <input type="hidden" name="id_back_image" id="id_back_image">
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      required
-      onchange="convertImageToBase64(this, 'id_back_image', 'preview_back')"
-      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
-    >
-    <div id="preview_back" style="margin-top:8px;color:#166534;font-weight:bold;">
-      ${organizer.id_back_url ? "Foto registrada previamente" : ""}
-    </div>
-  </div>
+  <div style="display:grid;gap:14px;">
 
-  <div style="margin-bottom:6px;">
-    <label>Selfie con cédula</label><br/>
-    <input type="hidden" name="selfie_id_image" id="selfie_id_image">
-    <input
-      type="file"
-      accept="image/*"
-      capture="user"
-      required
-      onchange="convertImageToBase64(this, 'selfie_id_image', 'preview_selfie')"
-      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
-    >
-    <div id="preview_selfie" style="margin-top:8px;color:#166534;font-weight:bold;">
-      ${organizer.selfie_id_url ? "Foto registrada previamente" : ""}
+    <div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;">
+      <div style="font-weight:bold;margin-bottom:8px;">Foto cédula frente</div>
+
+      <button
+        type="button"
+        onclick="openCamera('id_front_image', 'preview_front', 'environment')"
+        style="width:100%;padding:13px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+        Tomar foto cédula frente
+      </button>
+
+      <div id="preview_front" style="margin-top:10px;color:#166534;font-weight:bold;">
+        ${organizer.id_front_url ? "Foto registrada previamente" : "Pendiente por tomar"}
+      </div>
+    </div>
+
+    <div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;">
+      <div style="font-weight:bold;margin-bottom:8px;">Foto cédula reverso</div>
+
+      <button
+        type="button"
+        onclick="openCamera('id_back_image', 'preview_back', 'environment')"
+        style="width:100%;padding:13px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+        Tomar foto cédula reverso
+      </button>
+
+      <div id="preview_back" style="margin-top:10px;color:#166534;font-weight:bold;">
+        ${organizer.id_back_url ? "Foto registrada previamente" : "Pendiente por tomar"}
+      </div>
+    </div>
+
+    <div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;">
+      <div style="font-weight:bold;margin-bottom:8px;">Selfie con cédula</div>
+
+      <button
+        type="button"
+        onclick="openCamera('selfie_id_image', 'preview_selfie', 'user')"
+        style="width:100%;padding:13px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+        Tomar selfie con cédula
+      </button>
+
+      <div id="preview_selfie" style="margin-top:10px;color:#166534;font-weight:bold;">
+        ${organizer.selfie_id_url ? "Foto registrada previamente" : "Pendiente por tomar"}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="cameraModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;padding:18px;">
+  <div style="max-width:520px;margin:auto;background:white;border-radius:18px;padding:18px;">
+    <h2 style="margin-top:0;">Tomar foto</h2>
+
+    <video
+      id="cameraVideo"
+      autoplay
+      playsinline
+      style="width:100%;border-radius:14px;background:#111827;">
+    </video>
+
+    <canvas id="cameraCanvas" style="display:none;"></canvas>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+      <button
+        type="button"
+        onclick="capturePhoto()"
+        style="padding:13px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+        Capturar
+      </button>
+
+      <button
+        type="button"
+        onclick="closeCamera()"
+        style="padding:13px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+        Cancelar
+      </button>
     </div>
   </div>
 </div>
 
 <script>
-  function convertImageToBase64(input, hiddenInputId, previewId) {
-    const file = input.files && input.files[0];
+  let currentStream = null;
+  let currentHiddenInputId = null;
+  let currentPreviewId = null;
 
-    if (!file) {
+  async function openCamera(hiddenInputId, previewId, facingMode) {
+    try {
+      currentHiddenInputId = hiddenInputId;
+      currentPreviewId = previewId;
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Este navegador no permite abrir la cámara directamente. Usa un navegador actualizado en el celular.");
+        return;
+      }
+
+      currentStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      const video = document.getElementById("cameraVideo");
+      video.srcObject = currentStream;
+
+      document.getElementById("cameraModal").style.display = "block";
+    } catch (error) {
+      console.error(error);
+      alert("No fue posible abrir la cámara. Revisa permisos del navegador.");
+    }
+  }
+
+  function capturePhoto() {
+    const video = document.getElementById("cameraVideo");
+    const canvas = document.getElementById("cameraCanvas");
+
+    if (!video || !currentHiddenInputId || !currentPreviewId) {
+      alert("No hay cámara activa.");
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      alert("Solo se permiten imágenes.");
-      input.value = "";
-      return;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const imageBase64 = canvas.toDataURL("image/jpeg", 0.78);
+
+    document.getElementById(currentHiddenInputId).value = imageBase64;
+    document.getElementById(currentPreviewId).innerHTML = "Foto tomada y lista para guardar";
+
+    closeCamera();
+  }
+
+  function closeCamera() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = function(event) {
-      document.getElementById(hiddenInputId).value = event.target.result;
-      document.getElementById(previewId).innerHTML = "Foto lista para guardar";
-    };
-
-    reader.readAsDataURL(file);
+    document.getElementById("cameraModal").style.display = "none";
   }
 </script>
 
