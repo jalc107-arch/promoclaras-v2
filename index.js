@@ -3328,6 +3328,8 @@ app.get("/admin/resultados", async (req, res) => {
             <thead>
               <tr style="background:#eff6ff;">
                 <th style="padding:12px;text-align:left;">Campaña</th>
+                <th style="padding:12px;text-align:left;">Premio</th>
+                <th style="padding:12px;text-align:left;">Descripción</th>
                 <th style="padding:12px;text-align:left;">Modalidad</th>
                 <th style="padding:12px;text-align:left;">Resultado</th>
                 <th style="padding:12px;text-align:left;">Estado</th>
@@ -3338,12 +3340,35 @@ app.get("/admin/resultados", async (req, res) => {
             <tbody>
               ${(campaigns || []).map(c => `
                 <tr>
-                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.title}</td>
-                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.draw_mode}</td>
-                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.result_value || "Pendiente"}</td>
-                  <td style="padding:12px;border-bottom:1px solid #eee;">${c.status}</td>
-                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                  <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
+  ${c.title || "-"}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  ${c.prize || "-"}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;max-width:260px;line-height:1.4;color:#374151;">
+  ${c.description || "-"}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  ${c.draw_mode || "-"}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  ${c.result_value || "Pendiente"}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
+  ${campaignStatusLabel(c.status)}
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eee;">
   <div style="display:flex;flex-direction:column;gap:8px;">
+                  
+                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                  <div style="display:flex;flex-direction:column;gap:8px;">
 
     ${
       c.status === "pending"
