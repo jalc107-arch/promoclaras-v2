@@ -130,6 +130,98 @@ async function sendWhatsAppMessage(phone, message) {
   }
 }
 
+async function sendOrderCouponsWhatsApp(orderId) {
+  try {
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        buyers(*),
+        rifas(*)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (orderError) throw orderError;
+    if (!order) throw new Error("Orden no encontrada");
+
+    if (order.whatsapp_sent) {
+      console.log("WhatsApp ya enviado para la orden:", orderId);
+      return {
+        ok: true,
+        skipped: true,
+        reason: "WhatsApp ya enviado"
+      };
+    }
+
+    if (order.payment_status !== "paid") {
+      console.log("Orden aún no está pagada:", orderId);
+      return {
+        ok: false,
+        skipped: true,
+        reason: "Orden no pagada"
+      };
+    }
+
+    const { data: tickets, error: ticketsError } = await supabase
+      .from("tickets")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("ticket_code", { ascending: true });
+
+    if (ticketsError) throw ticketsError;
+
+    if (!tickets || tickets.length === 0) {
+      console.log("Orden pagada sin cupones asignados:", orderId);
+      return {
+        ok: false,
+        skipped: true,
+        reason: "Sin cupones asignados"
+      };
+    }
+
+    const baseUrl = "https://promoclaras-v2-production.up.railway.app";
+
+    const couponList = tickets
+      .map(t => t.combination || t.ticket_code || "-")
+      .join(", ");
+
+    const message = [
+      `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
+      ``,
+      `Campaña: ${order.rifas?.title || "-"}`,
+      `Cupones asignados: ${couponList}`,
+      ``,
+      `Consulta tu orden aquí:`,
+      `${baseUrl}/orden/${order.id}`,
+      ``,
+      `Gracias por participar.`
+    ].join("\n");
+
+    const result = await sendWhatsAppMessage(
+      order.buyers?.phone,
+      message
+    );
+
+    if (result.ok) {
+      await supabase
+        .from("orders")
+        .update({
+          whatsapp_sent: true
+        })
+        .eq("id", orderId);
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Error enviando cupones por WhatsApp:", error);
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
 function campaignStatusLabel(status) {
   if (status === "active") return "Activa";
   if (status === "pending") return "Pendiente";
