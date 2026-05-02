@@ -2095,11 +2095,11 @@ return `
                             `
                         }
 
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">
+                       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">
   <a
     href="/orden/${order.id}"
     style="display:block;padding:13px;background:#16a34a;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-    Ver orden
+    ${paid ? "Ver orden" : "Continuar pago"}
   </a>
 
   <a
@@ -2109,17 +2109,17 @@ return `
   </a>
 
   ${
-  coupons
-    ? `
-      <a
-        target="_blank"
-        href="https://wa.me/?text=${shareText}"
-        style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-        Compartir cupones
-      </a>
-    `
-    : ""
-}
+    coupons
+      ? `
+        <a
+          target="_blank"
+          href="https://wa.me/?text=${shareText}"
+          style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Compartir cupones
+        </a>
+      `
+      : ""
+  }
 </div>
                       </div>
                     `;
