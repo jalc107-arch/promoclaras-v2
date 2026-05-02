@@ -3395,6 +3395,54 @@ app.get("/admin/resultados", async (req, res) => {
   }
 });
 
+app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+
+    const { error } = await supabase
+      .from("rifas")
+      .update({
+        status: "active"
+      })
+      .eq("id", rifaId)
+      .eq("status", "pending");
+
+    if (error) throw error;
+
+    return res.redirect("/admin/resultados");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+
+    const { error } = await supabase
+      .from("rifas")
+      .update({
+        status: "cancelled"
+      })
+      .eq("id", rifaId)
+      .eq("status", "pending");
+
+    if (error) throw error;
+
+    return res.redirect("/admin/resultados");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
   try {
     if (!req.session.isAdmin) {
