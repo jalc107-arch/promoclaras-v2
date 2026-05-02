@@ -3312,7 +3312,7 @@ app.get("/admin/resultados", async (req, res) => {
       </head>
 
       <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:900px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+        <div style="max-width:1300px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);overflow-x:auto;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
   <h1>Administrador de resultados</h1>
 
@@ -3324,7 +3324,7 @@ app.get("/admin/resultados", async (req, res) => {
   </a>
 </div>
 
-          <table style="width:100%;border-collapse:collapse;">
+          <table style="width:100%;min-width:1100px;border-collapse:collapse;">
             <thead>
               <tr style="background:#eff6ff;">
                 <th style="padding:12px;text-align:left;">Campaña</th>
@@ -3349,9 +3349,9 @@ app.get("/admin/resultados", async (req, res) => {
       ${c.prize || "-"}
     </td>
 
-    <td style="padding:12px;border-bottom:1px solid #eee;max-width:260px;line-height:1.4;color:#374151;">
-      ${c.description || "-"}
-    </td>
+    <td style="padding:12px;border-bottom:1px solid #eee;width:320px;max-width:320px;line-height:1.4;color:#374151;white-space:normal;word-break:break-word;">
+  ${c.description || "-"}
+</td>
 
     <td style="padding:12px;border-bottom:1px solid #eee;">
       ${c.draw_mode || "-"}
