@@ -1304,6 +1304,19 @@ app.get("/campanas/:slug", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
+    const totalCoupons = Number(campaign.max_tickets || 0);
+const soldCoupons = Number(campaign.sold_tickets || 0);
+const availableCoupons = Number(campaign.available_tickets || 0);
+
+const soldPercentage = totalCoupons > 0
+  ? Math.min(100, Math.round((soldCoupons / totalCoupons) * 100))
+  : 0;
+
+let publicStatusLabel = "Pendiente";
+if (campaign.status === "active") publicStatusLabel = "Activa";
+if (campaign.status === "finished") publicStatusLabel = "Finalizada";
+if (campaign.status === "cancelled") publicStatusLabel = "Cancelada";
+
 res.setHeader("Content-Type", "text/html; charset=utf-8");
 res.send(`
 <!DOCTYPE html>
@@ -1355,31 +1368,70 @@ box-shadow:0 10px 30px rgba(0,0,0,.08);
 margin-bottom:24px;
 }
 
-.grid{
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-gap:18px;
-}
-
-.metric{
+.progress-card{
 background:#f9fbff;
 border:1px solid #e5e7eb;
-border-radius:14px;
-padding:20px;
-text-align:center;
+border-radius:16px;
+padding:24px;
 }
 
-.metric h2{
+.progress-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:16px;
+flex-wrap:wrap;
+margin-bottom:16px;
+}
+
+.progress-title{
 margin:0;
-font-size:30px;
+font-size:24px;
+color:#111827;
+}
+
+.progress-percent{
+font-size:34px;
+font-weight:bold;
 color:#2563eb;
 }
 
-.metric span{
-display:block;
-margin-top:8px;
-color:#6b7280;
-font-size:14px;
+.progress-bar-wrap{
+width:100%;
+height:18px;
+background:#e5e7eb;
+border-radius:999px;
+overflow:hidden;
+margin-bottom:14px;
+}
+
+.progress-bar{
+height:100%;
+background:linear-gradient(90deg,#16a34a,#22c55e);
+border-radius:999px;
+}
+
+.progress-meta{
+display:flex;
+justify-content:space-between;
+gap:12px;
+flex-wrap:wrap;
+font-size:15px;
+color:#374151;
+}
+
+.progress-meta strong{
+color:#111827;
+}
+
+.status-chip{
+display:inline-block;
+padding:8px 14px;
+border-radius:999px;
+font-size:13px;
+font-weight:bold;
+background:#dbeafe;
+color:#1d4ed8;
 }
 
 .price{
@@ -1428,35 +1480,37 @@ font-size:14px;
 
 <div class="card">
 
-<div class="grid">
+  <div class="progress-card">
+    <div class="progress-header">
+      <div>
+        <h2 class="progress-title">Avance de la campaña</h2>
+        <div style="margin-top:6px;color:#6b7280;font-size:15px;">
+          Sigue el progreso de venta de cupones en tiempo real
+        </div>
+      </div>
 
-<div class="metric">
-<h2>${campaign.max_tickets || 0}</h2>
-<span>Boletas Totales</span>
-</div>
+      <div>
+        <div class="progress-percent">${soldPercentage}%</div>
+        <div class="status-chip">${publicStatusLabel}</div>
+      </div>
+    </div>
 
-<div class="metric">
-<h2>${campaign.sold_tickets || 0}</h2>
-<span>Boletas Vendidas</span>
-</div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" style="width:${soldPercentage}%;"></div>
+    </div>
 
-<div class="metric">
-<h2>${campaign.available_tickets || 0}</h2>
-<span>Disponibles</span>
-</div>
-
-<div class="metric">
-<h2>${campaign.status || "active"}</h2>
-<span>Estado</span>
-</div>
-
-</div>
+    <div class="progress-meta">
+      <div><strong>${soldCoupons}</strong> cupones vendidos</div>
+      <div><strong>${availableCoupons}</strong> cupones disponibles</div>
+      <div><strong>${totalCoupons}</strong> cupones totales</div>
+    </div>
+  </div>
 
 </div>
 
 <div class="card">
 
-<h2 style="margin-top:0;">Valor por boleta</h2>
+<h2 style="margin-top:0;">Valor por cupón</h2>
 
 <div class="price">
 $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
