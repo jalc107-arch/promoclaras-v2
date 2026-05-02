@@ -3441,6 +3441,52 @@ app.get("/admin/organizadores", async (req, res) => {
   }
 });
 
+app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { organizerId } = req.params;
+
+    const { error } = await supabase
+      .from("organizers")
+      .update({
+        verification_status: "verified"
+      })
+      .eq("id", organizerId);
+
+    if (error) throw error;
+
+    return res.redirect("/admin/organizadores");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { organizerId } = req.params;
+
+    const { error } = await supabase
+      .from("organizers")
+      .update({
+        verification_status: "rejected"
+      })
+      .eq("id", organizerId);
+
+    if (error) throw error;
+
+    return res.redirect("/admin/organizadores");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.get("/admin/resultados", async (req, res) => {
   try {
     if (!req.session.isAdmin) {
