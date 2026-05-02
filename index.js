@@ -2114,7 +2114,7 @@ if (wompiTransactionId && payment.status !== "approved") {
   tickets && tickets.length
     ? `
     <div style="margin-bottom:18px;">
-      <b>Boletas asignadas:</b>
+      <b>Cupones asignadas:</b>
 
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
         ${tickets.map(t => `
