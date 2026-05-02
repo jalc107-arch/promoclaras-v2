@@ -538,7 +538,8 @@ if (campaignIds.length > 0) {
     tickets = ticketsData || [];
   }
 }
-
+const baseUrl = `${req.protocol}://${req.get("host")}`;
+    
 const campaignRows = (campaigns || []).map(c => `
   <tr>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
@@ -553,40 +554,58 @@ const campaignRows = (campaigns || []).map(c => `
   ${campaignStatusLabel(c.status)}
 </span>
     </td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
-      <a
-        href="/resultado/${c.id}"
-        style="
-          display:inline-block;
-          padding:8px 12px;
-          background:#2563eb;
-          color:white;
-          text-decoration:none;
-          border-radius:10px;
-          font-weight:bold;
-          font-size:13px;
-          margin-bottom:6px;
-        "
-      >
-        Ver resultado
-      </a>
-      <br/>
-      <a
-        href="/campanas/${c.slug}"
-        style="
-          display:inline-block;
-          padding:8px 12px;
-          background:#16a34a;
-          color:white;
-          text-decoration:none;
-          border-radius:10px;
-          font-weight:bold;
-          font-size:13px;
-        "
-      >
-        Ver campaña
-      </a>
-    </td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:150px;">
+  <a
+    href="/resultado/${c.id}"
+    style="
+      display:block;
+      padding:8px 12px;
+      background:#2563eb;
+      color:white;
+      text-decoration:none;
+      border-radius:10px;
+      font-weight:bold;
+      font-size:13px;
+      margin-bottom:7px;
+    "
+  >
+    Ver resultado
+  </a>
+
+  <a
+    href="/campanas/${c.slug}"
+    style="
+      display:block;
+      padding:8px 12px;
+      background:#16a34a;
+      color:white;
+      text-decoration:none;
+      border-radius:10px;
+      font-weight:bold;
+      font-size:13px;
+      margin-bottom:7px;
+    "
+  >
+    Ver campaña
+  </a>
+
+  <a
+    target="_blank"
+    href="https://wa.me/?text=${encodeURIComponent(`Participa en esta campaña: ${c.title} - ${c.slug ? `/campanas/${c.slug}` : ""}`)}"
+    style="
+      display:block;
+      padding:8px 12px;
+      background:#22c55e;
+      color:white;
+      text-decoration:none;
+      border-radius:10px;
+      font-weight:bold;
+      font-size:13px;
+    "
+  >
+    Compartir
+  </a>
+</td>
   </tr>
 `).join("");
     
