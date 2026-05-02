@@ -32,6 +32,9 @@ const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim()
 const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
 
+const ULTRAMSG_INSTANCE_ID = String(process.env.ULTRAMSG_INSTANCE_ID || "").trim();
+const ULTRAMSG_TOKEN = String(process.env.ULTRAMSG_TOKEN || "").trim();
+
 const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
@@ -67,6 +70,64 @@ function safeCompare(a, b) {
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function sendWhatsAppMessage(phone, message) {
+  try {
+    if (!ULTRAMSG_INSTANCE_ID || !ULTRAMSG_TOKEN) {
+      console.log("UltraMsg no configurado");
+      return {
+        ok: false,
+        reason: "UltraMsg no configurado"
+      };
+    }
+
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    if (!cleanPhone) {
+      console.log("Teléfono vacío para WhatsApp");
+      return {
+        ok: false,
+        reason: "Teléfono vacío"
+      };
+    }
+
+    const whatsappPhone = cleanPhone.startsWith("57")
+      ? cleanPhone
+      : `57${cleanPhone}`;
+
+    const response = await fetch(
+      `https://api.ultramsg.com/${ULTRAMSG_INSTANCE_ID}/messages/chat`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          token: ULTRAMSG_TOKEN,
+          to: whatsappPhone,
+          body: message
+        })
+      }
+    );
+
+    const resultText = await response.text();
+
+    console.log("UltraMsg status:", response.status);
+    console.log("UltraMsg response:", resultText);
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: resultText
+    };
+  } catch (error) {
+    console.error("Error enviando WhatsApp UltraMsg:", error);
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
 }
 
 function campaignStatusLabel(status) {
@@ -239,6 +300,34 @@ app.get("/health", async (req, res) => {
     return res.status(500).json({
       ok: false,
       app: "PROMOCLARAS V2",
+      error: error.message
+    });
+  }
+});
+
+app.get("/debug/ultramsg", async (req, res) => {
+  try {
+    const phone = String(req.query.phone || "").trim();
+
+    if (!phone) {
+      return res.status(400).json({
+        ok: false,
+        error: "Falta el parámetro phone. Ejemplo: /debug/ultramsg?phone=3001234567"
+      });
+    }
+
+    const result = await sendWhatsAppMessage(
+      phone,
+      `Prueba UltraMsg desde CampaClick. Si recibes este mensaje, la integración está funcionando correctamente.`
+    );
+
+    return res.json({
+      ok: result.ok,
+      result
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
       error: error.message
     });
   }
