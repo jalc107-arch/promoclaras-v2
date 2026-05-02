@@ -5,8 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 app.use(
   session({
@@ -39,6 +39,43 @@ const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
 );
+
+async function uploadOrganizerSupport(base64Image, organizerId, type) {
+  if (!base64Image) {
+    return null;
+  }
+
+  const match = String(base64Image).match(/^data:(image\/\w+);base64,(.+)$/);
+
+  if (!match) {
+    throw new Error("Formato de imagen inválido");
+  }
+
+  const mimeType = match[1];
+  const base64Data = match[2];
+
+  const extension = mimeType.includes("png") ? "png" : "jpg";
+  const buffer = Buffer.from(base64Data, "base64");
+
+  const filePath = `${organizerId}/${type}-${Date.now()}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("organizer-supports")
+    .upload(filePath, buffer, {
+      contentType: mimeType,
+      upsert: true
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { data } = supabase.storage
+    .from("organizer-supports")
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+}
 
 function slugify(text) {
   return String(text || "")
@@ -1200,20 +1237,85 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
               <input type="text" name="document_number" required value="${organizer.document_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
-            <div style="margin-bottom:12px;">
-              <label>Link foto cédula frente</label><br/>
-              <input type="text" name="id_front_url" required value="${organizer.id_front_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-            </div>
+            <div style="margin-bottom:16px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+  <b>Soportes de identidad</b>
+  <p style="margin:8px 0 14px;color:#6b7280;font-size:14px;">
+    Toma las fotos directamente desde la cámara del celular. No uses imágenes de galería.
+  </p>
 
-            <div style="margin-bottom:12px;">
-              <label>Link foto cédula reverso</label><br/>
-              <input type="text" name="id_back_url" required value="${organizer.id_back_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-            </div>
+  <div style="margin-bottom:14px;">
+    <label>Foto cédula frente</label><br/>
+    <input type="hidden" name="id_front_image" id="id_front_image">
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      required
+      onchange="convertImageToBase64(this, 'id_front_image', 'preview_front')"
+      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
+    >
+    <div id="preview_front" style="margin-top:8px;color:#166534;font-weight:bold;">
+      ${organizer.id_front_url ? "Foto registrada previamente" : ""}
+    </div>
+  </div>
 
-            <div style="margin-bottom:12px;">
-              <label>Link selfie con cédula</label><br/>
-              <input type="text" name="selfie_id_url" required value="${organizer.selfie_id_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-            </div>
+  <div style="margin-bottom:14px;">
+    <label>Foto cédula reverso</label><br/>
+    <input type="hidden" name="id_back_image" id="id_back_image">
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      required
+      onchange="convertImageToBase64(this, 'id_back_image', 'preview_back')"
+      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
+    >
+    <div id="preview_back" style="margin-top:8px;color:#166534;font-weight:bold;">
+      ${organizer.id_back_url ? "Foto registrada previamente" : ""}
+    </div>
+  </div>
+
+  <div style="margin-bottom:6px;">
+    <label>Selfie con cédula</label><br/>
+    <input type="hidden" name="selfie_id_image" id="selfie_id_image">
+    <input
+      type="file"
+      accept="image/*"
+      capture="user"
+      required
+      onchange="convertImageToBase64(this, 'selfie_id_image', 'preview_selfie')"
+      style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;background:white;"
+    >
+    <div id="preview_selfie" style="margin-top:8px;color:#166534;font-weight:bold;">
+      ${organizer.selfie_id_url ? "Foto registrada previamente" : ""}
+    </div>
+  </div>
+</div>
+
+<script>
+  function convertImageToBase64(input, hiddenInputId, previewId) {
+    const file = input.files && input.files[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      alert("Solo se permiten imágenes.");
+      input.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+      document.getElementById(hiddenInputId).value = event.target.result;
+      document.getElementById(previewId).innerHTML = "Foto lista para guardar";
+    };
+
+    reader.readAsDataURL(file);
+  }
+</script>
 
             <div style="margin-bottom:12px;">
               <label>Método de pago</label><br/>
@@ -1283,9 +1385,9 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
     }
 
     const documentNumber = String(req.body.document_number || "").trim();
-    const idFrontUrl = String(req.body.id_front_url || "").trim();
-    const idBackUrl = String(req.body.id_back_url || "").trim();
-    const selfieIdUrl = String(req.body.selfie_id_url || "").trim();
+    const idFrontImage = String(req.body.id_front_image || "").trim();
+    const idBackImage = String(req.body.id_back_image || "").trim();
+    const selfieIdImage = String(req.body.selfie_id_image || "").trim();
     const payoutMethod = String(req.body.payout_method || "").trim();
     const bankName = String(req.body.bank_name || "").trim();
     const accountType = String(req.body.account_type || "").trim();
@@ -1302,8 +1404,28 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
       return res.status(400).send("Debes aceptar los términos");
     }
 
-    if (!idFrontUrl || !idBackUrl || !selfieIdUrl) {
-  return res.status(400).send(`
+const { data: currentOrganizer, error: currentOrganizerError } = await supabase
+  .from("organizers")
+  .select("id_front_url,id_back_url,selfie_id_url")
+  .eq("id", organizerId)
+  .single();
+
+if (currentOrganizerError) throw currentOrganizerError;
+
+const finalIdFrontUrl = idFrontImage
+  ? await uploadOrganizerSupport(idFrontImage, organizerId, "cedula-frente")
+  : currentOrganizer?.id_front_url;
+
+const finalIdBackUrl = idBackImage
+  ? await uploadOrganizerSupport(idBackImage, organizerId, "cedula-reverso")
+  : currentOrganizer?.id_back_url;
+
+const finalSelfieIdUrl = selfieIdImage
+  ? await uploadOrganizerSupport(selfieIdImage, organizerId, "selfie-cedula")
+  : currentOrganizer?.selfie_id_url;
+
+if (!finalIdFrontUrl || !finalIdBackUrl || !finalSelfieIdUrl) {
+    return res.status(400).send(`
     <!DOCTYPE html>
     <html lang="es">
     <head>
@@ -1341,9 +1463,9 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
       .from("organizers")
       .update({
         document_number: documentNumber,
-        id_front_url: idFrontUrl || null,
-        id_back_url: idBackUrl || null,
-        selfie_id_url: selfieIdUrl || null,
+        id_front_url: finalIdFrontUrl || null,
+        id_back_url: finalIdBackUrl || null,
+        selfie_id_url: finalSelfieIdUrl || null,
         payout_method: payoutMethod || null,
         bank_name: bankName || null,
         account_type: accountType || null,
