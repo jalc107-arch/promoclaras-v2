@@ -4071,6 +4071,18 @@ app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
 
     const { rifaId } = req.params;
 
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
     const { error } = await supabase
       .from("rifas")
       .update({
@@ -4080,6 +4092,31 @@ app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
       .eq("status", "pending");
 
     if (error) throw error;
+
+    const { data: organizer } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("profile_id", campaign.owner_id)
+      .maybeSingle();
+
+    if (organizer?.phone) {
+      await sendWhatsAppMessage(
+        organizer.phone,
+        [
+          `Hola ${organizer.full_name || ""}.`,
+          ``,
+          `Tu campaña fue rechazada en CampaClick.`,
+          ``,
+          `Campaña: ${campaign.title || "-"}`,
+          `Premio: ${campaign.prize || "-"}`,
+          ``,
+          `Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
+          ``,
+          `Ingreso organizador:`,
+          `https://promoclaras-v2-production.up.railway.app/organizers/login`
+        ].join("\n")
+      );
+    }
 
     return res.redirect("/admin/resultados");
   } catch (error) {
