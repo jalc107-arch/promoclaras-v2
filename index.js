@@ -2540,14 +2540,21 @@ app.post("/webhooks/wompi", async (req, res) => {
 
 if (updatePaymentError) throw updatePaymentError;
 
-    await supabase
-      .from("orders")
-      .update({
-        payment_status: localOrderStatus
-      })
-      .eq("id", payment.order_id);
+    const { error: updateOrderError } = await supabase
+  .from("orders")
+  .update({
+    payment_status: localOrderStatus
+  })
+  .eq("id", payment.order_id);
 
-    return res.status(200).send("ok");
+if (updateOrderError) throw updateOrderError;
+
+if (localOrderStatus === "paid") {
+  await sendOrderCouponsWhatsApp(payment.order_id);
+}
+
+return res.status(200).send("ok");
+    
   } catch (error) {
     console.error("Webhook Wompi error:", error);
     return res.status(500).send(error.message);
