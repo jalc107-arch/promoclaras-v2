@@ -3409,11 +3409,17 @@ app.get("/admin/resultados", async (req, res) => {
           Ver campaña
         </a>
 
-        <a
-          href="/admin/campanas/${c.id}/resultado"
-          style="display:block;text-align:center;padding:9px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
-          Cargar resultado
-        </a>
+        ${
+  c.status !== "pending"
+    ? `
+      <a
+        href="/admin/campanas/${c.id}/resultado"
+        style="display:block;text-align:center;padding:9px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+        Cargar resultado
+      </a>
+    `
+    : ""
+}
 
       </div>
     </td>
