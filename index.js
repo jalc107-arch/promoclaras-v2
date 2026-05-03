@@ -128,8 +128,7 @@ function randomInt(min, max) {
 
 const DRAW_PROVIDERS = [
   { value: "baloto", label: "Baloto" },
-  { value: "baloto_revancha", label: "Baloto Revancha" },
-
+  
   { value: "loteria_bogota", label: "Lotería de Bogotá" },
   { value: "loteria_medellin", label: "Lotería de Medellín" },
   { value: "loteria_valle", label: "Lotería del Valle" },
@@ -173,7 +172,7 @@ function getDrawModeLabel(value) {
 }
 
 function isBalotoProvider(drawProvider) {
-  return ["baloto", "baloto_revancha"].includes(drawProvider);
+  return drawProvider === "baloto";
 }
 
 function isLoteriaProvider(drawProvider) {
