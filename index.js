@@ -733,6 +733,8 @@ if (organizer.verification_status === "verified") {
     </div>
   `;
 }
+
+const { data: campaigns, error: campaignsError } = await supabase
   .from("rifas")
   .select("*")
   .eq("owner_id", organizer.profile_id)
@@ -740,7 +742,7 @@ if (organizer.verification_status === "verified") {
 
 if (campaignsError) throw campaignsError;
 
-    const campaignIds = (campaigns || []).map(c => c.id);
+const campaignIds = (campaigns || []).map(c => c.id);
 
 let orders = [];
 let payments = [];
@@ -1095,6 +1097,8 @@ font-size:14px;
 </div>
 
 <div class="container">
+
+${verificationHtml}
 
 <div class="grid">
 
@@ -3962,30 +3966,25 @@ app.get("/admin/resultados", async (req, res) => {
 
       <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
         <div style="max-width:1300px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);overflow-x:auto;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
   <h1>Administrador de campañas</h1>
 
-<div style="display:flex;gap:10px;flex-wrap:wrap;">
-  <a
-    href="/admin/organizadores"
-    style="background:#2563eb;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-  >
-    Organizadores
-  </a>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a
+      href="/admin/organizadores"
+      style="background:#2563eb;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+    >
+      Organizadores
+    </a>
 
-  <a
-    href="/admin/logout"
-    style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-  >
-    Cerrar sesión
-  </a>
-</div>
-    
-    style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-  >
-    Cerrar sesión
-  </a>
+    <a
+      href="/admin/logout"
+      style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+    >
+      Cerrar sesión
+    </a>
+  </div>
 </div>
 
           <table style="width:100%;min-width:1100px;border-collapse:collapse;">
