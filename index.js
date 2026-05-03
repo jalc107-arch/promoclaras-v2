@@ -105,6 +105,23 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
 }
 
+function maskPhone(phone) {
+  const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+  if (!cleanPhone) {
+    return "-";
+  }
+
+  if (cleanPhone.length <= 4) {
+    return `${cleanPhone.charAt(0)}***`;
+  }
+
+  const first = cleanPhone.slice(0, 1);
+  const last = cleanPhone.slice(-3);
+
+  return `${first}******${last}`;
+}
+
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -3257,9 +3274,9 @@ app.get("/resultado/:rifaId", async (req, res) => {
             </div>
 
             <div class="winner-row">
-              <span>Teléfono</span>
-              <strong>${ticket.buyers?.phone || "-"}</strong>
-            </div>
+  <span>Teléfono</span>
+  <strong>${maskPhone(ticket.buyers?.phone)}</strong>
+</div>
 
             <div class="winner-row">
               <span>Cupón ganador</span>
