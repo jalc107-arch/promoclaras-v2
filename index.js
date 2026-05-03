@@ -3613,7 +3613,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
           <div class="status-box winner-box">
             <div class="status-icon">🎉</div>
             <h2>¡Tenemos ganador!</h2>
-            <p>La campaña ya cuenta con un código ganador registrado.</p>
+            <p>La campaña ya cuenta con un código promocional ganador registrado.</p>
           </div>
         `;
 
@@ -3632,7 +3632,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
 </div>
 
             <div class="winner-row">
-              <span>Código ganador</span>
+              <span>Código promocional ganador</span>
               <strong class="ticket-badge">${ticket.combination || ticket.ticket_code || "-"}</strong>
             </div>
           </div>
@@ -3883,8 +3883,8 @@ app.get("/resultado/:rifaId", async (req, res) => {
       <body>
 
         <div class="hero">
-          <h1>Resultado de campaña</h1>
-          <p>CampaClick — Consulta pública del resultado</p>
+          <h1>Resultado de la campaña</h1>
+          <p>CampaClick — Consulta oficial del resultado</p>
         </div>
 
         <div class="container">
