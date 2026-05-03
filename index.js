@@ -675,14 +675,23 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
 
     let verificationHtml = "";
 
-if (organizer.verification_status === "verified") {
-  verificationHtml = `
-    <div style="margin-top:18px;padding:14px;background:#ecfdf5;border-radius:12px;color:#166534;font-weight:700;">
-      ✔ Verificación aprobada
-    </div>
-  `;
 } else if (organizer.verification_status === "rejected") {
   verificationHtml = `
+    <div style="margin-top:18px;padding:14px;background:#fee2e2;border:1px solid #fecaca;border-radius:12px;color:#991b1b;font-weight:700;">
+      ❌ Verificación rechazada
+    </div>
+
+    ${
+      organizer.rejection_reason
+        ? `
+          <div style="margin-top:10px;padding:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;color:#9a3412;line-height:1.5;">
+            <b>Motivo del rechazo:</b><br/>
+            ${organizer.rejection_reason}
+          </div>
+        `
+        : ""
+    }
+
     <div style="margin-top:18px;">
       <a
         href="/organizers/${organizer.id}/verificacion"
@@ -692,6 +701,7 @@ if (organizer.verification_status === "verified") {
       </a>
     </div>
   `;
+}
 } else if (
   organizer.document_number ||
   organizer.id_front_url ||
@@ -830,11 +840,22 @@ const campaignRows = (campaigns || []).map(c => {
           </div>
         `
         : c.status === "cancelled"
-          ? `
-            <div style="margin-top:6px;font-size:12px;color:#991b1b;line-height:1.3;">
-              Rechazada. Debes crear una nueva campaña corregida.
-            </div>
-          `
+  ? `
+    <div style="margin-top:6px;font-size:12px;color:#991b1b;line-height:1.3;">
+      Rechazada. Debes crear una nueva campaña corregida.
+    </div>
+
+    ${
+      c.rejection_reason
+        ? `
+          <div style="margin-top:8px;padding:8px;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;color:#7f1d1d;font-size:12px;line-height:1.4;text-align:left;">
+            <b>Motivo:</b><br/>
+            ${c.rejection_reason}
+          </div>
+        `
+        : ""
+    }
+  `
           : c.status === "finished"
             ? `
               <div style="margin-top:6px;font-size:12px;color:#374151;line-height:1.3;">
@@ -3730,12 +3751,19 @@ app.get("/admin/organizadores", async (req, res) => {
       o.verification_status !== "rejected"
         ? `
           <form method="POST" action="/admin/organizadores/${o.id}/rechazar">
-            <button
-              type="submit"
-              style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
-              Rechazar
-            </button>
-          </form>
+  <textarea
+    name="rejection_reason"
+    placeholder="Motivo del rechazo"
+    required
+    style="width:100%;min-height:70px;padding:9px;border:1px solid #fecaca;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
+  ></textarea>
+
+  <button
+    type="submit"
+    style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+    Rechazar
+  </button>
+</form>
         `
         : ""
     }
@@ -3855,6 +3883,12 @@ app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
 
     const { organizerId } = req.params;
 
+    const rejectionReason = String(req.body.rejection_reason || "").trim();
+
+if (!rejectionReason) {
+  return res.status(400).send("Debes escribir el motivo del rechazo.");
+}
+
     const { data: organizer, error: organizerLookupError } = await supabase
       .from("organizers")
       .select("*")
@@ -3870,8 +3904,9 @@ app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
     const { error } = await supabase
       .from("organizers")
       .update({
-        verification_status: "rejected"
-      })
+  verification_status: "rejected",
+  rejection_reason: rejectionReason
+})
       .eq("id", organizerId);
 
     if (error) throw error;
@@ -3882,9 +3917,11 @@ app.post("/admin/organizadores/:organizerId/rechazar", async (req, res) => {
         `Hola ${organizer.full_name || ""}.`,
         ``,
         `Tu verificación como organizador en CampaClick fue rechazada.`,
-        ``,
-        `Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
-        ``,
+``,
+`Motivo del rechazo:`,
+`${rejectionReason}`,
+``,
+`Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
         `Ingreso organizador:`,
         `https://promoclaras-v2-production.up.railway.app/organizers/login`
       ].join("\n")
