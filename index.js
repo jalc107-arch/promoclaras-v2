@@ -500,8 +500,8 @@ async function sendOrderCouponsWhatsApp(orderId) {
     const baseUrl = "https://promoclaras-v2-production.up.railway.app";
 
     const couponList = tickets
-  .map(t => t.combination || t.ticket_code || "-")
-  .join(", ");
+  .map(t => `• ${t.combination || t.ticket_code || "-"}`)
+  .join("\n");
 
 const couponLabel = tickets.length === 1
   ? "Cupón asignado"
@@ -511,13 +511,17 @@ const message = [
   `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
   ``,
   `Campaña: ${order.rifas?.title || "-"}`,
-  `${couponLabel}: ${couponList}`,
-      ``,
-      `Consulta tu orden aquí:`,
-      `${baseUrl}/orden/${order.id}`,
-      ``,
-      `Gracias por participar.`
-    ].join("\n");
+  ``,
+  `${couponLabel}:`,
+  couponList,
+  ``,
+  `Cantidad total: ${tickets.length}`,
+  ``,
+  `Consulta tu orden aquí:`,
+  `${baseUrl}/orden/${order.id}`,
+  ``,
+  `Gracias por participar.`
+].join("\n");
 
     const result = await sendWhatsAppMessage(
       order.buyers?.phone,
