@@ -194,6 +194,28 @@ function isLoteriaProvider(drawProvider) {
   return String(drawProvider || "").startsWith("loteria_");
 }
 
+function getMinimumQtyByPrice(pricePerTicket) {
+  const price = Number(pricePerTicket || 0);
+
+  if (price === 1000) return 10;
+  if (price === 2000) return 3;
+  if (price === 3000) return 2;
+  if (price === 4000) return 2;
+  if (price >= 5000) return 1;
+
+  return 1;
+}
+
+function getMinimumQtyText(pricePerTicket) {
+  const minimumQty = getMinimumQtyByPrice(pricePerTicket);
+
+  if (minimumQty === 1) {
+    return "Puedes comprar desde 1 cupón.";
+  }
+
+  return `Por el valor de este cupón, la compra mínima es de ${minimumQty} cupones.`;
+}
+
 function getMaxTicketsByDrawMode(drawMode) {
   if (drawMode === "baloto_2") return 903;
   if (drawMode === "baloto_3") return 12341;
@@ -2843,6 +2865,9 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
   `);
 }
 
+    const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
+    const minimumQtyText = getMinimumQtyText(campaign.price_per_ticket);
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -2908,17 +2933,23 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
         </div>
 
         <div style="margin-bottom:20px;">
-          <label>Cantidad de Cupones</label><br/>
-          <input
-            type="number"
-            name="qty"
-            min="1"
-            max="20"
-            value="1"
-            required
-            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
-          >
-        </div>
+  <label>Cantidad de cupones</label><br/>
+
+  <input
+    type="number"
+    name="qty"
+    min="${minimumQty}"
+    max="20"
+    value="${minimumQty}"
+    required
+    style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+  >
+
+  <div style="margin-top:8px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;color:#1e3a8a;font-size:14px;line-height:1.4;">
+    <b>Regla de compra:</b><br/>
+    ${minimumQtyText}
+  </div>
+</div>
 
         <button
           type="submit"
@@ -3013,6 +3044,37 @@ if (campaign.status !== "active") {
     </html>
   `);
 }
+
+    const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
+
+if (qty < minimumQty) {
+  return res.status(400).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Cantidad mínima</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Cantidad mínima requerida</h1>
+
+        <p>
+          Para esta campaña, el valor del cupón exige una compra mínima de
+          <b>${minimumQty} cupones</b>.
+        </p>
+
+        <a
+          href="/campanas/${campaign.slug}/comprar"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver a comprar
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}    
 
     let buyer = null;
 
