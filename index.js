@@ -1854,23 +1854,50 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
             </div>
 
             <div style="margin-bottom:12px;">
-              <label>Proveedor de sorteo</label><br/>
-              <select name="draw_provider" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-                <option value="baloto">Baloto</option>
-                <option value="loteria_meta">Lotería del Meta</option>
-                <option value="loteria_bogota">Lotería de Bogotá</option>
-              </select>
-            </div>
+  <label>Proveedor de sorteo</label><br/>
+  <select
+    name="draw_provider"
+    id="draw_provider"
+    required
+    onchange="updateDrawModes()"
+    style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;"
+  >
+    ${generateProviderOptions()}
+  </select>
+</div>
 
-            <div style="margin-bottom:12px;">
-              <label>Modalidad</label><br/>
-              <select name="draw_mode" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
-                <option value="baloto_2">2 balotas</option>
-                <option value="baloto_3">3 balotas</option>
-                <option value="loteria_2_primeras">2 primeras cifras</option>
-                <option value="loteria_3_primeras">3 primeras cifras</option>
-              </select>
-            </div>
+<div style="margin-bottom:12px;">
+  <label>Modalidad</label><br/>
+  <select
+    name="draw_mode"
+    id="draw_mode"
+    required
+    style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;"
+  >
+  </select>
+
+  <div style="margin-top:6px;color:#6b7280;font-size:13px;">
+    Las modalidades cambian según el proveedor seleccionado.
+  </div>
+</div>
+
+<script>
+  const balotoModes = ${JSON.stringify(BALOTO_DRAW_MODES)};
+  const loteriaModes = ${JSON.stringify(LOTERIA_DRAW_MODES)};
+
+  function updateDrawModes() {
+    const provider = document.getElementById("draw_provider").value;
+    const modeSelect = document.getElementById("draw_mode");
+
+    const modes = provider === "baloto" ? balotoModes : loteriaModes;
+
+    modeSelect.innerHTML = modes.map(item => {
+      return '<option value="' + item.value + '">' + item.label + '</option>';
+    }).join("");
+  }
+
+  updateDrawModes();
+</script>
 
             <div style="margin-bottom:12px;">
               <label>Precio por cupón</label><br/>
@@ -1937,16 +1964,15 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       return res.status(400).send("Precio inválido");
     }
 
-    let maxTickets = 0;
+    if (!validateProviderAndMode(drawProvider, drawMode)) {
+  return res.status(400).send("La modalidad no corresponde al proveedor seleccionado");
+}
 
-    if (drawMode === "baloto_2") maxTickets = 903;
-    if (drawMode === "baloto_3") maxTickets = 12341;
-    if (drawMode === "loteria_2_primeras") maxTickets = 100;
-    if (drawMode === "loteria_3_primeras") maxTickets = 1000;
+const maxTickets = getMaxTicketsByDrawMode(drawMode);
 
-    if (maxTickets <= 0) {
-      return res.status(400).send("Modalidad inválida");
-    }
+if (maxTickets <= 0) {
+  return res.status(400).send("Modalidad inválida");
+}
 
     let slug = slugify(title);
     if (!slug) {
