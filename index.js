@@ -810,11 +810,41 @@ const campaignRows = (campaigns || []).map(c => {
     ${percent}% vendido
   </div>
 </td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;">
-      <span class="badge ${campaignStatusClass(c.status)}">
-  ${campaignStatusLabel(c.status)}
-</span>
-    </td>
+
+<td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:170px;">
+  <span class="badge ${campaignStatusClass(c.status)}">
+    ${campaignStatusLabel(c.status)}
+  </span>
+
+  ${
+    c.status === "pending"
+      ? `
+        <div style="margin-top:6px;font-size:12px;color:#92400e;line-height:1.3;">
+          En revisión por el administrador.
+        </div>
+      `
+      : c.status === "active"
+        ? `
+          <div style="margin-top:6px;font-size:12px;color:#166534;line-height:1.3;">
+            Disponible para participar.
+          </div>
+        `
+        : c.status === "cancelled"
+          ? `
+            <div style="margin-top:6px;font-size:12px;color:#991b1b;line-height:1.3;">
+              Rechazada. Debes crear una nueva campaña corregida.
+            </div>
+          `
+          : c.status === "finished"
+            ? `
+              <div style="margin-top:6px;font-size:12px;color:#374151;line-height:1.3;">
+                Campaña finalizada.
+              </div>
+            `
+            : ""
+  }
+</td>
+    
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:150px;">
   <a
     href="/resultado/${c.id}"
