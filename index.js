@@ -171,12 +171,6 @@ function getDrawModeLabel(value) {
   return found ? found.label : value || "-";
 }
 
-function getDrawModeLabel(value) {
-  const allModes = [...BALOTO_DRAW_MODES, ...LOTERIA_DRAW_MODES];
-  const found = allModes.find(item => item.value === value);
-  return found ? found.label : value || "-";
-}
-
 function getResultPlaceholder(drawMode) {
   if (drawMode === "baloto_2") return "Ej: 0814 para 08-14";
   if (drawMode === "baloto_3") return "Ej: 081430 para 08-14-30";
@@ -562,21 +556,6 @@ function campaignStatusClass(status) {
   return "pending";
 }
 
-function generateBalotoCombination(quantity) {
-  const numbers = [];
-
-  while (numbers.length < quantity) {
-    const n = randomInt(1, 43);
-
-    if (!numbers.includes(n)) {
-      numbers.push(n);
-    }
-  }
-
-  numbers.sort((a, b) => a - b);
-
-  return numbers.map(n => String(n).padStart(2, "0")).join("-");
-}
 
 function generateTicketCode(drawMode) {
   if (drawMode === "baloto_2") {
