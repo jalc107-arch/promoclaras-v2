@@ -880,22 +880,39 @@ const campaignRows = (campaigns || []).map(c => {
     Ver campaña
   </a>
 
-  <a
-    target="_blank"
-    href="https://wa.me/?text=${encodeURIComponent(`Participa en esta campaña: ${c.title} - ${baseUrl}/campanas/${c.slug}`)}"
-    style="
-      display:block;
-      padding:8px 12px;
-      background:#22c55e;
-      color:white;
-      text-decoration:none;
-      border-radius:10px;
-      font-weight:bold;
-      font-size:13px;
-    "
-  >
-    Compartir
-  </a>
+  ${
+  c.status === "active"
+    ? `
+      <a
+        target="_blank"
+        href="https://wa.me/?text=${encodeURIComponent(`Participa en esta campaña: ${c.title} - ${baseUrl}/campanas/${c.slug}`)}"
+        style="
+          display:block;
+          padding:8px 12px;
+          background:#22c55e;
+          color:white;
+          text-decoration:none;
+          border-radius:10px;
+          font-weight:bold;
+          font-size:13px;
+        "
+      >
+        Compartir
+      </a>
+    `
+    : `
+      <div style="
+        padding:8px 12px;
+        background:#e5e7eb;
+        color:#6b7280;
+        border-radius:10px;
+        font-weight:bold;
+        font-size:13px;
+      ">
+        No disponible para compartir
+      </div>
+    `
+}
 </td>
       </tr>
 `;
