@@ -3645,7 +3645,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
           <h2>No hubo ganador</h2>
           <p>
             El resultado fue cargado correctamente, pero ningún código vendido
-            coincide con la combinación ganadora.
+            coincide con el resultado oficial.
           </p>
         </div>
       `;
