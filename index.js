@@ -673,8 +673,14 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
       return res.status(404).send("Organizador no encontrado");
     }
 
-    let verificationHtml = "";
+let verificationHtml = "";
 
+if (organizer.verification_status === "verified") {
+  verificationHtml = `
+    <div style="margin-top:18px;padding:14px;background:#ecfdf5;border-radius:12px;color:#166534;font-weight:700;">
+      ✔ Verificación aprobada
+    </div>
+  `;
 } else if (organizer.verification_status === "rejected") {
   verificationHtml = `
     <div style="margin-top:18px;padding:14px;background:#fee2e2;border:1px solid #fecaca;border-radius:12px;color:#991b1b;font-weight:700;">
@@ -701,7 +707,6 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
       </a>
     </div>
   `;
-}
 } else if (
   organizer.document_number ||
   organizer.id_front_url ||
@@ -728,8 +733,6 @@ app.get("/organizers/:organizerId/panel", async (req, res) => {
     </div>
   `;
 }
-
-    const { data: campaigns, error: campaignsError } = await supabase
   .from("rifas")
   .select("*")
   .eq("owner_id", organizer.profile_id)
@@ -3960,10 +3963,25 @@ app.get("/admin/resultados", async (req, res) => {
       <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
         <div style="max-width:1300px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);overflow-x:auto;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          
   <h1>Administrador de campañas</h1>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;">
+  <a
+    href="/admin/organizadores"
+    style="background:#2563eb;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+  >
+    Organizadores
+  </a>
 
   <a
     href="/admin/logout"
+    style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+  >
+    Cerrar sesión
+  </a>
+</div>
+    
     style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
   >
     Cerrar sesión
