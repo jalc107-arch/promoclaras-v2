@@ -126,6 +126,115 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+const DRAW_PROVIDERS = [
+  { value: "baloto", label: "Baloto" },
+  { value: "baloto_revancha", label: "Baloto Revancha" },
+
+  { value: "loteria_bogota", label: "Lotería de Bogotá" },
+  { value: "loteria_medellin", label: "Lotería de Medellín" },
+  { value: "loteria_valle", label: "Lotería del Valle" },
+  { value: "loteria_cundinamarca", label: "Lotería de Cundinamarca" },
+  { value: "loteria_santander", label: "Lotería de Santander" },
+  { value: "loteria_boyaca", label: "Lotería de Boyacá" },
+  { value: "loteria_cauca", label: "Lotería del Cauca" },
+  { value: "loteria_cruz_roja", label: "Lotería de la Cruz Roja" },
+  { value: "loteria_huila", label: "Lotería del Huila" },
+  { value: "loteria_meta", label: "Lotería del Meta" },
+  { value: "loteria_manizales", label: "Lotería de Manizales" },
+  { value: "loteria_risaralda", label: "Lotería de Risaralda" },
+  { value: "loteria_quindio", label: "Lotería del Quindío" },
+  { value: "loteria_tolimense", label: "Lotería del Tolima" }
+];
+
+const BALOTO_DRAW_MODES = [
+  { value: "baloto_2", label: "2 balotas" },
+  { value: "baloto_3", label: "3 balotas" },
+  { value: "baloto_4", label: "4 balotas" },
+  { value: "baloto_5", label: "5 balotas" }
+];
+
+const LOTERIA_DRAW_MODES = [
+  { value: "loteria_2_primeras", label: "2 primeras cifras" },
+  { value: "loteria_2_ultimas", label: "2 últimas cifras" },
+  { value: "loteria_3_primeras", label: "3 primeras cifras" },
+  { value: "loteria_3_ultimas", label: "3 últimas cifras" },
+  { value: "loteria_4_pleno", label: "4 números pleno" }
+];
+
+function getDrawProviderLabel(value) {
+  const found = DRAW_PROVIDERS.find(item => item.value === value);
+  return found ? found.label : value || "-";
+}
+
+function getDrawModeLabel(value) {
+  const allModes = [...BALOTO_DRAW_MODES, ...LOTERIA_DRAW_MODES];
+  const found = allModes.find(item => item.value === value);
+  return found ? found.label : value || "-";
+}
+
+function isBalotoProvider(drawProvider) {
+  return ["baloto", "baloto_revancha"].includes(drawProvider);
+}
+
+function isLoteriaProvider(drawProvider) {
+  return String(drawProvider || "").startsWith("loteria_");
+}
+
+function getMaxTicketsByDrawMode(drawMode) {
+  if (drawMode === "baloto_2") return 903;
+  if (drawMode === "baloto_3") return 12341;
+  if (drawMode === "baloto_4") return 123410;
+  if (drawMode === "baloto_5") return 962598;
+
+  if (drawMode === "loteria_2_primeras") return 100;
+  if (drawMode === "loteria_2_ultimas") return 100;
+  if (drawMode === "loteria_3_primeras") return 1000;
+  if (drawMode === "loteria_3_ultimas") return 1000;
+  if (drawMode === "loteria_4_pleno") return 10000;
+
+  return 0;
+}
+
+function generateProviderOptions(selectedValue = "") {
+  return DRAW_PROVIDERS.map(item => `
+    <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
+      ${item.label}
+    </option>
+  `).join("");
+}
+
+function generateDrawModeOptions(selectedValue = "") {
+  return `
+    <optgroup label="Baloto">
+      ${BALOTO_DRAW_MODES.map(item => `
+        <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
+          ${item.label}
+        </option>
+      `).join("")}
+    </optgroup>
+
+    <optgroup label="Loterías">
+      ${LOTERIA_DRAW_MODES.map(item => `
+        <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
+          ${item.label}
+        </option>
+      `).join("")}
+    </optgroup>
+  `;
+}
+
+function validateProviderAndMode(drawProvider, drawMode) {
+  if (isBalotoProvider(drawProvider)) {
+    return drawMode.startsWith("baloto_");
+  }
+
+  if (isLoteriaProvider(drawProvider)) {
+    return drawMode.startsWith("loteria_");
+  }
+
+  return false;
+}
+
 async function sendWhatsAppMessage(phone, message) {
   try {
     if (!ULTRAMSG_INSTANCE_ID || !ULTRAMSG_TOKEN) {
@@ -295,40 +404,44 @@ function campaignStatusClass(status) {
   return "pending";
 }
 
+function generateBalotoCombination(quantity) {
+  const numbers = [];
+
+  while (numbers.length < quantity) {
+    const n = randomInt(1, 43);
+
+    if (!numbers.includes(n)) {
+      numbers.push(n);
+    }
+  }
+
+  numbers.sort((a, b) => a - b);
+
+  return numbers.map(n => String(n).padStart(2, "0")).join("-");
+}
+
 function generateTicketCode(drawMode) {
   if (drawMode === "baloto_2") {
-    const numbers = [];
-
-    while (numbers.length < 2) {
-      const n = randomInt(1, 43);
-
-      if (!numbers.includes(n)) {
-        numbers.push(n);
-      }
-    }
-
-    numbers.sort((a, b) => a - b);
-
-    return numbers.map(n => String(n).padStart(2, "0")).join("-");
+    return generateBalotoCombination(2);
   }
 
   if (drawMode === "baloto_3") {
-    const numbers = [];
+    return generateBalotoCombination(3);
+  }
 
-    while (numbers.length < 3) {
-      const n = randomInt(1, 43);
+  if (drawMode === "baloto_4") {
+    return generateBalotoCombination(4);
+  }
 
-      if (!numbers.includes(n)) {
-        numbers.push(n);
-      }
-    }
-
-    numbers.sort((a, b) => a - b);
-
-    return numbers.map(n => String(n).padStart(2, "0")).join("-");
+  if (drawMode === "baloto_5") {
+    return generateBalotoCombination(5);
   }
 
   if (drawMode === "loteria_2_primeras") {
+    return String(randomInt(0, 99)).padStart(2, "0");
+  }
+
+  if (drawMode === "loteria_2_ultimas") {
     return String(randomInt(0, 99)).padStart(2, "0");
   }
 
@@ -336,7 +449,15 @@ function generateTicketCode(drawMode) {
     return String(randomInt(0, 999)).padStart(3, "0");
   }
 
-  return crypto.randomUUID().slice(0, 8);
+  if (drawMode === "loteria_3_ultimas") {
+    return String(randomInt(0, 999)).padStart(3, "0");
+  }
+
+  if (drawMode === "loteria_4_pleno") {
+    return String(randomInt(0, 9999)).padStart(4, "0");
+  }
+
+  throw new Error("Modalidad de sorteo inválida");
 }
 
 async function assignTicketsToOrder(orderId) {
@@ -363,9 +484,9 @@ async function assignTicketsToOrder(orderId) {
   const maxTickets = Number(orderData.rifas?.max_tickets || 0);
 
   const { data: existingTickets, error: existingError } = await supabase
-    .from("tickets")
-    .select("ticket_code")
-    .eq("rifa_id", orderData.rifa_id);
+  .from("tickets")
+  .select("ticket_code, combination")
+  .eq("rifa_id", orderData.rifa_id);
 
   if (existingError) throw existingError;
 
