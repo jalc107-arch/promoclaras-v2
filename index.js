@@ -267,7 +267,7 @@ function campaignStatusLabel(status) {
   if (status === "active") return "Activa";
   if (status === "pending") return "Pendiente";
   if (status === "finished") return "Finalizada";
-  if (status === "cancelled") return "Cancelada";
+  if (status === "cancelled") return "Rechazada";
   return status || "-";
 }
 
@@ -4001,12 +4001,19 @@ app.get("/admin/resultados", async (req, res) => {
               </form>
 
               <form method="POST" action="/admin/campanas/${c.id}/cancelar">
-                <button
-                  type="submit"
-                  style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
-                  Rechazar
-                </button>
-              </form>
+  <textarea
+    name="rejection_reason"
+    placeholder="Motivo del rechazo"
+    required
+    style="width:100%;min-height:70px;padding:9px;border:1px solid #fecaca;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
+  ></textarea>
+
+  <button
+    type="submit"
+    style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+    Rechazar
+  </button>
+</form>
             `
             : ""
         }
@@ -4118,6 +4125,12 @@ app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
 
     const { rifaId } = req.params;
 
+    const rejectionReason = String(req.body.rejection_reason || "").trim();
+
+if (!rejectionReason) {
+  return res.status(400).send("Debes escribir el motivo del rechazo.");
+}
+
     const { data: campaign, error: campaignError } = await supabase
       .from("rifas")
       .select("*")
@@ -4133,8 +4146,9 @@ app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
     const { error } = await supabase
       .from("rifas")
       .update({
-        status: "cancelled"
-      })
+  status: "cancelled",
+  rejection_reason: rejectionReason
+})
       .eq("id", rifaId)
       .eq("status", "pending");
 
@@ -4153,11 +4167,14 @@ app.post("/admin/campanas/:rifaId/cancelar", async (req, res) => {
           `Hola ${organizer.full_name || ""}.`,
           ``,
           `Tu campaña fue rechazada en CampaClick.`,
-          ``,
-          `Campaña: ${campaign.title || "-"}`,
-          `Premio: ${campaign.prize || "-"}`,
-          ``,
-          `Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
+``,
+`Campaña: ${campaign.title || "-"}`,
+`Premio: ${campaign.prize || "-"}`,
+``,
+`Motivo del rechazo:`,
+`${rejectionReason}`,
+``,
+`Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
           ``,
           `Ingreso organizador:`,
           `https://promoclaras-v2-production.up.railway.app/organizers/login`
