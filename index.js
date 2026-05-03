@@ -944,8 +944,8 @@ const campaignRows = (campaigns || []).map(c => {
   <tr>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_provider}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.draw_mode}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawProviderLabel(c.draw_provider)}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawModeLabel(c.draw_mode)}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">
       $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
     </td>
@@ -2356,7 +2356,8 @@ body {
       <div style="margin-top:20px;color:#374151;line-height:1.7;">
         <div><b>Premio:</b> ${campaign.prize || "-"}</div>
         <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
-        <div><b>Modalidad:</b> ${campaign.draw_mode || "-"}</div>
+        <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
+        <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
       </div>
     </div>
 
@@ -4202,7 +4203,7 @@ app.get("/admin/resultados", async (req, res) => {
 </td>
 
     <td style="padding:12px;border-bottom:1px solid #eee;">
-  ${c.draw_mode || "-"}
+  ${getDrawModeLabel(c.draw_mode)}
 </td>
 
 <td style="padding:12px;border-bottom:1px solid #eee;">
@@ -4563,7 +4564,8 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
           <h1>Cargar resultado</h1>
 
           <p><b>Campaña:</b> ${rifa.title}</p>
-          <p><b>Modalidad:</b> ${rifa.draw_mode}</p>
+          <p><b>Sorteo:</b> ${getDrawProviderLabel(rifa.draw_provider)}</p>
+          <p><b>Modalidad:</b> ${getDrawModeLabel(rifa.draw_mode)}</p>
 
           <form method="POST" action="/admin/campanas/${rifa.id}/resultado">
             <label>Resultado ganador</label><br/>
