@@ -194,6 +194,144 @@ function getMaxTicketsByDrawMode(drawMode) {
   return 0;
 }
 
+function normalizeResultValue(drawMode, rawValue) {
+  const digits = String(rawValue || "").replace(/\D/g, "");
+
+  if (drawMode === "baloto_2") {
+    if (digits.length !== 4) {
+      throw new Error("Para Baloto 2 balotas debes escribir 4 dígitos. Ejemplo: 0814");
+    }
+
+    const numbers = [
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4))
+    ];
+
+    validateBalotoNumbers(numbers);
+
+    return numbers
+      .sort((a, b) => a - b)
+      .map(n => String(n).padStart(2, "0"))
+      .join("-");
+  }
+
+  if (drawMode === "baloto_3") {
+    if (digits.length !== 6) {
+      throw new Error("Para Baloto 3 balotas debes escribir 6 dígitos. Ejemplo: 081430");
+    }
+
+    const numbers = [
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4)),
+      Number(digits.slice(4, 6))
+    ];
+
+    validateBalotoNumbers(numbers);
+
+    return numbers
+      .sort((a, b) => a - b)
+      .map(n => String(n).padStart(2, "0"))
+      .join("-");
+  }
+
+  if (drawMode === "baloto_4") {
+    if (digits.length !== 8) {
+      throw new Error("Para Baloto 4 balotas debes escribir 8 dígitos. Ejemplo: 08143041");
+    }
+
+    const numbers = [
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4)),
+      Number(digits.slice(4, 6)),
+      Number(digits.slice(6, 8))
+    ];
+
+    validateBalotoNumbers(numbers);
+
+    return numbers
+      .sort((a, b) => a - b)
+      .map(n => String(n).padStart(2, "0"))
+      .join("-");
+  }
+
+  if (drawMode === "baloto_5") {
+    if (digits.length !== 10) {
+      throw new Error("Para Baloto 5 balotas debes escribir 10 dígitos. Ejemplo: 0814303541");
+    }
+
+    const numbers = [
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4)),
+      Number(digits.slice(4, 6)),
+      Number(digits.slice(6, 8)),
+      Number(digits.slice(8, 10))
+    ];
+
+    validateBalotoNumbers(numbers);
+
+    return numbers
+      .sort((a, b) => a - b)
+      .map(n => String(n).padStart(2, "0"))
+      .join("-");
+  }
+
+  if (drawMode === "loteria_2_primeras") {
+    if (digits.length < 2) {
+      throw new Error("Debes escribir mínimo 2 cifras del resultado.");
+    }
+
+    return digits.slice(0, 2);
+  }
+
+  if (drawMode === "loteria_2_ultimas") {
+    if (digits.length < 2) {
+      throw new Error("Debes escribir mínimo 2 cifras del resultado.");
+    }
+
+    return digits.slice(-2);
+  }
+
+  if (drawMode === "loteria_3_primeras") {
+    if (digits.length < 3) {
+      throw new Error("Debes escribir mínimo 3 cifras del resultado.");
+    }
+
+    return digits.slice(0, 3);
+  }
+
+  if (drawMode === "loteria_3_ultimas") {
+    if (digits.length < 3) {
+      throw new Error("Debes escribir mínimo 3 cifras del resultado.");
+    }
+
+    return digits.slice(-3);
+  }
+
+  if (drawMode === "loteria_4_pleno") {
+    if (digits.length !== 4) {
+      throw new Error("Para pleno debes escribir exactamente 4 cifras.");
+    }
+
+    return digits.padStart(4, "0");
+  }
+
+  throw new Error("Modalidad de resultado inválida");
+}
+
+function validateBalotoNumbers(numbers) {
+  const uniqueNumbers = new Set(numbers);
+
+  if (uniqueNumbers.size !== numbers.length) {
+    throw new Error("Las balotas no pueden repetirse.");
+  }
+
+  for (const number of numbers) {
+    if (!Number.isInteger(number) || number < 1 || number > 43) {
+      throw new Error("Las balotas deben estar entre 01 y 43.");
+    }
+  }
+}
+
 function generateProviderOptions(selectedValue = "") {
   return DRAW_PROVIDERS.map(item => `
     <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
@@ -4605,11 +4743,11 @@ app.post("/admin/campanas/:rifaId/resultado", async (req, res) => {
     }
 
     const { rifaId } = req.params;
-    const resultValue = String(req.body.result_value || "").trim();
+    const rawResultValue = String(req.body.result_value || "").trim();
 
-    if (!resultValue) {
-      return res.status(400).send("Falta el resultado");
-    }
+    if (!rawResultValue) {
+  return res.status(400).send("Falta el resultado");
+}
 
     const { data: currentRifa, error: currentRifaError } = await supabase
   .from("rifas")
@@ -4627,12 +4765,17 @@ if (currentRifa.status === "finished" || currentRifa.result_value) {
   return res.status(403).send("El resultado de esta campaña ya fue cargado y no puede modificarse.");
 }
 
-    const { data: winnerTicket, error: ticketError } = await supabase
-      .from("tickets")
-      .select("*")
-      .eq("rifa_id", rifaId)
-      .eq("combination", resultValue)
-      .maybeSingle();
+    const resultValue = normalizeResultValue(
+  currentRifa.draw_mode,
+  rawResultValue
+);
+
+const { data: winnerTicket, error: ticketError } = await supabase
+  .from("tickets")
+  .select("*")
+  .eq("rifa_id", rifaId)
+  .eq("combination", resultValue)
+  .maybeSingle();
 
     if (ticketError) throw ticketError;
 
