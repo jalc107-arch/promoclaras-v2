@@ -4260,6 +4260,63 @@ if (!rejectionReason) {
   }
 });
 
+async function sendWinnerWhatsApp(rifaId, winnerTicketId) {
+  try {
+    if (!winnerTicketId) {
+      console.log("No hay ganador para enviar WhatsApp");
+      return {
+        ok: false,
+        skipped: true,
+        reason: "Sin ganador"
+      };
+    }
+
+    const { data: ticket, error: ticketError } = await supabase
+      .from("tickets")
+      .select(`
+        *,
+        buyers(*),
+        rifas(*)
+      `)
+      .eq("id", winnerTicketId)
+      .single();
+
+    if (ticketError) throw ticketError;
+
+    if (!ticket) {
+      return {
+        ok: false,
+        reason: "Ticket ganador no encontrado"
+      };
+    }
+
+    const baseUrl = "https://promoclaras-v2-production.up.railway.app";
+
+    const message = [
+      `🎉 ¡Felicitaciones ${ticket.buyers?.full_name || ""}!`,
+      ``,
+      `Tu cupón resultó ganador en CampaClick.`,
+      ``,
+      `Campaña: ${ticket.rifas?.title || "-"}`,
+      `Premio: ${ticket.rifas?.prize || "-"}`,
+      `Cupón ganador: ${ticket.combination || ticket.ticket_code || "-"}`,
+      ``,
+      `Consulta el resultado aquí:`,
+      `${baseUrl}/resultado/${rifaId}`,
+      ``,
+      `Pronto el organizador o el equipo de validación se comunicará contigo para continuar el proceso de entrega del premio.`
+    ].join("\n");
+
+    return await sendWhatsAppMessage(ticket.buyers?.phone, message);
+  } catch (error) {
+    console.error("Error enviando WhatsApp al ganador:", error);
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
 app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
   try {
     if (!req.session.isAdmin) {
@@ -4349,18 +4406,25 @@ app.post("/admin/campanas/:rifaId/resultado", async (req, res) => {
 
     if (ticketError) throw ticketError;
 
-    const { error: updateError } = await supabase
-      .from("rifas")
-      .update({
-        result_value: resultValue,
-        winner_ticket_id: winnerTicket?.id || null,
-        status: "finished"
-      })
-      .eq("id", rifaId);
+const winnerTicketId = winnerTicket?.id || null;
 
-    if (updateError) throw updateError;
+const { error: updateError } = await supabase
+  .from("rifas")
+  .update({
+    result_value: resultValue,
+    winner_ticket_id: winnerTicketId,
+    status: "finished"
+  })
+  .eq("id", rifaId);
 
-    return res.redirect(`/resultado/${rifaId}`);
+if (updateError) throw updateError;
+
+if (winnerTicketId) {
+  await sendWinnerWhatsApp(rifaId, winnerTicketId);
+}
+
+return res.redirect(`/resultado/${rifaId}`);
+    
   } catch (error) {
     return res.status(500).send(error.message);
   }
