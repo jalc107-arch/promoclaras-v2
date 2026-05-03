@@ -355,26 +355,6 @@ function generateProviderOptions(selectedValue = "") {
   `).join("");
 }
 
-function generateDrawModeOptions(selectedValue = "") {
-  return `
-    <optgroup label="Baloto">
-      ${BALOTO_DRAW_MODES.map(item => `
-        <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
-          ${item.label}
-        </option>
-      `).join("")}
-    </optgroup>
-
-    <optgroup label="Loterías">
-      ${LOTERIA_DRAW_MODES.map(item => `
-        <option value="${item.value}" ${selectedValue === item.value ? "selected" : ""}>
-          ${item.label}
-        </option>
-      `).join("")}
-    </optgroup>
-  `;
-}
-
 function validateProviderAndMode(drawProvider, drawMode) {
   if (isBalotoProvider(drawProvider)) {
     return drawMode.startsWith("baloto_");
