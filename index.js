@@ -1245,7 +1245,7 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 <tr>
 <th>Comprador</th>
 <th>Teléfono</th>
-<th>Boleta</th>
+<th>Cupón</th>
 <th>Estado</th>
 </tr>
 </thead>
@@ -3243,7 +3243,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
           <div class="status-box winner-box">
             <div class="status-icon">🎉</div>
             <h2>¡Tenemos ganador!</h2>
-            <p>La campaña ya cuenta con una boleta ganadora registrada.</p>
+            <p>La campaña ya cuenta con un Cupón ganador registrado.</p>
           </div>
         `;
 
@@ -3262,7 +3262,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
             </div>
 
             <div class="winner-row">
-              <span>Boleta ganadora</span>
+              <span>Cupón ganador</span>
               <strong class="ticket-badge">${ticket.combination || ticket.ticket_code || "-"}</strong>
             </div>
           </div>
@@ -3274,7 +3274,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
           <div class="status-icon">🔎</div>
           <h2>No hubo ganador</h2>
           <p>
-            El resultado fue cargado correctamente, pero ninguna boleta vendida
+            El resultado fue cargado correctamente, pero ninguna cupón vendido
             coincide con la combinación ganadora.
           </p>
         </div>
