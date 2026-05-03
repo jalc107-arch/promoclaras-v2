@@ -171,6 +171,27 @@ function getDrawModeLabel(value) {
   return found ? found.label : value || "-";
 }
 
+function getDrawModeLabel(value) {
+  const allModes = [...BALOTO_DRAW_MODES, ...LOTERIA_DRAW_MODES];
+  const found = allModes.find(item => item.value === value);
+  return found ? found.label : value || "-";
+}
+
+function getResultPlaceholder(drawMode) {
+  if (drawMode === "baloto_2") return "Ej: 0814 para 08-14";
+  if (drawMode === "baloto_3") return "Ej: 081430 para 08-14-30";
+  if (drawMode === "baloto_4") return "Ej: 08143041 para 08-14-30-41";
+  if (drawMode === "baloto_5") return "Ej: 0814303541 para 08-14-30-35-41";
+
+  if (drawMode === "loteria_2_primeras") return "Ej: 5839, toma 58";
+  if (drawMode === "loteria_2_ultimas") return "Ej: 5839, toma 39";
+  if (drawMode === "loteria_3_primeras") return "Ej: 5839, toma 583";
+  if (drawMode === "loteria_3_ultimas") return "Ej: 5839, toma 839";
+  if (drawMode === "loteria_4_pleno") return "Ej: 5839";
+
+  return "Escribe el resultado ganador";
+}
+
 function isBalotoProvider(drawProvider) {
   return drawProvider === "baloto";
 }
@@ -594,7 +615,23 @@ function generateTicketCode(drawMode) {
     return String(randomInt(0, 9999)).padStart(4, "0");
   }
 
-  throw new Error("Modalidad de sorteo inválida");
+  return crypto.randomUUID().slice(0, 8);
+}
+
+function generateBalotoCombination(quantity) {
+  const numbers = [];
+
+  while (numbers.length < quantity) {
+    const n = randomInt(1, 43);
+
+    if (!numbers.includes(n)) {
+      numbers.push(n);
+    }
+  }
+
+  numbers.sort((a, b) => a - b);
+
+  return numbers.map(n => String(n).padStart(2, "0")).join("-");
 }
 
 async function assignTicketsToOrder(orderId) {
@@ -4709,13 +4746,17 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
             <label>Resultado ganador</label><br/>
 
             <input
-              type="text"
-              name="result_value"
-              required
-              placeholder="Ej: 08-14 o 583"
-              value="${rifa.result_value || ""}"
-              style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 18px;"
-            />
+  type="text"
+  name="result_value"
+  required
+  placeholder="${getResultPlaceholder(rifa.draw_mode)}"
+  value="${rifa.result_value || ""}"
+  style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 8px;"
+/>
+
+<div style="margin-bottom:18px;color:#6b7280;font-size:13px;line-height:1.4;">
+  ${getResultPlaceholder(rifa.draw_mode)}
+</div>
 
             <button
               type="submit"
