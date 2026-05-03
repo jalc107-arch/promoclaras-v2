@@ -4115,7 +4115,7 @@ app.get("/admin/resultados", async (req, res) => {
         </a>
 
         ${
-  c.status !== "pending"
+  c.status === "active"
     ? `
       <a
         href="/admin/campanas/${c.id}/resultado"
@@ -4123,7 +4123,19 @@ app.get("/admin/resultados", async (req, res) => {
         Cargar resultado
       </a>
     `
-    : ""
+    : c.status === "finished"
+      ? `
+        <div style="
+          padding:9px;
+          background:#e5e7eb;
+          color:#6b7280;
+          border-radius:10px;
+          font-weight:bold;
+          text-align:center;">
+          Resultado cerrado
+        </div>
+      `
+      : ""
 }
 
       </div>
@@ -4352,6 +4364,43 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
+    if (rifa.status === "finished" || rifa.result_value) {
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Resultado cerrado</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Resultado cerrado</h1>
+        <p>
+          Esta campaña ya tiene un resultado cargado y no puede ser modificado.
+        </p>
+
+        <div style="margin-top:14px;padding:16px;background:#eff6ff;border-radius:12px;color:#1e3a8a;font-weight:bold;">
+          Resultado registrado: ${rifa.result_value}
+        </div>
+
+        <a
+          href="/resultado/${rifa.id}"
+          style="display:inline-block;margin-top:20px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Ver resultado
+        </a>
+
+        <a
+          href="/admin/resultados"
+          style="display:inline-block;margin-top:20px;margin-left:8px;padding:14px 18px;background:#111827;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver al admin
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -4413,6 +4462,22 @@ app.post("/admin/campanas/:rifaId/resultado", async (req, res) => {
     if (!resultValue) {
       return res.status(400).send("Falta el resultado");
     }
+
+    const { data: currentRifa, error: currentRifaError } = await supabase
+  .from("rifas")
+  .select("*")
+  .eq("id", rifaId)
+  .single();
+
+if (currentRifaError) throw currentRifaError;
+
+if (!currentRifa) {
+  return res.status(404).send("Campaña no encontrada");
+}
+
+if (currentRifa.status === "finished" || currentRifa.result_value) {
+  return res.status(403).send("El resultado de esta campaña ya fue cargado y no puede modificarse.");
+}
 
     const { data: winnerTicket, error: ticketError } = await supabase
       .from("tickets")
