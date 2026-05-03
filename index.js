@@ -872,22 +872,40 @@ const campaignRows = (campaigns || []).map(c => {
 </td>
     
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:150px;">
-  <a
-    href="/resultado/${c.id}"
-    style="
-      display:block;
-      padding:8px 12px;
-      background:#2563eb;
-      color:white;
-      text-decoration:none;
-      border-radius:10px;
-      font-weight:bold;
-      font-size:13px;
-      margin-bottom:7px;
-    "
-  >
-    Ver resultado
-  </a>
+  ${
+  c.status === "finished" || c.status === "active"
+    ? `
+      <a
+        href="/resultado/${c.id}"
+        style="
+          display:block;
+          padding:8px 12px;
+          background:#2563eb;
+          color:white;
+          text-decoration:none;
+          border-radius:10px;
+          font-weight:bold;
+          font-size:13px;
+          margin-bottom:7px;
+        "
+      >
+        Ver resultado
+      </a>
+    `
+    : `
+      <div style="
+        padding:8px 12px;
+        background:#e5e7eb;
+        color:#6b7280;
+        border-radius:10px;
+        font-weight:bold;
+        font-size:13px;
+        margin-bottom:7px;
+      ">
+        Resultado no disponible
+      </div>
+    `
+}
 
   <a
     href="/campanas/${c.slug}"
