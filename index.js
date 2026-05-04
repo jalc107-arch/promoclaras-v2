@@ -32,6 +32,10 @@ const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim()
 const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
 
+const APP_BASE_URL = String(
+  process.env.APP_BASE_URL || "https://promoclaras.com"
+).replace(/\/$/, "");
+
 const ULTRAMSG_INSTANCE_ID = String(process.env.ULTRAMSG_INSTANCE_ID || "").trim();
 const ULTRAMSG_TOKEN = String(process.env.ULTRAMSG_TOKEN || "").trim();
 
@@ -4784,7 +4788,7 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
     `Ya puedes ingresar al panel y crear campañas para revisión del administrador.`,
     ``,
     `Ingreso organizador:`,
-    `https://promoclaras-v2-production.up.railway.app/organizers/login`
+    `https://promoclaras.com`
   ].join("\n")
 );
 
@@ -4842,7 +4846,7 @@ if (!rejectionReason) {
 ``,
 `Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
         `Ingreso organizador:`,
-        `https://promoclaras-v2-production.up.railway.app/organizers/login`
+        `https://promoclaras.com`
       ].join("\n")
     );
 
@@ -5084,7 +5088,7 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
           `Ya puedes compartirla y recibir participantes.`,
           ``,
           `Link de la campaña:`,
-          `https://promoclaras-v2-production.up.railway.app/campanas/${campaign.slug}`
+          `https://promoclaras.com/campanas/${campaign.slug}`
         ].join("\n")
       );
     }
@@ -5155,7 +5159,7 @@ if (!rejectionReason) {
 `Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
           ``,
           `Ingreso organizador:`,
-          `https://promoclaras-v2-production.up.railway.app/organizers/login`
+          `https://promoclaras.com`
         ].join("\n")
       );
     }
