@@ -998,18 +998,33 @@ app.get("/health", async (req, res) => {
 
 app.get("/debug/ultramsg", async (req, res) => {
   try {
+    const key = String(req.query.key || "").trim();
     const phone = String(req.query.phone || "").trim();
+
+    if (!ADMIN_PASSWORD) {
+      return res.status(500).json({
+        ok: false,
+        error: "Falta ADMIN_PASSWORD en Railway"
+      });
+    }
+
+    if (key !== ADMIN_PASSWORD) {
+      return res.status(401).json({
+        ok: false,
+        error: "No autorizado"
+      });
+    }
 
     if (!phone) {
       return res.status(400).json({
         ok: false,
-        error: "Falta el parámetro phone. Ejemplo: /debug/ultramsg?phone=3001234567"
+        error: "Falta el parámetro phone. Ejemplo: /debug/ultramsg?key=TU_CLAVE_ADMIN&phone=3001234567"
       });
     }
 
     const result = await sendWhatsAppMessage(
       phone,
-      `Prueba UltraMsg desde CampaClick. Si recibes este mensaje, la integración está funcionando correctamente.`
+      "Prueba UltraMsg desde CampaClick. Si recibes este mensaje, la integración está funcionando correctamente."
     );
 
     return res.json({
