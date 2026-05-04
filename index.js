@@ -6,7 +6,9 @@ import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-const app = express();
+cconst app = express();
+
+app.set("trust proxy", 1);
 
 app.use(
   helmet({
@@ -22,12 +24,13 @@ app.use(
     secret: process.env.SESSION_SECRET || "promoclaras_v2_secret",
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
-  secure: process.env.NODE_ENV === "production",
-  httpOnly: true,
-  sameSite: "lax",
-  maxAge: 1000 * 60 * 60 * 4
-}
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 4
+    }
   })
 );
 
