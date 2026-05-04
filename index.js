@@ -3228,8 +3228,33 @@ if (wompiTransactionId && payment.status !== "approved") {
       .select("id")
       .eq("order_id", orderId);
 
-    if (!existingTickets || existingTickets.length === 0) {
+   if (!existingTickets || existingTickets.length === 0) {
   await assignTicketsToOrder(orderId);
+
+  const { data: updatedOrderData } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      rifas(*)
+    `)
+    .eq("id", orderId)
+    .single();
+
+  if (updatedOrderData?.rifas) {
+    const soldTickets =
+      Number(updatedOrderData.rifas.sold_tickets || 0) + Number(updatedOrderData.qty || 0);
+
+    const availableTickets =
+      Number(updatedOrderData.rifas.max_tickets || 0) - soldTickets;
+
+    await supabase
+      .from("rifas")
+      .update({
+        sold_tickets: soldTickets,
+        available_tickets: availableTickets
+      })
+      .eq("id", updatedOrderData.rifas.id);
+  }
 }
 
 await sendOrderCouponsWhatsApp(orderId);
