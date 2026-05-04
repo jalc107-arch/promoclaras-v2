@@ -498,7 +498,7 @@ async function sendOrderCouponsWhatsApp(orderId) {
       };
     }
 
-    const baseUrl = "https://promoclaras-v2-production.up.railway.app";
+    const baseUrl = "https://promoclaras.com";
 
     const couponList = tickets
   .map(t => `• ${t.combination || t.ticket_code || "-"}`)
@@ -906,6 +906,11 @@ app.get("/", (req, res) => {
             <a class="action blue" href="/consultar">
               <span>Consultar mis códigos</span>
               <small>Revisa tus órdenes y códigos promocionales asignados.</small>
+            </a>
+
+            <a class="action blue" href="/campanas">
+            <span>Ver campañas activas</span>
+            <small>Explora las campañas disponibles para participar.</small>
             </a>
 
             <a class="action green" href="/organizers/login">
@@ -5184,7 +5189,7 @@ async function sendWinnerWhatsApp(rifaId, winnerTicketId) {
       };
     }
 
-    const baseUrl = "https://promoclaras-v2-production.up.railway.app";
+    const baseUrl = "https://promoclaras.com";
 
 const message = [
   `🎉 ¡Felicitaciones ${ticket.buyers?.full_name || ""}!`,
