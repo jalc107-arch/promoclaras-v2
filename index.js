@@ -67,6 +67,14 @@ const supabase = createClient(
   SUPABASE_SERVICE_ROLE_KEY
 );
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiados intentos de ingreso. Espera 15 minutos e intenta nuevamente."
+});
+
 async function uploadOrganizerSupport(base64Image, organizerId, type) {
   if (!base64Image) {
     return null;
