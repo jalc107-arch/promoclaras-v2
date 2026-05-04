@@ -1547,20 +1547,20 @@ const campaignRows = (campaigns || []).map(c => {
     ? `
       <a
         target="_blank"
-        href="https://wa.me/?text=${encodeURIComponent(
-`🎉 ¡Participa en esta campaña de CampaClick!
+       href="https://wa.me/?text=${encodeURIComponent(
+`Te invito a participar en esta campaña de CampaClick.
 
-📌 Campaña: ${c.title}
-🎁 Premio: ${c.prize || "-"}
-💰 Valor por código: $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
-🎯 Sorteo: ${getDrawProviderLabel(c.draw_provider)}
-🧩 Modalidad: ${getDrawModeLabel(c.draw_mode)}
-📅 Fecha del sorteo: ${c.draw_date || "-"}
+Campaña: ${c.title}
+Premio: ${c.prize || "-"}
+Valor por código promocional: $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
+Sorteo: ${getDrawProviderLabel(c.draw_provider)}
+Modalidad: ${getDrawModeLabel(c.draw_mode)}
+Fecha del sorteo: ${c.draw_date || "-"}
 
-🔗 Link para participar:
+Link para participar:
 ${baseUrl}/campanas/${c.slug}
 
-✅ Los códigos promocionales se asignan automáticamente después del pago aprobado.`
+Los códigos promocionales se asignan automáticamente después del pago aprobado.`
 )}"
         style="
           display:block;
@@ -2681,20 +2681,20 @@ app.get("/campanas/:slug", async (req, res) => {
     const baseUrl = APP_BASE_URL;
     const campaignPublicUrl = `${baseUrl}/campanas/${campaign.slug}`;
     
-    const whatsappShareMessage = [
-  `🎉 ¡Participa en esta campaña de CampaClick!`,
+   const whatsappShareMessage = [
+  `Te invito a participar en esta campaña de CampaClick.`,
   ``,
-  `📌 Campaña: ${campaign.title}`,
-  `🎁 Premio: ${campaign.prize || "-"}`,
-  `💰 Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}`,
-  `🎯 Sorteo: ${getDrawProviderLabel(campaign.draw_provider)}`,
-  `🧩 Modalidad: ${getDrawModeLabel(campaign.draw_mode)}`,
-  `📅 Fecha del sorteo: ${campaign.draw_date || "-"}`,
+  `Campaña: ${campaign.title}`,
+  `Premio: ${campaign.prize || "-"}`,
+  `Valor por código promocional: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}`,
+  `Sorteo: ${getDrawProviderLabel(campaign.draw_provider)}`,
+  `Modalidad: ${getDrawModeLabel(campaign.draw_mode)}`,
+  `Fecha del sorteo: ${campaign.draw_date || "-"}`,
   ``,
-  `🔗 Link para participar:`,
+  `Link para participar:`,
   `${campaignPublicUrl}`,
   ``,
-  `✅ Los códigos promocionales se asignan automáticamente después del pago aprobado.`
+  `Los códigos promocionales se asignan automáticamente después del pago aprobado.`
 ].join("\n");
 
 const whatsappShareText = encodeURIComponent(whatsappShareMessage);
