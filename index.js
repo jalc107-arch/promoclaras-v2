@@ -2842,6 +2842,241 @@ app.get("/r/:slug", async (req, res) => {
   return res.redirect(`/campanas/${req.params.slug}`);
 });
 
+app.get("/campanas", async (req, res) => {
+  try {
+    const { data: campaigns, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("status", "active")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Campañas activas - CampaClick</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f6fb;
+  color: #111827;
+}
+
+.header {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: white;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.header p {
+  margin-top: 10px;
+  font-size: 17px;
+  opacity: .92;
+}
+
+.container {
+  max-width: 1150px;
+  margin: -28px auto 0;
+  padding: 0 20px 40px;
+}
+
+.card {
+  background: white;
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.10);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.campaign {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 20px;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 260px;
+}
+
+.campaign h2 {
+  margin: 0 0 10px;
+  font-size: 21px;
+  color: #111827;
+}
+
+.description {
+  color: #4b5563;
+  line-height: 1.5;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.info {
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.price {
+  font-size: 26px;
+  font-weight: 900;
+  color: #16a34a;
+  margin-bottom: 14px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 14px;
+  background: #2563eb;
+  color: white;
+  text-decoration: none;
+  border-radius: 13px;
+  font-weight: bold;
+}
+
+.btn-secondary {
+  background: #111827;
+  margin-top: 10px;
+}
+
+.empty {
+  padding: 24px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 16px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.top-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.top-actions a {
+  text-decoration: none;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: bold;
+  color: white;
+}
+
+.footer {
+  text-align: center;
+  padding: 26px;
+  color: #6b7280;
+  font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>Campañas activas</h1>
+  <p>Consulta las campañas disponibles y participa de forma segura.</p>
+</div>
+
+<div class="container">
+  <div class="card">
+
+    <div class="top-actions">
+      <a href="/" style="background:#111827;">Inicio</a>
+      <a href="/consultar" style="background:#2563eb;">Consultar mis códigos</a>
+    </div>
+
+    ${
+      campaigns && campaigns.length > 0
+        ? `
+          <div class="grid">
+            ${campaigns.map(campaign => `
+              <div class="campaign">
+                <div>
+                  <h2>${campaign.title || "Campaña"}</h2>
+
+                  <div class="description">
+                    ${campaign.description || "Campaña promocional disponible para participar."}
+                  </div>
+
+                  <div class="info">
+                    <div><b>Premio:</b> ${campaign.prize || "-"}</div>
+                    <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+                    <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
+                    <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
+                  </div>
+
+                  <div class="price">
+                    $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+                  </div>
+                </div>
+
+                <div>
+                  <a class="btn" href="/campanas/${campaign.slug}">
+                    Ver campaña
+                  </a>
+
+                  <a class="btn btn-secondary" href="/campanas/${campaign.slug}/comprar">
+                    Participar ahora
+                  </a>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `
+        : `
+          <div class="empty">
+            En este momento no hay campañas activas disponibles.
+          </div>
+        `
+    }
+
+  </div>
+</div>
+
+<div class="footer">
+  © CampaClick — Plataforma de campañas promocionales
+</div>
+
+</body>
+</html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.get("/consultar", async (req, res) => {
   try {
     const phone = String(req.query.phone || "").trim();
