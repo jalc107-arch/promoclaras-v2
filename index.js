@@ -2746,7 +2746,7 @@ body {
 
     <div class="card">
       <div class="price-card">
-        <div class="price-label">Valor por cupón</div>
+        <div class="price-label">Valor por código promocional</div>
 
         <div class="price">
           $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
