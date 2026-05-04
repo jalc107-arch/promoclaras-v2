@@ -6,8 +6,13 @@ import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcrypt";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
 
@@ -19,6 +24,11 @@ app.use(
 
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+
+app.get("/campaclick-share.jpg", (req, res) => {
+  res.sendFile(path.join(__dirname, "campaclick-share.jpg"));
+});
+
 app.use("/img", express.static("public/img"));
 
 
@@ -2653,6 +2663,7 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
 <title>${campaign.title}</title>
+
 
 <meta property="og:title" content="${campaign.title} | CampaClick" />
 <meta property="og:description" content="Premio: ${campaign.prize || "-"} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")} · Fecha del sorteo: ${campaign.draw_date || "-"}" />
