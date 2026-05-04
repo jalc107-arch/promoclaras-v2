@@ -2135,9 +2135,9 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
   La comisión de CampaClick es del <b>5%</b> sobre transacciones exitosas. 
   Además, Wompi aplica sus costos propios de procesamiento: <b>2.65% + $700 + IVA</b> por transacción exitosa, según tarifa vigente del proveedor.
   <br/><br/>
-  <a href="/politicas" target="_blank" style="color:#2563eb;font-weight:bold;">
-    Ver políticas completas
-  </a>
+  <a href="/terminos-organizadores" target="_blank" style="color:#2563eb;font-weight:bold;">
+  Ver políticas completas
+</a>
 </div>
 
             <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;">
@@ -2670,13 +2670,12 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 <meta property="og:url" content="${campaignPublicUrl}" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="CampaClick" />
-<meta property="og:image" content="${APP_BASE_URL}/img/campaclick-share.jpg" />
+<meta property="og:image" content="${APP_BASE_URL}/campaclick-share.jpg" />
 
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${campaign.title} | CampaClick" />
 <meta name="twitter:description" content="Premio: ${campaign.prize || "-"} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}" />
-<meta name="twitter:image" content="${APP_BASE_URL}/img/campaclick-share.jpg" />
-
+<meta name="twitter:image" content="${APP_BASE_URL}/campaclick-share.jpg" />
 <style>
 * {
   box-sizing: border-box;
