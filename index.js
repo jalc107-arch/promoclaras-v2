@@ -210,10 +210,10 @@ function getMinimumQtyText(pricePerTicket) {
   const minimumQty = getMinimumQtyByPrice(pricePerTicket);
 
   if (minimumQty === 1) {
-    return "Puedes comprar desde 1 cupón.";
+    return "Puedes comprar desde 1 Código promocional.";
   }
 
-  return `Por el valor de este cupón, la compra mínima es de ${minimumQty} cupones.`;
+  return `Por el valor de este código, la compra mínima es de ${minimumQty} Códigos.`;
 }
 
 function getMaxTicketsByDrawMode(drawMode) {
@@ -505,8 +505,8 @@ async function sendOrderCouponsWhatsApp(orderId) {
   .join("\n");
 
 const couponLabel = tickets.length === 1
-  ? "Cupón asignado"
-  : "Cupones asignados";
+  ? "Código promocional asignado"
+  : "Códigos promocionales asignados";
 
 const message = [
   `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
@@ -2553,7 +2553,7 @@ body {
       </a>
 
       <div class="small-note">
-        Tu cupón se asigna automáticamente después del pago aprobado.
+        Tu código promocional se asigna automáticamente después del pago aprobado.
       </div>
     `
     : campaign.status === "finished"
@@ -3070,7 +3070,7 @@ if (qty < minimumQty) {
         <h1>Cantidad mínima requerida</h1>
 
         <p>
-          Para esta campaña, el valor del cupón exige una compra mínima de
+          Para esta campaña, el valor del código promocional exige una compra mínima de
           <b>${minimumQty} cupones</b>.
         </p>
 
