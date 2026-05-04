@@ -1339,7 +1339,7 @@ const campaignRows = (campaigns || []).map(c => {
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawProviderLabel(c.draw_provider)}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawModeLabel(c.draw_mode)}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;min-width:230px;">
+   <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;min-width:230px;">
   <div style="font-weight:bold;color:#111827;font-size:15px;">
     $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
   </div>
@@ -1364,14 +1364,15 @@ const campaignRows = (campaigns || []).map(c => {
     </div>
 
     <div>
-  Wompi: <b>2.65% + $700 + IVA</b> por transacción exitosa, según tarifa vigente de Wompi.
-</div>
+      Wompi: <b>2.65% + $700 + IVA</b> por transacción exitosa.
+    </div>
 
-<div style="margin-top:5px;color:#6b7280;">
-  Estos valores se descuentan de las ventas aprobadas y pueden variar según las políticas del proveedor de pagos.
-</div>
+    <div style="margin-top:5px;color:#6b7280;">
+      Estos valores se descuentan de las ventas aprobadas y pueden variar según las políticas del proveedor de pagos.
+    </div>
+  </div>
+</td>
 
-    
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:160px;">
   <div style="font-weight:bold;color:#111827;">
     ${sold} / ${total}
@@ -2257,10 +2258,7 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
     }
 
-    if (!organizer.terms_accepted) {
-  return res.status(403).send("Debes aceptar las políticas y condiciones antes de crear campañas.");
-}
-
+   
     if (!organizer.terms_accepted) {
   return res.status(403).send(`
     <!DOCTYPE html>
@@ -2286,7 +2284,7 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
         </a>
 
         <a
-          href="/politicas"
+          href="/terminos-organizadores"
           target="_blank"
           style="display:inline-block;margin-top:18px;margin-left:8px;padding:14px 18px;background:#111827;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Ver políticas
@@ -2452,6 +2450,10 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     if (organizer.verification_status !== "verified") {
       return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
     }
+
+    if (!organizer.terms_accepted) {
+  return res.status(403).send("Debes aceptar las políticas y condiciones antes de crear campañas.");
+}
 
     const title = String(req.body.title || "").trim();
     const prize = String(req.body.prize || "").trim();
