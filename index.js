@@ -3469,12 +3469,13 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
 
     const buyerName = String(req.body.buyer_name || "").trim();
     const buyerPhone = String(req.body.buyer_phone || "").trim();
+    const cleanBuyerPhone = buyerPhone.replace(/\D/g, "");
     const buyerEmail = String(req.body.buyer_email || "").trim();
     const qty = Number(req.body.qty || 0);
 
-    if (!buyerName || !buyerPhone) {
-      return res.status(400).send("Faltan nombre o teléfono");
-    }
+    if (!buyerName || !cleanBuyerPhone) {
+  return res.status(400).send("Faltan nombre o teléfono");
+}
 
     if (!Number.isInteger(qty) || qty <= 0 || qty > 20) {
       return res.status(400).send("Cantidad inválida");
@@ -3594,7 +3595,7 @@ if (qty > availableTickets) {
     const { data: existingBuyer, error: existingBuyerError } = await supabase
       .from("buyers")
       .select("*")
-      .eq("phone", buyerPhone)
+      .eq("phone", cleanBuyerPhone)
       .maybeSingle();
 
     if (existingBuyerError) throw existingBuyerError;
@@ -3606,7 +3607,7 @@ if (qty > availableTickets) {
         .from("buyers")
         .insert({
           full_name: buyerName,
-          phone: buyerPhone,
+          phone: cleanBuyerPhone,
           email: buyerEmail || null
         })
         .select()
@@ -3786,7 +3787,7 @@ return res.redirect(`/orden/${orderId}`);
     );
 
     const baseUrl = APP_BASE_URL;
-    const redirectUrl = `${baseUrl}/orden/${order.id}`;
+    const redirectUrl = `${APP_BASE_URL}/orden/${order.id}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
@@ -4053,8 +4054,7 @@ app.post("/webhooks/wompi", async (req, res) => {
         .update({
           sold_tickets: soldTickets,
           available_tickets: availableTickets,
-          status: "active"
-        })
+          })
         .eq("id", orderData.rifas.id);
     }
   }
@@ -4778,7 +4778,7 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
 
     if (error) throw error;
 
-    await sendWhatsAppMessage(
+   await sendWhatsAppMessage(
   organizer.phone,
   [
     `Hola ${organizer.full_name || ""}.`,
@@ -4788,7 +4788,7 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
     `Ya puedes ingresar al panel y crear campañas para revisión del administrador.`,
     ``,
     `Ingreso organizador:`,
-    `https://promoclaras.com`
+    `${APP_BASE_URL}/organizers/login`
   ].join("\n")
 );
 
@@ -4834,21 +4834,22 @@ if (!rejectionReason) {
 
     if (error) throw error;
 
-    await sendWhatsAppMessage(
-      organizer.phone,
-      [
-        `Hola ${organizer.full_name || ""}.`,
-        ``,
-        `Tu verificación como organizador en CampaClick fue rechazada.`,
-``,
-`Motivo del rechazo:`,
-`${rejectionReason}`,
-``,
-`Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
-        `Ingreso organizador:`,
-        `https://promoclaras.com`
-      ].join("\n")
-    );
+   await sendWhatsAppMessage(
+  organizer.phone,
+  [
+    `Hola ${organizer.full_name || ""}.`,
+    ``,
+    `Tu verificación como organizador en CampaClick fue rechazada.`,
+    ``,
+    `Motivo del rechazo:`,
+    `${rejectionReason}`,
+    ``,
+    `Por favor ingresa nuevamente al panel, revisa la información y vuelve a enviar tus soportes de identidad.`,
+    ``,
+    `Ingreso organizador:`,
+    `${APP_BASE_URL}/organizers/login`
+  ].join("\n")
+);
 
     return res.redirect("/admin/organizadores");
   } catch (error) {
@@ -5076,21 +5077,21 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
 
     if (organizer?.phone) {
       await sendWhatsAppMessage(
-        organizer.phone,
-        [
-          `Hola ${organizer.full_name || ""}.`,
-          ``,
-          `Tu campaña fue aprobada en CampaClick.`,
-          ``,
-          `Campaña: ${campaign.title || "-"}`,
-          `Premio: ${campaign.prize || "-"}`,
-          ``,
-          `Ya puedes compartirla y recibir participantes.`,
-          ``,
-          `Link de la campaña:`,
-          `https://promoclaras.com/campanas/${campaign.slug}`
-        ].join("\n")
-      );
+  organizer.phone,
+  [
+    `Hola ${organizer.full_name || ""}.`,
+    ``,
+    `Tu campaña fue aprobada en CampaClick.`,
+    ``,
+    `Campaña: ${campaign.title || "-"}`,
+    `Premio: ${campaign.prize || "-"}`,
+    ``,
+    `Ya puedes compartirla y recibir participantes.`,
+    ``,
+    `Link de la campaña:`,
+    `${APP_BASE_URL}/campanas/${campaign.slug}`
+  ].join("\n")
+);
     }
 
     return res.redirect("/admin/resultados");
@@ -5144,24 +5145,24 @@ if (!rejectionReason) {
 
     if (organizer?.phone) {
       await sendWhatsAppMessage(
-        organizer.phone,
-        [
-          `Hola ${organizer.full_name || ""}.`,
-          ``,
-          `Tu campaña fue rechazada en CampaClick.`,
-``,
-`Campaña: ${campaign.title || "-"}`,
-`Premio: ${campaign.prize || "-"}`,
-``,
-`Motivo del rechazo:`,
-`${rejectionReason}`,
-``,
-`Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
-          ``,
-          `Ingreso organizador:`,
-          `https://promoclaras.com`
-        ].join("\n")
-      );
+  organizer.phone,
+  [
+    `Hola ${organizer.full_name || ""}.`,
+    ``,
+    `Tu campaña fue rechazada en CampaClick.`,
+    ``,
+    `Campaña: ${campaign.title || "-"}`,
+    `Premio: ${campaign.prize || "-"}`,
+    ``,
+    `Motivo del rechazo:`,
+    `${rejectionReason}`,
+    ``,
+    `Por favor revisa la información de la campaña antes de volver a crearla o solicitar una nueva revisión.`,
+    ``,
+    `Ingreso organizador:`,
+    `${APP_BASE_URL}/organizers/login`
+  ].join("\n")
+);
     }
 
     return res.redirect("/admin/resultados");
