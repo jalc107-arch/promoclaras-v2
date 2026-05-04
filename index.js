@@ -850,6 +850,13 @@ app.get("/", (req, res) => {
           background: linear-gradient(135deg, #5b21b6, #7c3aed);
         }
 
+        .admin-wide {
+  grid-column: 1 / -1;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+}
+
         .footer {
           margin-top: 24px;
           text-align: center;
@@ -923,7 +930,7 @@ app.get("/", (req, res) => {
               <small>Registra tu perfil para solicitar verificación.</small>
             </a>
 
-            <a class="action purple" href="/admin/login">
+            <a class="action purple admin-wide" href="/admin/login">
               <span>Ingreso administrador</span>
               <small>Revisión de organizadores, campañas y resultados.</small>
             </a>
