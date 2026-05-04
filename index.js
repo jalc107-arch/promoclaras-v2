@@ -2091,9 +2091,19 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
             <div style="margin-bottom:18px;">
               <label style="display:flex;align-items:center;gap:8px;">
                 <input type="checkbox" name="terms_accepted" value="true" ${organizer.terms_accepted ? "checked" : ""}>
-                Acepto términos y confirmo que la información es real
+                Acepto las políticas de uso, comisiones, tratamiento de datos y condiciones de participación de CampaClick. Declaro que conozco que la plataforma cobra una comisión del 5% sobre transacciones exitosas y que Wompi descuenta sus costos propios por procesamiento de pago.
               </label>
             </div>
+
+            <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;color:#1e3a8a;font-size:14px;line-height:1.5;">
+  <b>Información importante:</b><br/>
+  La comisión de CampaClick es del <b>5%</b> sobre transacciones exitosas. 
+  Además, Wompi aplica sus costos propios de procesamiento: <b>2.65% + $700 + IVA</b> por transacción exitosa, según tarifa vigente del proveedor.
+  <br/><br/>
+  <a href="/politicas" target="_blank" style="color:#2563eb;font-weight:bold;">
+    Ver políticas completas
+  </a>
+</div>
 
             <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;">
               Guardar verificación
@@ -2137,8 +2147,8 @@ app.post("/organizers/:organizerId/verificacion", async (req, res) => {
     }
 
     if (!termsAccepted) {
-      return res.status(400).send("Debes aceptar los términos");
-    }
+  return res.status(400).send("Debes aceptar las políticas de uso, comisiones, tratamiento de datos y condiciones de participación de CampaClick.");
+}
 
 const { data: currentOrganizer, error: currentOrganizerError } = await supabase
   .from("organizers")
