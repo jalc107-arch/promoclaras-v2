@@ -19,8 +19,6 @@ app.use(
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
-app.set("trust proxy", 1);
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "promoclaras_v2_secret",
@@ -67,13 +65,6 @@ const supabase = createClient(
   SUPABASE_SERVICE_ROLE_KEY
 );
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Demasiados intentos de ingreso. Espera 15 minutos e intenta nuevamente."
-});
 
 async function uploadOrganizerSupport(base64Image, organizerId, type) {
   if (!base64Image) {
