@@ -1364,14 +1364,12 @@ const campaignRows = (campaigns || []).map(c => {
     </div>
 
     <div>
-      Wompi: <b>2.65% + $700 + IVA</b> aprox.
-    </div>
+  Wompi: <b>2.65% + $700 + IVA</b> por transacción exitosa, según tarifa vigente de Wompi.
+</div>
 
-    <div style="margin-top:5px;color:#6b7280;">
-      Se aplican sobre ventas o transacciones aprobadas.
-    </div>
-  </div>
-</td>
+<div style="margin-top:5px;color:#6b7280;">
+  Estos valores se descuentan de las ventas aprobadas y pueden variar según las políticas del proveedor de pagos.
+</div>
 
     
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:160px;">
