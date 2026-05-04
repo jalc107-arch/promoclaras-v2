@@ -1328,7 +1328,7 @@ const totalCampaignCoupons = (campaigns || []).reduce(
   0
 );
     
-const baseUrl = `${req.protocol}://${req.get("host")}`;
+const baseUrl = APP_BASE_URL;
     
 const campaignRows = (campaigns || []).map(c => {
   const sold = Number(c.sold_tickets || 0);
@@ -2454,7 +2454,7 @@ app.get("/campanas/:slug", async (req, res) => {
       publicStatusColor = "#dc2626";
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = APP_BASE_URL;
     const campaignPublicUrl = `${baseUrl}/campanas/${campaign.slug}`;
     
     const whatsappShareText = encodeURIComponent(
@@ -3132,7 +3132,7 @@ app.get("/consultar", async (req, res) => {
       }
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = APP_BASE_URL;
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -3785,7 +3785,7 @@ return res.redirect(`/orden/${orderId}`);
       WOMPI_INTEGRITY_SECRET
     );
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = APP_BASE_URL;
     const redirectUrl = `${baseUrl}/orden/${order.id}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
