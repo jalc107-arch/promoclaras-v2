@@ -34,6 +34,14 @@ app.use(
   })
 );
 
+const loginLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiados intentos de ingreso. Espera 15 minutos e intenta nuevamente."
+});
+
 const PORT = process.env.PORT || 3000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -1164,7 +1172,7 @@ app.get("/organizers/login", (req, res) => {
   `);
 });
 
-app.post("/organizers/login", async (req, res) => {
+app.post("/organizers/login", loginLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "").trim();
@@ -4510,7 +4518,7 @@ app.get("/admin/login", (req, res) => {
   `);
 });
 
-app.post("/admin/login", (req, res) => {
+app.post("/admin/login", loginLimiter, (req, res) => {
   const password = String(req.body.password || "").trim();
 
   if (!ADMIN_PASSWORD) {
