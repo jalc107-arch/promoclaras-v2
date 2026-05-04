@@ -710,7 +710,58 @@ while (assignedTickets.length < qty && current <= maxTickets) {
 }
 
 app.get("/", (req, res) => {
-  res.send("PROMOCLARAS V2 funcionando");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>CampaClick</title>
+    </head>
+
+    <body style="font-family:Arial;background:#f3f6fb;margin:0;padding:40px;">
+      <div style="max-width:760px;margin:auto;background:white;padding:30px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        
+        <h1 style="margin-top:0;color:#1d4ed8;">CampaClick</h1>
+
+        <p style="color:#4b5563;font-size:17px;line-height:1.5;">
+          Plataforma de campañas promocionales.
+          Desde aquí puedes ingresar, consultar tus códigos o administrar campañas.
+        </p>
+
+        <div style="display:grid;gap:14px;margin-top:28px;">
+
+          <a href="/consultar"
+            style="display:block;padding:16px;background:#2563eb;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
+            Consultar mis códigos promocionales
+          </a>
+
+          <a href="/organizers/login"
+            style="display:block;padding:16px;background:#16a34a;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
+            Ingreso organizador
+          </a>
+
+          <a href="/organizers/register"
+            style="display:block;padding:16px;background:#111827;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
+            Crear cuenta de organizador
+          </a>
+
+          <a href="/admin/login"
+            style="display:block;padding:16px;background:#7c3aed;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
+            Ingreso administrador
+          </a>
+
+        </div>
+
+        <p style="margin-top:25px;color:#6b7280;font-size:13px;">
+          © CampaClick — Plataforma de campañas promocionales
+        </p>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 app.get("/health", async (req, res) => {
