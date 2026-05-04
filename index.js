@@ -1339,9 +1339,41 @@ const campaignRows = (campaigns || []).map(c => {
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawProviderLabel(c.draw_provider)}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawModeLabel(c.draw_mode)}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;">
-      $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
-    </td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;min-width:230px;">
+  <div style="font-weight:bold;color:#111827;font-size:15px;">
+    $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
+  </div>
+
+  <div style="
+    margin-top:8px;
+    padding:9px;
+    background:#f9fafb;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    font-size:12px;
+    color:#374151;
+    line-height:1.4;
+    text-align:left;
+  ">
+    <div style="font-weight:bold;color:#111827;margin-bottom:4px;">
+      Costos aplicables
+    </div>
+
+    <div>
+      Plataforma: <b>5%</b>
+    </div>
+
+    <div>
+      Wompi: <b>2.65% + $700 + IVA</b> aprox.
+    </div>
+
+    <div style="margin-top:5px;color:#6b7280;">
+      Se aplican sobre ventas o transacciones aprobadas.
+    </div>
+  </div>
+</td>
+
+    
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:center;min-width:160px;">
   <div style="font-weight:bold;color:#111827;">
     ${sold} / ${total}
