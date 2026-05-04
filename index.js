@@ -502,7 +502,7 @@ async function sendOrderCouponsWhatsApp(orderId) {
       };
     }
 
-    const baseUrl = "https://promoclaras.com";
+    const baseUrl = APP_BASE_URL;
 
     const couponList = tickets
   .map(t => `• ${t.combination || t.ticket_code || "-"}`)
@@ -5201,7 +5201,7 @@ async function sendWinnerWhatsApp(rifaId, winnerTicketId) {
       };
     }
 
-    const baseUrl = "https://promoclaras.com";
+    const baseUrl = APP_BASE_URL;
 
 const message = [
   `🎉 ¡Felicitaciones ${ticket.buyers?.full_name || ""}!`,
