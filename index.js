@@ -595,6 +595,41 @@ function campaignStatusLabel(status) {
   return status || "-";
 }
 
+function moneyCOP(value) {
+  return `$${Number(value || 0).toLocaleString("es-CO")}`;
+}
+
+function calculateFinancialSummary(payments = []) {
+  const approvedPayments = (payments || []).filter(p => p.status === "approved");
+
+  const grossRevenue = approvedPayments.reduce(
+    (acc, p) => acc + Number(p.amount || 0),
+    0
+  );
+
+  const platformFee = grossRevenue * 0.05;
+
+  const wompiBaseFee = approvedPayments.reduce((acc, p) => {
+    const amount = Number(p.amount || 0);
+    return acc + (amount * 0.0265) + 700;
+  }, 0);
+
+  const wompiVat = wompiBaseFee * 0.19;
+  const wompiEstimatedFee = wompiBaseFee + wompiVat;
+
+  const estimatedNetToOrganizer = grossRevenue - platformFee - wompiEstimatedFee;
+
+  return {
+    approvedPaymentsCount: approvedPayments.length,
+    grossRevenue,
+    platformFee,
+    wompiBaseFee,
+    wompiVat,
+    wompiEstimatedFee,
+    estimatedNetToOrganizer
+  };
+}
+
 function campaignStatusClass(status) {
   if (status === "finished") return "approved";
   if (status === "active") return "approved";
@@ -1343,6 +1378,8 @@ const totalCampaignCoupons = (campaigns || []).reduce(
 );
     
 const baseUrl = APP_BASE_URL;
+
+    const financialSummary = calculateFinancialSummary(payments);
     
 const campaignRows = (campaigns || []).map(c => {
   const sold = Number(c.sold_tickets || 0);
@@ -1741,14 +1778,23 @@ ${verificationHtml}
 </div>
 
 <div class="card">
-<div class="metric">
-$${Number(
-payments
-.filter(p=>p.status==="approved")
-.reduce((acc,p)=>acc+Number(p.amount || 0),0)
-).toLocaleString("es-CO")}
+  <div class="metric">${moneyCOP(financialSummary.grossRevenue)}</div>
+  <div class="label">Recaudo bruto aprobado</div>
 </div>
-<div class="label">Recaudo Total</div>
+
+<div class="card">
+  <div class="metric">${moneyCOP(financialSummary.platformFee)}</div>
+  <div class="label">Comisión CampaClick 5%</div>
+</div>
+
+<div class="card">
+  <div class="metric">${moneyCOP(financialSummary.wompiEstimatedFee)}</div>
+  <div class="label">Comisión Wompi estimada</div>
+</div>
+
+<div class="card">
+  <div class="metric">${moneyCOP(financialSummary.estimatedNetToOrganizer)}</div>
+  <div class="label">Neto aproximado a girar</div>
 </div>
 
 </div>
@@ -5074,6 +5120,37 @@ app.get("/admin/resultados", async (req, res) => {
 
     if (error) throw error;
 
+    const campaignIds = (campaigns || []).map(c => c.id);
+
+let adminOrders = [];
+let adminPayments = [];
+
+if (campaignIds.length > 0) {
+  const { data: ordersData, error: ordersError } = await supabase
+    .from("orders")
+    .select("*")
+    .in("rifa_id", campaignIds);
+
+  if (ordersError) throw ordersError;
+
+  adminOrders = ordersData || [];
+
+  const orderIds = adminOrders.map(o => o.id);
+
+  if (orderIds.length > 0) {
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from("payments")
+      .select("*")
+      .in("order_id", orderIds);
+
+    if (paymentsError) throw paymentsError;
+
+    adminPayments = paymentsData || [];
+  }
+}
+
+const adminFinancialSummary = calculateFinancialSummary(adminPayments);
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -5105,6 +5182,36 @@ app.get("/admin/resultados", async (req, res) => {
     >
       Cerrar sesión
     </a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:22px 0;">
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;">
+    <div style="color:#1e3a8a;font-weight:bold;">Recaudo bruto aprobado</div>
+    <div style="font-size:26px;font-weight:900;margin-top:8px;">
+      ${moneyCOP(adminFinancialSummary.grossRevenue)}
+    </div>
+  </div>
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px;">
+    <div style="color:#166534;font-weight:bold;">Comisión CampaClick 5%</div>
+    <div style="font-size:26px;font-weight:900;margin-top:8px;">
+      ${moneyCOP(adminFinancialSummary.platformFee)}
+    </div>
+  </div>
+
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:16px;">
+    <div style="color:#9a3412;font-weight:bold;">Wompi estimado</div>
+    <div style="font-size:26px;font-weight:900;margin-top:8px;">
+      ${moneyCOP(adminFinancialSummary.wompiEstimatedFee)}
+    </div>
+  </div>
+
+  <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:14px;padding:16px;">
+    <div style="color:#065f46;font-weight:bold;">Neto aproximado a girar</div>
+    <div style="font-size:26px;font-weight:900;margin-top:8px;">
+      ${moneyCOP(adminFinancialSummary.estimatedNetToOrganizer)}
+    </div>
   </div>
 </div>
 
