@@ -719,46 +719,217 @@ app.get("/", (req, res) => {
       <meta charset="utf-8"/>
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
       <title>CampaClick</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          min-height: 100vh;
+          font-family: Arial, sans-serif;
+          background:
+            radial-gradient(circle at top left, rgba(37,99,235,.18), transparent 32%),
+            linear-gradient(135deg, #eef4ff, #f8fafc);
+          color: #111827;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+        }
+
+        .shell {
+          width: 100%;
+          max-width: 980px;
+          background: rgba(255,255,255,.92);
+          border: 1px solid #e5e7eb;
+          border-radius: 28px;
+          box-shadow: 0 24px 70px rgba(15,23,42,.14);
+          overflow: hidden;
+        }
+
+        .hero {
+          padding: 42px 34px 28px;
+          text-align: center;
+          background: linear-gradient(135deg, #1d4ed8, #2563eb);
+          color: white;
+        }
+
+        .brand {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 72px;
+          height: 72px;
+          border-radius: 22px;
+          background: rgba(255,255,255,.18);
+          font-size: 34px;
+          margin-bottom: 14px;
+        }
+
+        h1 {
+          margin: 0;
+          font-size: 44px;
+          letter-spacing: .3px;
+        }
+
+        .subtitle {
+          margin: 14px auto 0;
+          max-width: 720px;
+          font-size: 18px;
+          line-height: 1.5;
+          opacity: .94;
+        }
+
+        .content {
+          padding: 30px 34px 34px;
+        }
+
+        .notice {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1e3a8a;
+          padding: 16px;
+          border-radius: 18px;
+          line-height: 1.5;
+          margin-bottom: 22px;
+          text-align: center;
+        }
+
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .action {
+          display: block;
+          padding: 22px 18px;
+          border-radius: 18px;
+          text-decoration: none;
+          color: white;
+          font-weight: 800;
+          text-align: center;
+          box-shadow: 0 10px 24px rgba(15,23,42,.12);
+          transition: transform .15s ease, opacity .15s ease;
+        }
+
+        .action:hover {
+          transform: translateY(-2px);
+          opacity: .95;
+        }
+
+        .action span {
+          display: block;
+          font-size: 20px;
+          margin-bottom: 6px;
+        }
+
+        .action small {
+          display: block;
+          font-size: 13px;
+          font-weight: 500;
+          opacity: .92;
+          line-height: 1.4;
+        }
+
+        .blue {
+          background: linear-gradient(135deg, #1d4ed8, #2563eb);
+        }
+
+        .green {
+          background: linear-gradient(135deg, #15803d, #16a34a);
+        }
+
+        .dark {
+          background: linear-gradient(135deg, #020617, #111827);
+        }
+
+        .purple {
+          background: linear-gradient(135deg, #5b21b6, #7c3aed);
+        }
+
+        .footer {
+          margin-top: 24px;
+          text-align: center;
+          color: #6b7280;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 720px) {
+          body {
+            padding: 14px;
+            align-items: flex-start;
+          }
+
+          .hero {
+            padding: 34px 22px 24px;
+          }
+
+          h1 {
+            font-size: 36px;
+          }
+
+          .subtitle {
+            font-size: 16px;
+          }
+
+          .content {
+            padding: 22px;
+          }
+
+          .grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      </style>
     </head>
 
-    <body style="font-family:Arial;background:#f3f6fb;margin:0;padding:40px;">
-      <div style="max-width:760px;margin:auto;background:white;padding:30px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-        
-        <h1 style="margin-top:0;color:#1d4ed8;">CampaClick</h1>
+    <body>
+      <main class="shell">
+        <section class="hero">
+          <div class="brand">🎯</div>
+          <h1>CampaClick</h1>
+          <p class="subtitle">
+            Plataforma para crear, administrar y consultar campañas promocionales con asignación automática de códigos después del pago aprobado.
+          </p>
+        </section>
 
-        <p style="color:#4b5563;font-size:17px;line-height:1.5;">
-          Plataforma de campañas promocionales.
-          Desde aquí puedes ingresar, consultar tus códigos o administrar campañas.
-        </p>
+        <section class="content">
+          <div class="notice">
+            Desde aquí puedes consultar tus códigos promocionales, ingresar como organizador, crear tu cuenta o acceder al panel administrador.
+          </div>
 
-        <div style="display:grid;gap:14px;margin-top:28px;">
+          <div class="grid">
+            <a class="action blue" href="/consultar">
+              <span>Consultar mis códigos</span>
+              <small>Revisa tus órdenes y códigos promocionales asignados.</small>
+            </a>
 
-          <a href="/consultar"
-            style="display:block;padding:16px;background:#2563eb;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
-            Consultar mis códigos promocionales
-          </a>
+            <a class="action green" href="/organizers/login">
+              <span>Ingreso organizador</span>
+              <small>Administra tus campañas, ventas y resultados.</small>
+            </a>
 
-          <a href="/organizers/login"
-            style="display:block;padding:16px;background:#16a34a;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
-            Ingreso organizador
-          </a>
+            <a class="action dark" href="/organizers/register">
+              <span>Crear cuenta</span>
+              <small>Registra tu perfil para solicitar verificación.</small>
+            </a>
 
-          <a href="/organizers/register"
-            style="display:block;padding:16px;background:#111827;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
-            Crear cuenta de organizador
-          </a>
+            <a class="action purple" href="/admin/login">
+              <span>Ingreso administrador</span>
+              <small>Revisión de organizadores, campañas y resultados.</small>
+            </a>
+          </div>
 
-          <a href="/admin/login"
-            style="display:block;padding:16px;background:#7c3aed;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
-            Ingreso administrador
-          </a>
-
-        </div>
-
-        <p style="margin-top:25px;color:#6b7280;font-size:13px;">
-          © CampaClick — Plataforma de campañas promocionales
-        </p>
-      </div>
+          <div class="footer">
+            © CampaClick — Plataforma de campañas promocionales<br/>
+            Los códigos se asignan automáticamente después del pago aprobado.
+          </div>
+        </section>
+      </main>
     </body>
     </html>
   `);
