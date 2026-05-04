@@ -213,7 +213,7 @@ function getMinimumQtyText(pricePerTicket) {
     return "Puedes comprar desde 1 Código promocional.";
   }
 
-  return `Por el valor de este código, la compra mínima es de ${minimumQty} Códigos.`;
+  return `Por el valor de este código, la compra mínima es de ${minimumQty} Códigos promocionales.`;
 }
 
 function getMaxTicketsByDrawMode(drawMode) {
@@ -1543,7 +1543,7 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 <tr>
 <th>Comprador</th>
 <th>Teléfono</th>
-<th>Cupón</th>
+<th>Código promocional</th>
 <th>Estado</th>
 </tr>
 </thead>
@@ -2061,7 +2061,7 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
 </script>
 
             <div style="margin-bottom:12px;">
-              <label>Precio por cupón</label><br/>
+              <label>Precio por Código promocional</label><br/>
               <input type="number" name="price_per_ticket" min="1" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
@@ -2487,7 +2487,7 @@ body {
         <div>
           <h2 class="progress-title">Avance de la campaña</h2>
           <div class="progress-description">
-            Sigue el progreso de venta de Códigos promocionales en tiempo real.
+              Sigue el progreso de participación de la campaña en tiempo real.
           </div>
         </div>
 
@@ -3094,15 +3094,15 @@ if (qty > availableTickets) {
     <head>
       <meta charset="utf-8"/>
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
-      <title>Cupones insuficientes</title>
+      <title>Cantidad no disponible</title>
     </head>
     <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
       <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-        <h1>No hay suficientes Códigos disponibles</h1>
+        <h1>No fue posible procesar la cantidad solicitada</h1>
 
         <p>
-          Esta campaña solo tiene disponibles
-          <b>${availableTickets}</b> ${availableTickets === 1 ? "cupón" : "cupones"}.
+          En este momento no es posible asignar esa cantidad de códigos promocionales.
+          Intenta con una cantidad menor.
         </p>
 
         <a
