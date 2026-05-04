@@ -2228,7 +2228,27 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       </head>
       <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
         <div style="max-width:760px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+         
           <h1>Crear nueva campaña</h1>
+
+          <div style="margin-bottom:18px;padding:16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;color:#9a3412;line-height:1.5;">
+  <b>Información importante sobre comisiones:</b><br/><br/>
+
+  Al crear esta campaña aceptas que CampaClick cobrará una comisión del
+  <b>5% sobre las ventas aprobadas</b> por el uso de la plataforma.
+
+  <br/><br/>
+
+  Además, Wompi cobra sus propios costos de procesamiento por transacción exitosa,
+  que actualmente pueden ser aproximadamente <b>2.65% + $700 + IVA</b>.
+  Esta comisión corresponde a la pasarela de pagos, no a CampaClick.
+
+  <br/><br/>
+
+  <a href="/terminos-organizadores" target="_blank" style="color:#2563eb;font-weight:bold;">
+    Ver términos y condiciones para organizadores
+  </a>
+</div>
 
           <form method="POST" action="/organizers/${organizer.id}/campanas/nueva">
             <div style="margin-bottom:12px;">
@@ -2302,6 +2322,18 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
               <input type="date" name="draw_date" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
+            <div style="margin-bottom:18px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+  <label style="display:flex;gap:10px;align-items:flex-start;line-height:1.5;">
+    <input type="checkbox" name="campaign_terms_accepted" value="true" required style="margin-top:4px;">
+    <span>
+      Declaro que he leído y acepto los términos para organizadores.
+      Entiendo que CampaClick cobra una comisión del <b>5%</b> sobre ventas aprobadas
+      y que Wompi cobra sus propios costos de procesamiento, aproximadamente
+      <b>2.65% + $700 + IVA</b> por transacción exitosa.
+    </span>
+  </label>
+</div>
+
             <button type="submit" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;">
               Guardar campaña
             </button>
@@ -2348,10 +2380,39 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     const drawMode = String(req.body.draw_mode || "").trim();
     const pricePerTicket = Number(req.body.price_per_ticket || 0);
     const drawDate = String(req.body.draw_date || "").trim();
+    const campaignTermsAccepted = req.body.campaign_terms_accepted === "true";
 
     if (!title || !prize || !drawProvider || !drawMode || !drawDate) {
       return res.status(400).send("Faltan campos obligatorios");
     }
+
+    if (!campaignTermsAccepted) {
+  return res.status(400).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Aceptación requerida</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Aceptación requerida</h1>
+        <p>
+          Para crear una campaña debes aceptar los términos para organizadores,
+          incluyendo la comisión de CampaClick del 5% y los costos de procesamiento de Wompi.
+        </p>
+
+        <a
+          href="/organizers/${organizerId}/campanas/nueva"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver a crear campaña
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
 
     if (!Number.isFinite(pricePerTicket) || pricePerTicket <= 0) {
       return res.status(400).send("Precio inválido");
@@ -2398,7 +2459,11 @@ if (maxTickets <= 0) {
         available_tickets: maxTickets,
         draw_date: drawDate,
         status: "pending",
-        slug
+        slug,
+        platform_fee_percent: 5,
+        campaign_terms_accepted: true,
+        campaign_terms_accepted_at: new Date().toISOString(),
+        payment_gateway_fee_note: "Wompi cobra costos propios de procesamiento, aproximadamente 2.65% + $700 + IVA por transacción exitosa."
       });
 
     if (insertError) throw insertError;
@@ -5396,6 +5461,100 @@ return res.redirect(`/resultado/${rifaId}`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
+});
+
+app.get("/terminos-organizadores", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Términos para Organizadores - CampaClick</title>
+    </head>
+
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;color:#111827;">
+      <div style="max-width:900px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);line-height:1.6;">
+        <h1>Términos y condiciones para organizadores</h1>
+
+        <p>
+          Estos términos regulan el uso de CampaClick por parte de los organizadores que crean campañas promocionales dentro de la plataforma.
+        </p>
+
+        <h2>1. Naturaleza de la plataforma</h2>
+        <p>
+          CampaClick es una plataforma tecnológica que permite crear, administrar y consultar campañas promocionales digitales, con asignación automática de códigos promocionales después del pago aprobado.
+        </p>
+
+        <h2>2. Comisión de la plataforma CampaClick</h2>
+        <p>
+          El organizador acepta que CampaClick cobra una comisión por el uso de la plataforma equivalente al <b>5% del valor total de las ventas efectivamente aprobadas</b> dentro de cada campaña.
+        </p>
+
+        <p>
+          Esta comisión corresponde al uso de la infraestructura tecnológica, administración de campañas, consulta de códigos, panel de organizador, gestión de resultados, notificaciones y demás funcionalidades ofrecidas por la plataforma.
+        </p>
+
+        <h2>3. Comisión de la pasarela de pago Wompi</h2>
+        <p>
+          El organizador declara conocer y aceptar que los pagos realizados por los participantes son procesados a través de Wompi u otra pasarela de pagos habilitada.
+        </p>
+
+        <p>
+          Wompi cobra sus propias tarifas por cada transacción exitosa. De acuerdo con la información comercial visualizada, dicha tarifa puede corresponder aproximadamente a <b>2.65% + $700 + IVA por transacción exitosa</b>.
+        </p>
+
+        <p>
+          Esta comisión no es cobrada por CampaClick, sino directamente por la pasarela de pagos encargada del procesamiento de la transacción.
+        </p>
+
+        <h2>4. Valor neto a recibir por el organizador</h2>
+        <p>
+          El organizador entiende y acepta que el valor neto a recibir podrá ser inferior al valor total vendido, debido a:
+        </p>
+
+        <ul>
+          <li>Comisión de CampaClick del 5%.</li>
+          <li>Comisiones, valores fijos e IVA cobrados por Wompi.</li>
+          <li>Retenciones, descuentos, reversos o contracargos aplicados por bancos, franquicias, entidades financieras o pasarelas de pago.</li>
+        </ul>
+
+        <h2>5. Ejemplo ilustrativo</h2>
+        <p>
+          Si una campaña vende $100.000, CampaClick podrá descontar el 5%, equivalente a $5.000. Adicionalmente, Wompi podrá descontar sus costos por procesamiento, como el porcentaje, valor fijo e impuestos aplicables.
+        </p>
+
+        <p>
+          Este ejemplo es únicamente ilustrativo. El valor final puede variar según la tarifa vigente de la pasarela, impuestos, retenciones o condiciones comerciales aplicables.
+        </p>
+
+        <h2>6. Aceptación expresa</h2>
+        <p>
+          Al registrarse como organizador, completar su verificación o crear una campaña, el organizador manifiesta que ha leído, entendido y aceptado estos términos, incluyendo la comisión de CampaClick y los costos de procesamiento de Wompi.
+        </p>
+
+        <h2>7. Cambios en tarifas</h2>
+        <p>
+          CampaClick podrá actualizar sus tarifas, comisiones o condiciones de uso. Las nuevas condiciones serán informadas o publicadas dentro de la plataforma.
+        </p>
+
+        <div style="margin-top:28px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;color:#1e3a8a;">
+          <b>Resumen:</b><br/>
+          Comisión CampaClick: <b>5%</b><br/>
+          Comisión Wompi aproximada: <b>2.65% + $700 + IVA por transacción exitosa</b>
+        </div>
+
+        <div style="margin-top:24px;">
+          <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver al inicio
+          </a>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 app.listen(PORT, "0.0.0.0", () => {
