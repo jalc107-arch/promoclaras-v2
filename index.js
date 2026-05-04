@@ -2257,6 +2257,46 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
     }
 
+    if (!organizer.terms_accepted) {
+  return res.status(403).send("Debes aceptar las políticas y condiciones antes de crear campañas.");
+}
+
+    if (!organizer.terms_accepted) {
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Políticas pendientes</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Debes aceptar las políticas</h1>
+
+        <p style="line-height:1.6;color:#374151;">
+          Para crear campañas en CampaClick, primero debes aceptar las políticas,
+          términos, condiciones y costos aplicables de la plataforma.
+        </p>
+
+        <a
+          href="/organizers/${organizer.id}/verificacion"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Ir a mi verificación
+        </a>
+
+        <a
+          href="/politicas"
+          target="_blank"
+          style="display:inline-block;margin-top:18px;margin-left:8px;padding:14px 18px;background:#111827;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Ver políticas
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
       <!DOCTYPE html>
