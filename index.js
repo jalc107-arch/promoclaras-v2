@@ -429,6 +429,100 @@ function validateProviderAndMode(drawProvider, drawMode) {
   return false;
 }
 
+function getAllowedDrawDays(drawProvider) {
+  const days = {
+    baloto: [1, 3, 6], // Lunes, miércoles, sábado
+
+    loteria_cundinamarca: [1], // Lunes
+    loteria_tolimense: [1], // Lunes
+
+    loteria_cruz_roja: [2], // Martes
+    loteria_huila: [2], // Martes
+
+    loteria_manizales: [3], // Miércoles
+    loteria_meta: [3], // Miércoles
+    loteria_valle: [3], // Miércoles
+
+    loteria_bogota: [4], // Jueves
+    loteria_quindio: [4], // Jueves
+
+    loteria_santander: [5], // Viernes
+    loteria_medellin: [5], // Viernes
+    loteria_risaralda: [5], // Viernes
+
+    loteria_boyaca: [6], // Sábado
+    loteria_cauca: [6] // Sábado
+  };
+
+  return days[drawProvider] || [];
+}
+
+function getDayName(dayNumber) {
+  const names = [
+    "domingo",
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado"
+  ];
+
+  return names[dayNumber] || "-";
+}
+
+function parseLocalDate(dateString) {
+  const parts = String(dateString || "").split("-");
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function validateDrawDate(drawProvider, drawDate) {
+  const selectedDate = parseLocalDate(drawDate);
+
+  if (!selectedDate || Number.isNaN(selectedDate.getTime())) {
+    throw new Error("Fecha de sorteo inválida.");
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  selectedDate.setHours(0, 0, 0, 0);
+
+  if (selectedDate <= today) {
+    throw new Error("La fecha del sorteo debe ser posterior a la fecha actual.");
+  }
+
+  const selectedDay = selectedDate.getDay();
+  const allowedDays = getAllowedDrawDays(drawProvider);
+
+  if (!allowedDays.length) {
+    throw new Error("No hay días configurados para el sorteo seleccionado.");
+  }
+
+  if (!allowedDays.includes(selectedDay)) {
+    const allowedText = allowedDays.map(getDayName).join(", ");
+
+    throw new Error(
+      `La fecha seleccionada no corresponde al día de sorteo. Para ${getDrawProviderLabel(drawProvider)}, solo puedes escoger: ${allowedText}.`
+    );
+  }
+
+  return true;
+}
+
 async function sendWhatsAppMessage(phone, message) {
   try {
     if (!ULTRAMSG_INSTANCE_ID || !ULTRAMSG_TOKEN) {
@@ -2550,6 +2644,36 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     if (!title || !prize || !drawProvider || !drawMode || !drawDate) {
       return res.status(400).send("Faltan campos obligatorios");
     }
+
+    try {
+  validateDrawDate(drawProvider, drawDate);
+} catch (dateError) {
+  return res.status(400).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>Fecha de sorteo inválida</title>
+    </head>
+    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+      <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+        <h1>Fecha de sorteo inválida</h1>
+
+        <p style="line-height:1.6;color:#374151;">
+          ${dateError.message}
+        </p>
+
+        <a
+          href="/organizers/${organizerId}/campanas/nueva"
+          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+          Volver a crear campaña
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+}
 
     if (!campaignTermsAccepted) {
   return res.status(400).send(`
