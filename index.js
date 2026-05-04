@@ -6,7 +6,7 @@ import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-cconst app = express();
+const app = express();
 
 app.set("trust proxy", 1);
 
