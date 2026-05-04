@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import bcrypt from "bcrypt";
 
 const app = express();
 
@@ -1076,6 +1077,8 @@ app.post("/organizers/register", async (req, res) => {
 
     if (profileError) throw profileError;
 
+    const passwordHash = await bcrypt.hash(password, 12);
+
     const { data: organizer, error: organizerError } = await supabase
       .from("organizers")
       .insert({
@@ -1083,7 +1086,7 @@ app.post("/organizers/register", async (req, res) => {
         full_name: fullName,
         email,
         phone: phone || null,
-        password,
+        password: passwordHash,
         verification_status: "pending"
       })
       .select()
@@ -1155,17 +1158,22 @@ app.post("/organizers/login", loginLimiter, async (req, res) => {
     }
 
     const { data: organizer, error } = await supabase
-      .from("organizers")
-      .select("*")
-      .eq("email", email)
-      .eq("password", password)
-      .maybeSingle();
+  .from("organizers")
+  .select("*")
+  .eq("email", email)
+  .maybeSingle();
 
-    if (error) throw error;
+if (error) throw error;
 
-    if (!organizer) {
-      return res.status(401).send("Correo o contraseña incorrectos");
-    }
+if (!organizer) {
+  return res.status(401).send("Correo o contraseña incorrectos");
+}
+
+const passwordOk = await bcrypt.compare(password, organizer.password || "");
+
+if (!passwordOk) {
+  return res.status(401).send("Correo o contraseña incorrectos");
+}
 
     req.session.organizerId = organizer.id;
 
