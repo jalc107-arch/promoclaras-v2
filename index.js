@@ -2220,6 +2220,9 @@ if (!finalIdFrontUrl || !finalIdBackUrl || !finalSelfieIdUrl) {
         account_holder: accountHolder || null,
         prize_proof_url: prizeProofUrl || null,
         terms_accepted: termsAccepted,
+        terms_accepted_at: termsAccepted ? new Date().toISOString() : null,
+        terms_accepted_ip: termsAccepted ? (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "") : null,
+        terms_accepted_user_agent: termsAccepted ? String(req.headers["user-agent"] || "") : null,
         verification_status: "pending"
       })
       .eq("id", organizerId);
