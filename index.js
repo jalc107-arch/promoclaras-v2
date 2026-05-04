@@ -490,11 +490,11 @@ async function sendOrderCouponsWhatsApp(orderId) {
     if (ticketsError) throw ticketsError;
 
     if (!tickets || tickets.length === 0) {
-      console.log("Orden pagada sin cupones asignados:", orderId);
+      console.log("Orden pagada sin Códigos asignados:", orderId);
       return {
         ok: false,
         skipped: true,
-        reason: "Sin cupones asignados"
+        reason: "Sin Códigos asignados"
       };
     }
 
@@ -540,7 +540,7 @@ const message = [
 
     return result;
   } catch (error) {
-    console.error("Error enviando cupones por WhatsApp:", error);
+    console.error("Error enviando Códigos por WhatsApp:", error);
     return {
       ok: false,
       reason: error.message
@@ -1430,17 +1430,17 @@ ${verificationHtml}
 
 <div class="card">
 <div class="metric">${tickets.length}</div>
-<div class="label">Cupones Vendidos</div>
+<div class="label">Códigos Vendidos</div>
 </div>
 
 <div class="card">
 <div class="metric">${availableCampaignCoupons}</div>
-<div class="label">Cupones Disponibles</div>
+<div class="label">Códigos Disponibles</div>
 </div>
 
 <div class="card">
 <div class="metric">${totalCampaignCoupons}</div>
-<div class="label">Cupones Totales</div>
+<div class="label">Códigos Totales</div>
 </div>
 
 <div class="card">
@@ -1536,7 +1536,7 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 <div class="table-card" style="margin-top:30px;">
 
-<h2>Cupones asignadas</h2>
+<h2>Códigos promocionales asignadas</h2>
 
 <table>
 <thead>
@@ -2487,7 +2487,7 @@ body {
         <div>
           <h2 class="progress-title">Avance de la campaña</h2>
           <div class="progress-description">
-            Sigue el progreso de venta de cupones en tiempo real.
+            Sigue el progreso de venta de Códigos promocionales en tiempo real.
           </div>
         </div>
 
@@ -2542,7 +2542,7 @@ body {
       <a
         class="button button-secondary"
         href="/consultar">
-        Consultar mis cupones
+        Consultar mis Códigos promocionales
       </a>
 
       <a
@@ -2580,7 +2580,7 @@ body {
             class="button button-secondary"
             style="margin-top:16px;"
             href="/consultar">
-            Consultar mis cupones
+            Consultar mis Códigos promocionales
           </a>
         `
         : `
@@ -2593,7 +2593,7 @@ body {
             class="button button-secondary"
             style="margin-top:16px;"
             href="/consultar">
-            Consultar mis cupones
+            Consultar mis Códigos promocionales
           </a>
         `
 }
@@ -2669,16 +2669,16 @@ app.get("/consultar", async (req, res) => {
       <head>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Consultar mis cupones</title>
+        <title>Consultar mis Códigos promocionales</title>
       </head>
 
       <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
         <div style="max-width:850px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
 
-          <h1 style="margin-top:0;">Consultar mis cupones</h1>
+          <h1 style="margin-top:0;">Consultar mis Códigos promocionales</h1>
 
           <p style="color:#6b7280;">
-            Ingresa el número de teléfono usado en la compra para consultar tus órdenes y cupones asignados.
+            Ingresa el número de teléfono usado en la compra para consultar tus órdenes y Códigos promocionales asignados.
           </p>
 
           <form method="GET" action="/consultar" style="margin-top:20px;margin-bottom:28px;">
@@ -2738,7 +2738,7 @@ if (order.payment_status === "failed") {
 }
 
 const shareText = encodeURIComponent(
-  `Hola, estos son mis cupones de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+  `Hola, estos son mis Códigos promocionales de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
 );
 
 return `
@@ -2775,7 +2775,7 @@ return `
                             `
                             : `
                               <div style="margin-top:12px;color:#92400e;">
-                                Aún no hay cupones asignados. Si ya pagaste, espera unos segundos y vuelve a consultar.
+                                Aún no hay Códigos promocionales asignados. Si ya pagaste, espera unos segundos y vuelve a consultar.
                               </div>
                             `
                         }
@@ -2800,7 +2800,7 @@ return `
           target="_blank"
           href="https://wa.me/?text=${shareText}"
           style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-          Compartir cupones
+          Compartir Códigos promocionales
         </a>
       `
       : ""
@@ -2938,7 +2938,7 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
         </div>
 
         <div style="margin-bottom:20px;">
-  <label>Cantidad de cupones</label><br/>
+  <label>Cantidad de Códigos</label><br/>
 
  <input
   type="number"
@@ -3098,7 +3098,7 @@ if (qty > availableTickets) {
     </head>
     <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
       <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-        <h1>No hay suficientes cupones disponibles</h1>
+        <h1>No hay suficientes Códigos disponibles</h1>
 
         <p>
           Esta campaña solo tiene disponibles
@@ -3341,7 +3341,7 @@ return res.redirect(`/orden/${orderId}`);
   tickets && tickets.length
     ? `
     <div style="margin-bottom:18px;">
-      <b>Cupones asignadas:</b>
+      <b>Códigos asignadas:</b>
 
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
         ${tickets.map(t => `
@@ -3360,7 +3360,7 @@ return res.redirect(`/orden/${orderId}`);
       <a
         target="_blank"
         href="https://wa.me/?text=${encodeURIComponent(
-  `Hola, estas son mis cupones de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+  `Hola, estas son mis Códigos de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
 )}"
         style="
           display:block;
@@ -3374,7 +3374,7 @@ return res.redirect(`/orden/${orderId}`);
           font-weight:bold;
         "
       >
-        Compartir mis cupones por WhatsApp
+        Compartir mis Códigos por WhatsApp
       </a>
     </div>
     `
@@ -3450,7 +3450,7 @@ text-align:center;
       font-weight:bold;
     "
   >
-    Consultar mis cupones
+    Consultar mis Códigos
   </a>
 </div>
 
