@@ -1999,7 +1999,7 @@ font-size:14px;
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
     <div>
       <h1>Panel del Organizador</h1>
-      <p>Resumen general de campañas y ventas</p>
+      <p>Consulta tus campañas, ventas y liquidación individual por campaña</p>
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -2030,55 +2030,6 @@ font-size:14px;
 <div class="container">
 
 ${verificationHtml}
-
-<div class="grid">
-
-<div class="card">
-<div class="metric">${orders.length}</div>
-<div class="label">Órdenes Totales</div>
-</div>
-
-<div class="card">
-<div class="metric">${payments.filter(p=>p.status==="approved").length}</div>
-<div class="label">Pagos Aprobados</div>
-</div>
-
-<div class="card">
-<div class="metric">${tickets.length}</div>
-<div class="label">Códigos Vendidos</div>
-</div>
-
-<div class="card">
-<div class="metric">${availableCampaignCoupons}</div>
-<div class="label">Códigos Disponibles</div>
-</div>
-
-<div class="card">
-<div class="metric">${totalCampaignCoupons}</div>
-<div class="label">Códigos Totales</div>
-</div>
-
-<div class="card">
-  <div class="metric">${moneyCOP(financialSummary.grossRevenue)}</div>
-  <div class="label">Recaudo bruto aprobado</div>
-</div>
-
-<div class="card">
-  <div class="metric">${moneyCOP(financialSummary.platformFee)}</div>
-  <div class="label">Comisión CampaClick 5%</div>
-</div>
-
-<div class="card">
-  <div class="metric">${moneyCOP(financialSummary.wompiEstimatedFee)}</div>
-  <div class="label">Comisión Wompi estimada</div>
-</div>
-
-<div class="card">
-  <div class="metric">${moneyCOP(financialSummary.estimatedNetToOrganizer)}</div>
-  <div class="label">Neto aproximado a girar</div>
-</div>
-
-</div>
 
 <div class="table-card">
 
