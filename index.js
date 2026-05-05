@@ -5758,13 +5758,14 @@ const adminCampaignRows = (campaigns || []).map(c => {
       Cargar resultado masivo
     </a>
 
-    <a
+   <a
       href="/admin/logout"
       style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
     >
       Cerrar sesión
     </a>
   </div>
+</div>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:22px 0;">
   <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;">
