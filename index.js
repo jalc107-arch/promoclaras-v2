@@ -778,6 +778,105 @@ function calculateFinancialSummary(payments = []) {
   };
 }
 
+function calculateWompiFeeForPayment(amount) {
+  const value = Number(amount || 0);
+
+  if (value <= 0) {
+    return {
+      baseFee: 0,
+      vat: 0,
+      totalFee: 0
+    };
+  }
+
+  const baseFee = (value * 0.0265) + 700;
+  const vat = baseFee * 0.19;
+  const totalFee = baseFee + vat;
+
+  return {
+    baseFee,
+    vat,
+    totalFee
+  };
+}
+
+function calculateCampaignFinancialSummary(campaign, campaignOrders = [], campaignPayments = []) {
+  const paidOrderIds = new Set(
+    (campaignOrders || [])
+      .filter(o => o.payment_status === "paid")
+      .map(o => o.id)
+  );
+
+  const approvedPayments = (campaignPayments || []).filter(p => {
+    return p.status === "approved" && paidOrderIds.has(p.order_id);
+  });
+
+  const grossRevenue = approvedPayments.reduce(
+    (acc, p) => acc + Number(p.amount || 0),
+    0
+  );
+
+  const platformFeePercent = Number(campaign.platform_fee_percent || 5);
+  const platformFee = grossRevenue * (platformFeePercent / 100);
+
+  const gatewayFee = approvedPayments.reduce((acc, p) => {
+    return acc + calculateWompiFeeForPayment(p.amount).totalFee;
+  }, 0);
+
+  const prizeType = campaign.prize_type || "physical";
+  const prizeCashAmount = Number(campaign.prize_cash_amount || 0);
+
+  const prizeDeduction = prizeType === "money"
+    ? prizeCashAmount
+    : 0;
+
+  const netToOrganizer = grossRevenue - platformFee - gatewayFee - prizeDeduction;
+
+  return {
+    approvedPaymentsCount: approvedPayments.length,
+    grossRevenue,
+    platformFee,
+    gatewayFee,
+    prizeType,
+    prizeCashAmount,
+    prizeDeduction,
+    netToOrganizer
+  };
+}
+
+function prizeTypeLabel(value) {
+  if (value === "money") return "Premio en dinero";
+  return "Premio físico / especie";
+}
+
+function prizeDeliveryStatusLabel(value) {
+  if (value === "delivered") return "Premio entregado";
+  if (value === "not_required") return "No aplica";
+  return "Pendiente entrega premio";
+}
+
+function payoutStatusLabel(value) {
+  if (value === "paid") return "Giro realizado";
+  if (value === "blocked") return "Bloqueado";
+  return "Pendiente giro";
+}
+
+function canPayOrganizer(campaign) {
+  if (campaign.status !== "finished") {
+    return false;
+  }
+
+  if (campaign.payout_status === "paid") {
+    return false;
+  }
+
+  if (!campaign.winner_ticket_id) {
+    return true;
+  }
+
+  return campaign.prize_delivery_status === "delivered";
+}
+
 function campaignStatusClass(status) {
   if (status === "finished") return "approved";
   if (status === "active") return "approved";
@@ -1537,6 +1636,11 @@ const campaignRows = (campaigns || []).map(c => {
     ? Math.min(100, Math.round((sold / total) * 100))
     : 0;
 
+  const campaignOrders = orders.filter(o => o.rifa_id === c.id);
+const campaignOrderIds = campaignOrders.map(o => o.id);
+const campaignPayments = payments.filter(p => campaignOrderIds.includes(p.order_id));
+const campaignFinancial = calculateCampaignFinancialSummary(c, campaignOrders, campaignPayments);
+
   return `
   
   <tr>
@@ -1589,6 +1693,35 @@ const campaignRows = (campaigns || []).map(c => {
 
   <div style="font-size:12px;color:#6b7280;margin-top:4px;">
     ${percent}% vendido
+  </div>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #e5e7eb;min-width:260px;">
+  <div style="padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;line-height:1.5;font-size:12px;color:#374151;">
+    <div style="font-weight:bold;color:#111827;margin-bottom:6px;">
+      Liquidación estimada
+    </div>
+
+    <div>Recaudo aprobado: <b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
+    <div>Comisión CampaClick: <b>${moneyCOP(campaignFinancial.platformFee)}</b></div>
+    <div>Wompi estimado: <b>${moneyCOP(campaignFinancial.gatewayFee)}</b></div>
+    <div>Descuento premio: <b>${moneyCOP(campaignFinancial.prizeDeduction)}</b></div>
+
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb;font-weight:bold;color:#065f46;">
+      Neto aproximado a girar: ${moneyCOP(campaignFinancial.netToOrganizer)}
+    </div>
+
+    <div style="margin-top:8px;color:#6b7280;">
+      ${prizeTypeLabel(c.prize_type)}
+    </div>
+
+    <div style="margin-top:4px;color:#6b7280;">
+      Premio: ${prizeDeliveryStatusLabel(c.prize_delivery_status)}
+    </div>
+
+    <div style="margin-top:4px;color:#6b7280;">
+      Giro: ${payoutStatusLabel(c.payout_status)}
+    </div>
   </div>
 </td>
 
@@ -1960,6 +2093,7 @@ ${verificationHtml}
 <th>Modalidad</th>
 <th>Precio</th>
 <th>Avance</th>
+<th>Liquidación</th>
 <th>Estado</th>
 <th>Acciones</th>
 </tr>
@@ -1968,7 +2102,7 @@ ${verificationHtml}
 <tbody>
 ${campaignRows || `
 <tr>
-<td colspan="8" style="padding:18px;text-align:center;color:#6b7280;">
+<td colspan="9" style="padding:18px;text-align:center;color:#6b7280;">
 Aún no tienes campañas creadas.
 </td>
 </tr>
@@ -2571,6 +2705,37 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
             </div>
 
             <div style="margin-bottom:12px;">
+  <label>Tipo de premio</label><br/>
+  <select
+    name="prize_type"
+    required
+    style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;"
+  >
+    <option value="physical">Premio físico / especie</option>
+    <option value="money">Premio en dinero</option>
+  </select>
+
+  <div style="margin-top:6px;color:#6b7280;font-size:13px;line-height:1.4;">
+    Si el premio es en dinero, CampaClick descontará ese valor del recaudo antes de calcular el giro al organizador.
+  </div>
+</div>
+
+<div style="margin-bottom:12px;">
+  <label>Valor del premio en dinero</label><br/>
+  <input
+    type="number"
+    name="prize_cash_amount"
+    min="0"
+    value="0"
+    style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;"
+  >
+
+  <div style="margin-top:6px;color:#6b7280;font-size:13px;line-height:1.4;">
+    Déjalo en 0 si el premio no es en dinero.
+  </div>
+</div>
+
+            <div style="margin-bottom:12px;">
               <label>Descripción</label><br/>
               <textarea name="description" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;min-height:100px;"></textarea>
             </div>
@@ -2689,6 +2854,8 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     const title = String(req.body.title || "").trim();
     const prize = String(req.body.prize || "").trim();
     const description = String(req.body.description || "").trim();
+    const prizeType = String(req.body.prize_type || "physical").trim();
+    const prizeCashAmount = Number(req.body.prize_cash_amount || 0);
     const drawProvider = String(req.body.draw_provider || "").trim();
     const drawMode = String(req.body.draw_mode || "").trim();
     const pricePerTicket = Number(req.body.price_per_ticket || 0);
@@ -2761,6 +2928,20 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       return res.status(400).send("Precio inválido");
     }
 
+    if (!["physical", "money"].includes(prizeType)) {
+  return res.status(400).send("Tipo de premio inválido");
+}
+
+if (prizeType === "money") {
+  if (!Number.isFinite(prizeCashAmount) || prizeCashAmount <= 0) {
+    return res.status(400).send("Si el premio es en dinero, debes escribir el valor del premio.");
+  }
+}
+
+if (prizeType === "physical" && prizeCashAmount > 0) {
+  return res.status(400).send("Si el premio es físico, el valor del premio en dinero debe quedar en 0.");
+}
+
     if (!validateProviderAndMode(drawProvider, drawMode)) {
   return res.status(400).send("La modalidad no corresponde al proveedor seleccionado");
 }
@@ -2803,6 +2984,10 @@ if (maxTickets <= 0) {
         draw_date: drawDate,
         status: "pending",
         slug,
+        prize_type: prizeType,
+prize_cash_amount: prizeType === "money" ? prizeCashAmount : 0,
+prize_delivery_status: "pending",
+payout_status: "pending",
         platform_fee_percent: 5,
         campaign_terms_accepted: true,
         campaign_terms_accepted_at: new Date().toISOString(),
@@ -5329,6 +5514,211 @@ if (campaignIds.length > 0) {
 
 const adminFinancialSummary = calculateFinancialSummary(adminPayments);
 
+    const { data: adminOrganizers, error: adminOrganizersError } = await supabase
+  .from("organizers")
+  .select("*");
+
+if (adminOrganizersError) throw adminOrganizersError;
+
+const adminCampaignRows = (campaigns || []).map(c => {
+  const campaignOrders = adminOrders.filter(o => o.rifa_id === c.id);
+  const campaignOrderIds = campaignOrders.map(o => o.id);
+  const campaignPayments = adminPayments.filter(p => campaignOrderIds.includes(p.order_id));
+  const campaignFinancial = calculateCampaignFinancialSummary(c, campaignOrders, campaignPayments);
+
+  const organizer = (adminOrganizers || []).find(o => o.profile_id === c.owner_id);
+
+  const payoutAllowed = canPayOrganizer(c);
+
+  let controlHtml = "";
+
+  if (c.status !== "finished") {
+    controlHtml = `
+      <div style="padding:9px;background:#fef3c7;color:#92400e;border-radius:10px;font-weight:bold;text-align:center;">
+        Campaña no finalizada
+      </div>
+    `;
+  } else if (c.winner_ticket_id && c.prize_delivery_status !== "delivered") {
+    controlHtml = `
+      <form method="POST" action="/admin/campanas/${c.id}/premio-entregado">
+        <textarea
+          name="prize_delivery_notes"
+          placeholder="Soporte o nota de entrega del premio"
+          required
+          style="width:100%;min-height:70px;padding:9px;border:1px solid #bbf7d0;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
+        ></textarea>
+
+        <button
+          type="submit"
+          style="width:100%;padding:9px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+          Marcar premio entregado
+        </button>
+      </form>
+
+      <div style="margin-top:6px;padding:8px;background:#fff7ed;color:#9a3412;border-radius:10px;font-size:12px;text-align:center;">
+        El giro al organizador queda bloqueado hasta entregar el premio.
+      </div>
+    `;
+  } else if (c.payout_status === "paid") {
+    controlHtml = `
+      <div style="padding:9px;background:#dcfce7;color:#166534;border-radius:10px;font-weight:bold;text-align:center;">
+        Giro realizado
+      </div>
+
+      <div style="margin-top:6px;font-size:12px;color:#374151;">
+        Ref: ${c.payout_reference || "-"}
+      </div>
+    `;
+  } else if (payoutAllowed) {
+    controlHtml = `
+      <form method="POST" action="/admin/campanas/${c.id}/giro-organizador">
+        <input
+          type="text"
+          name="payout_reference"
+          placeholder="Referencia del giro"
+          required
+          style="width:100%;padding:9px;border:1px solid #ccc;border-radius:10px;margin-bottom:6px;"
+        />
+
+        <textarea
+          name="payout_notes"
+          placeholder="Notas del pago al organizador"
+          style="width:100%;min-height:60px;padding:9px;border:1px solid #ccc;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
+        ></textarea>
+
+        <button
+          type="submit"
+          style="width:100%;padding:9px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+          Registrar giro al organizador
+        </button>
+      </form>
+    `;
+  }
+
+  return `
+    <tr>
+      <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
+        ${c.title || "-"}
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        <div><b>${organizer?.full_name || "-"}</b></div>
+        <div style="font-size:12px;color:#6b7280;">${organizer?.email || "-"}</div>
+        <div style="font-size:12px;color:#6b7280;">${organizer?.phone || "-"}</div>
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        ${c.prize || "-"}
+        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+          ${prizeTypeLabel(c.prize_type)}
+        </div>
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        ${getDrawProviderLabel(c.draw_provider)}<br/>
+        <span style="font-size:12px;color:#6b7280;">${getDrawModeLabel(c.draw_mode)}</span>
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        ${c.draw_date || "-"}
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        ${c.result_value || "Pendiente"}
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;min-width:260px;">
+        <div style="padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;line-height:1.5;font-size:12px;color:#374151;">
+          <div>Recaudo aprobado: <b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
+          <div>CampaClick 5%: <b>${moneyCOP(campaignFinancial.platformFee)}</b></div>
+          <div>Wompi estimado: <b>${moneyCOP(campaignFinancial.gatewayFee)}</b></div>
+          <div>Descuento premio: <b>${moneyCOP(campaignFinancial.prizeDeduction)}</b></div>
+
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb;font-weight:bold;color:#065f46;">
+            Neto a girar: ${moneyCOP(campaignFinancial.netToOrganizer)}
+          </div>
+
+          <div style="margin-top:8px;color:#6b7280;">
+            Pagos aprobados: ${campaignFinancial.approvedPaymentsCount}
+          </div>
+        </div>
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;">
+        <div>${campaignStatusLabel(c.status)}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+          Premio: ${prizeDeliveryStatusLabel(c.prize_delivery_status)}
+        </div>
+        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+          Giro: ${payoutStatusLabel(c.payout_status)}
+        </div>
+      </td>
+
+      <td style="padding:12px;border-bottom:1px solid #eee;min-width:220px;">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+
+          ${
+            c.status === "pending"
+              ? `
+                <form method="POST" action="/admin/campanas/${c.id}/aprobar">
+                  <button
+                    type="submit"
+                    style="width:100%;padding:9px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+                    Aprobar
+                  </button>
+                </form>
+
+                <form method="POST" action="/admin/campanas/${c.id}/cancelar">
+                  <textarea
+                    name="rejection_reason"
+                    placeholder="Motivo del rechazo"
+                    required
+                    style="width:100%;min-height:70px;padding:9px;border:1px solid #fecaca;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
+                  ></textarea>
+
+                  <button
+                    type="submit"
+                    style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+                    Rechazar
+                  </button>
+                </form>
+              `
+              : ""
+          }
+
+          <a
+            href="/campanas/${c.slug}"
+            target="_blank"
+            style="display:block;text-align:center;padding:9px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+            Ver campaña
+          </a>
+
+          ${
+            c.status === "active" && new Date(`${c.draw_date}T00:00:00`) <= new Date()
+              ? `
+                <a
+                  href="/admin/campanas/${c.id}/resultado"
+                  style="display:block;text-align:center;padding:9px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+                  Cargar resultado
+                </a>
+              `
+              : c.status === "active"
+                ? `
+                  <div style="padding:9px;background:#fef3c7;color:#92400e;border-radius:10px;font-weight:bold;text-align:center;">
+                    Esperando fecha sorteo
+                  </div>
+                `
+                : ""
+          }
+
+          ${controlHtml}
+
+        </div>
+      </td>
+    </tr>
+  `;
+}).join("");
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -5410,134 +5800,26 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
             <thead>
               <tr style="background:#eff6ff;">
                 <th style="padding:12px;text-align:left;">Campaña</th>
-                <th style="padding:12px;text-align:left;">Premio</th>
-                <th style="padding:12px;text-align:left;">Descripción</th>
-                <th style="padding:12px;text-align:left;">Modalidad</th>
-                <th style="padding:12px;text-align:left;">Precio</th>
-                <th style="padding:12px;text-align:left;">Fecha sorteo</th>
-                <th style="padding:12px;text-align:left;">Resultado</th>
-                <th style="padding:12px;text-align:left;">Estado</th>
-                <th style="padding:12px;text-align:left;">Acción</th>
+<th style="padding:12px;text-align:left;">Organizador</th>
+<th style="padding:12px;text-align:left;">Premio</th>
+<th style="padding:12px;text-align:left;">Sorteo / Modalidad</th>
+<th style="padding:12px;text-align:left;">Fecha sorteo</th>
+<th style="padding:12px;text-align:left;">Resultado</th>
+<th style="padding:12px;text-align:left;">Liquidación</th>
+<th style="padding:12px;text-align:left;">Estado</th>
+<th style="padding:12px;text-align:left;">Acción</th>
               </tr>
             </thead>
 
             <tbody>
 
-            ${(campaigns || []).map(c => `
+       ${adminCampaignRows || `
   <tr>
-    <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-      ${c.title || "-"}
-    </td>
-
-    <td style="padding:12px;border-bottom:1px solid #eee;">
-      ${c.prize || "-"}
-    </td>
-
-    <td style="padding:12px;border-bottom:1px solid #eee;width:320px;max-width:320px;line-height:1.4;color:#374151;white-space:normal;word-break:break-word;">
-  <div style="max-height:70px;overflow:auto;">
-    ${c.description || "-"}
-  </div>
-</td>
-
-    <td style="padding:12px;border-bottom:1px solid #eee;">
-  ${getDrawModeLabel(c.draw_mode)}
-</td>
-
-<td style="padding:12px;border-bottom:1px solid #eee;">
-  $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
-</td>
-
-<td style="padding:12px;border-bottom:1px solid #eee;">
-  ${c.draw_date || "-"}
-</td>
-
-<td style="padding:12px;border-bottom:1px solid #eee;">
-  ${c.result_value || "Pendiente"}
-</td>
-
-    <td style="padding:12px;border-bottom:1px solid #eee;">
-      ${campaignStatusLabel(c.status)}
-    </td>
-
-    <td style="padding:12px;border-bottom:1px solid #eee;">
-      <div style="display:flex;flex-direction:column;gap:8px;">
-
-        ${
-          c.status === "pending"
-            ? `
-              <form method="POST" action="/admin/campanas/${c.id}/aprobar">
-                <button
-                  type="submit"
-                  style="width:100%;padding:9px;background:#16a34a;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
-                  Aprobar
-                </button>
-              </form>
-
-              <form method="POST" action="/admin/campanas/${c.id}/cancelar">
-  <textarea
-    name="rejection_reason"
-    placeholder="Motivo del rechazo"
-    required
-    style="width:100%;min-height:70px;padding:9px;border:1px solid #fecaca;border-radius:10px;font-family:Arial;font-size:13px;margin-bottom:6px;"
-  ></textarea>
-
-  <button
-    type="submit"
-    style="width:100%;padding:9px;background:#dc2626;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
-    Rechazar
-  </button>
-</form>
-            `
-            : ""
-        }
-
-        <a
-          href="/campanas/${c.slug}"
-          target="_blank"
-          style="display:block;text-align:center;padding:9px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
-          Ver campaña
-        </a>
-
-        ${
-  c.status === "active" && new Date(`${c.draw_date}T00:00:00`) <= new Date()
-    ? `
-      <a
-        href="/admin/campanas/${c.id}/resultado"
-        style="display:block;text-align:center;padding:9px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
-        Cargar resultado
-      </a>
-    `
-    : c.status === "active"
-      ? `
-        <div style="
-          padding:9px;
-          background:#fef3c7;
-          color:#92400e;
-          border-radius:10px;
-          font-weight:bold;
-          text-align:center;">
-          Esperando fecha sorteo
-        </div>
-      `
-      : c.status === "finished"
-        ? `
-          <div style="
-            padding:9px;
-            background:#e5e7eb;
-            color:#6b7280;
-            border-radius:10px;
-            font-weight:bold;
-            text-align:center;">
-            Resultado cerrado
-          </div>
-        `
-        : ""
-}
-
-      </div>
+    <td colspan="9" style="padding:18px;text-align:center;color:#6b7280;">
+      No hay campañas creadas.
     </td>
   </tr>
-`).join("")}
+`}
            
             </tbody>
           </table>
@@ -6398,6 +6680,173 @@ app.get("/terminos-organizadores", (req, res) => {
     </body>
     </html>
   `);
+});
+
+app.post("/admin/campanas/:rifaId/premio-entregado", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+    const notes = String(req.body.prize_delivery_notes || "").trim();
+
+    if (!notes) {
+      return res.status(400).send("Debes registrar una nota o soporte de entrega del premio.");
+    }
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (campaign.status !== "finished") {
+      return res.status(400).send("Solo puedes marcar entrega de premio cuando la campaña ya está finalizada.");
+    }
+
+    if (!campaign.winner_ticket_id) {
+      return res.status(400).send("Esta campaña no tiene ganador registrado. No requiere entrega de premio.");
+    }
+
+    const { error } = await supabase
+      .from("rifas")
+      .update({
+        prize_delivery_status: "delivered",
+        prize_delivered_at: new Date().toISOString(),
+        prize_delivery_notes: notes
+      })
+      .eq("id", rifaId);
+
+    if (error) throw error;
+
+    return res.redirect("/admin/resultados");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/campanas/:rifaId/giro-organizador", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { rifaId } = req.params;
+    const payoutReference = String(req.body.payout_reference || "").trim();
+    const payoutNotes = String(req.body.payout_notes || "").trim();
+
+    if (!payoutReference) {
+      return res.status(400).send("Debes registrar la referencia del giro.");
+    }
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (campaign.status !== "finished") {
+      return res.status(400).send("No puedes girar al organizador si la campaña no está finalizada.");
+    }
+
+    if (campaign.payout_status === "paid") {
+      return res.status(400).send("Esta campaña ya tiene giro registrado.");
+    }
+
+    if (campaign.winner_ticket_id && campaign.prize_delivery_status !== "delivered") {
+      return res.status(400).send("No puedes girar al organizador hasta confirmar la entrega del premio al ganador.");
+    }
+
+    const { data: orders, error: ordersError } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("rifa_id", rifaId);
+
+    if (ordersError) throw ordersError;
+
+    const orderIds = (orders || []).map(o => o.id);
+
+    let payments = [];
+
+    if (orderIds.length > 0) {
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from("payments")
+        .select("*")
+        .in("order_id", orderIds);
+
+      if (paymentsError) throw paymentsError;
+
+      payments = paymentsData || [];
+    }
+
+    const financial = calculateCampaignFinancialSummary(campaign, orders || [], payments || []);
+
+    if (financial.netToOrganizer < 0) {
+      return res.status(400).send("La liquidación arroja valor negativo. Revisa la campaña antes de registrar giro.");
+    }
+
+    const { error } = await supabase
+      .from("rifas")
+      .update({
+        payout_status: "paid",
+        payout_paid_at: new Date().toISOString(),
+        payout_reference: payoutReference,
+        payout_notes: payoutNotes || null,
+        gross_revenue_last: financial.grossRevenue,
+        platform_fee_last: financial.platformFee,
+        gateway_fee_last: financial.gatewayFee,
+        prize_deduction_last: financial.prizeDeduction,
+        net_to_organizer_last: financial.netToOrganizer
+      })
+      .eq("id", rifaId);
+
+    if (error) throw error;
+
+    const { data: organizer } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("profile_id", campaign.owner_id)
+      .maybeSingle();
+
+    if (organizer?.phone) {
+      await sendWhatsAppMessage(
+        organizer.phone,
+        [
+          `Hola ${organizer.full_name || ""}.`,
+          ``,
+          `Se registró el giro de liquidación de tu campaña en CampaClick.`,
+          ``,
+          `Campaña: ${campaign.title || "-"}`,
+          `Recaudo aprobado: ${moneyCOP(financial.grossRevenue)}`,
+          `Comisión CampaClick: ${moneyCOP(financial.platformFee)}`,
+          `Wompi estimado: ${moneyCOP(financial.gatewayFee)}`,
+          `Descuento premio: ${moneyCOP(financial.prizeDeduction)}`,
+          ``,
+          `Neto girado: ${moneyCOP(financial.netToOrganizer)}`,
+          `Referencia: ${payoutReference}`,
+          ``,
+          `Gracias por usar CampaClick.`
+        ].join("\n")
+      );
+    }
+
+    return res.redirect("/admin/resultados");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
