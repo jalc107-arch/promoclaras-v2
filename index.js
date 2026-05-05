@@ -2112,39 +2112,73 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 <div class="table-card" style="margin-top:30px;">
 
-<h2>Códigos promocionales asignadas</h2>
+<h2>Códigos promocionales asignados por campaña</h2>
 
-<table>
-<thead>
-<tr>
-<th>Comprador</th>
-<th>Teléfono</th>
-<th>Código promocional</th>
-<th>Estado</th>
-</tr>
-</thead>
+${
+  (campaigns || []).map(campaign => {
+    const campaignOrders = orders.filter(order => order.rifa_id === campaign.id);
+    const campaignOrderIds = campaignOrders.map(order => order.id);
 
-<tbody>
-${tickets.map(ticket => {
-  const order = orders.find(o => o.id === ticket.order_id);
-  return `
-    <tr>
-      <td>${order?.buyers?.full_name || "-"}</td>
-      <td>${order?.buyers?.phone || "-"}</td>
-      <td>
-        <span class="badge approved">
-          ${ticket.combination || ticket.ticket_code || "-"}
-        </span>
-      </td>
-      <td>${ticket.status || "-"}</td>
-    </tr>
-  `;
-}).join("")}
-</tbody>
-</table>
+    const campaignTickets = tickets.filter(ticket =>
+      campaignOrderIds.includes(ticket.order_id)
+    );
+
+    return `
+      <div style="margin-top:24px;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+
+        <div style="background:#eff6ff;padding:14px 16px;color:#1e3a8a;font-weight:bold;">
+          ${campaign.title || "Campaña"} 
+          <span style="font-weight:normal;color:#374151;">
+            — ${campaignTickets.length} código${campaignTickets.length === 1 ? "" : "s"} asignado${campaignTickets.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Comprador</th>
+              <th>Teléfono</th>
+              <th>Código promocional</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${
+              campaignTickets.length > 0
+                ? campaignTickets.map(ticket => {
+                    const order = campaignOrders.find(o => o.id === ticket.order_id);
+
+                    return `
+                      <tr>
+                        <td>${order?.buyers?.full_name || "-"}</td>
+                        <td>${order?.buyers?.phone || "-"}</td>
+                        <td>
+                          <span class="badge approved">
+                            ${ticket.combination || ticket.ticket_code || "-"}
+                          </span>
+                        </td>
+                        <td>${ticket.status || "-"}</td>
+                      </tr>
+                    `;
+                  }).join("")
+                : `
+                  <tr>
+                    <td colspan="4" style="padding:16px;text-align:center;color:#6b7280;">
+                      Esta campaña aún no tiene códigos promocionales asignados.
+                    </td>
+                  </tr>
+                `
+            }
+          </tbody>
+        </table>
+
+      </div>
+    `;
+  }).join("")
+}
 
 </div>
-
 </div>
 
 <div class="footer">
