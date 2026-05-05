@@ -270,6 +270,60 @@ function getMaxTicketsByDrawMode(drawMode) {
   return 0;
 }
 
+function formatDateOnly(dateValue) {
+  if (!dateValue) return "";
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(dateValue).slice(0, 10);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeBulkResultForCampaign(drawMode, rawValue) {
+  const digits = String(rawValue || "").replace(/\D/g, "");
+
+  if (drawMode.startsWith("baloto_")) {
+    if (digits.length !== 10) {
+      throw new Error("Para carga masiva de Baloto debes escribir las 5 balotas en 10 dígitos. Ejemplo: 0814303541");
+    }
+
+    const numbers = [
+      Number(digits.slice(0, 2)),
+      Number(digits.slice(2, 4)),
+      Number(digits.slice(4, 6)),
+      Number(digits.slice(6, 8)),
+      Number(digits.slice(8, 10))
+    ];
+
+    validateBalotoNumbers(numbers);
+
+    const sortedNumbers = numbers
+      .sort((a, b) => a - b)
+      .map(n => String(n).padStart(2, "0"));
+
+    if (drawMode === "baloto_2") return sortedNumbers.slice(0, 2).join("-");
+    if (drawMode === "baloto_3") return sortedNumbers.slice(0, 3).join("-");
+    if (drawMode === "baloto_4") return sortedNumbers.slice(0, 4).join("-");
+    if (drawMode === "baloto_5") return sortedNumbers.slice(0, 5).join("-");
+  }
+
+  if (drawMode.startsWith("loteria_")) {
+    if (digits.length !== 4) {
+      throw new Error("Para carga masiva de lotería debes escribir el resultado completo de 4 cifras. Ejemplo: 5839");
+    }
+
+    if (drawMode === "loteria_2_primeras") return digits.slice(0, 2);
+    if (drawMode === "loteria_2_ultimas") return digits.slice(-2);
+    if (drawMode === "loteria_3_primeras") return digits.slice(0, 3);
+    if (drawMode === "loteria_3_ultimas") return digits.slice(-3);
+    if (drawMode === "loteria_4_pleno") return digits.padStart(4, "0");
+  }
+
+  throw new Error("Modalidad no válida para carga masiva.");
+}
 
 function normalizeResultValue(drawMode, rawValue) {
   const digits = String(rawValue || "").replace(/\D/g, "");
@@ -5301,13 +5355,26 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
     </a>
 
     <a
+      href="/admin/resultados-pendientes"
+      style="background:#16a34a;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+    >
+      Resultados pendientes
+    </a>
+
+    <a
+      href="/admin/resultados/masivo"
+      style="background:#7c3aed;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+    >
+      Cargar resultado masivo
+    </a>
+
+    <a
       href="/admin/logout"
       style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
     >
       Cerrar sesión
     </a>
   </div>
-</div>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:22px 0;">
   <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;">
@@ -5432,7 +5499,7 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
         </a>
 
         ${
-  c.status === "active"
+  c.status === "active" && new Date(`${c.draw_date}T00:00:00`) <= new Date()
     ? `
       <a
         href="/admin/campanas/${c.id}/resultado"
@@ -5440,19 +5507,31 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
         Cargar resultado
       </a>
     `
-    : c.status === "finished"
+    : c.status === "active"
       ? `
         <div style="
           padding:9px;
-          background:#e5e7eb;
-          color:#6b7280;
+          background:#fef3c7;
+          color:#92400e;
           border-radius:10px;
           font-weight:bold;
           text-align:center;">
-          Resultado cerrado
+          Esperando fecha sorteo
         </div>
       `
-      : ""
+      : c.status === "finished"
+        ? `
+          <div style="
+            padding:9px;
+            background:#e5e7eb;
+            color:#6b7280;
+            border-radius:10px;
+            font-weight:bold;
+            text-align:center;">
+            Resultado cerrado
+          </div>
+        `
+        : ""
 }
 
       </div>
@@ -5470,6 +5549,394 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
     return res.status(500).send(error.message);
   }
 });
+
+app.get("/admin/resultados-pendientes", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayText = today.toISOString().slice(0, 10);
+
+    const { data: campaigns, error } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("status", "active")
+      .is("result_value", null)
+      .lte("draw_date", todayText)
+      .order("draw_date", { ascending: true });
+
+    if (error) throw error;
+
+    const grouped = {};
+
+    for (const c of campaigns || []) {
+      const key = `${getDrawProviderLabel(c.draw_provider)} - ${c.draw_date}`;
+
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+
+      grouped[key].push(c);
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Resultados pendientes</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:1300px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            <div>
+              <h1 style="margin:0;">Resultados pendientes</h1>
+              <p style="margin:8px 0 0;color:#6b7280;">
+                Campañas activas cuya fecha de sorteo ya llegó y aún no tienen resultado cargado.
+              </p>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <a href="/admin/resultados/masivo" style="background:#7c3aed;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
+                Cargar resultado masivo
+              </a>
+
+              <a href="/admin/resultados" style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
+                Volver a campañas
+              </a>
+            </div>
+          </div>
+
+          ${
+            campaigns && campaigns.length > 0
+              ? Object.keys(grouped).map(groupName => `
+                <div style="margin-top:24px;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+                  <div style="background:#eff6ff;padding:14px 16px;color:#1e3a8a;font-weight:bold;">
+                    ${groupName}
+                  </div>
+
+                  <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                      <tr style="background:#f9fafb;">
+                        <th style="padding:12px;text-align:left;">Campaña</th>
+                        <th style="padding:12px;text-align:left;">Premio</th>
+                        <th style="padding:12px;text-align:left;">Modalidad</th>
+                        <th style="padding:12px;text-align:left;">Vendidos</th>
+                        <th style="padding:12px;text-align:left;">Acción</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      ${grouped[groupName].map(c => `
+                        <tr>
+                          <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
+                            ${c.title || "-"}
+                          </td>
+
+                          <td style="padding:12px;border-bottom:1px solid #eee;">
+                            ${c.prize || "-"}
+                          </td>
+
+                          <td style="padding:12px;border-bottom:1px solid #eee;">
+                            ${getDrawModeLabel(c.draw_mode)}
+                          </td>
+
+                          <td style="padding:12px;border-bottom:1px solid #eee;">
+                            ${Number(c.sold_tickets || 0)} / ${Number(c.max_tickets || 0)}
+                          </td>
+
+                          <td style="padding:12px;border-bottom:1px solid #eee;">
+                            <a
+                              href="/admin/campanas/${c.id}/resultado"
+                              style="display:inline-block;padding:9px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+                              Cargar individual
+                            </a>
+                          </td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `).join("")
+              : `
+                <div style="padding:20px;background:#ecfdf5;border:1px solid #86efac;border-radius:14px;color:#166534;font-weight:bold;text-align:center;">
+                  No hay resultados pendientes por cargar.
+                </div>
+              `
+          }
+
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/admin/resultados/masivo", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Cargar resultado masivo</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:720px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Cargar resultado masivo</h1>
+
+          <div style="margin-bottom:18px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;color:#1e3a8a;line-height:1.5;">
+            Esta opción carga el resultado a todas las campañas activas del mismo sorteo y fecha que aún no tengan resultado.
+          </div>
+
+          <form method="POST" action="/admin/resultados/masivo">
+
+            <div style="margin-bottom:14px;">
+              <label>Sorteo</label><br/>
+              <select
+                name="draw_provider"
+                required
+                style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;">
+                ${generateProviderOptions()}
+              </select>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <label>Fecha del sorteo</label><br/>
+              <input
+                type="date"
+                name="draw_date"
+                required
+                style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;">
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <label>Resultado oficial completo</label><br/>
+              <input
+                type="text"
+                name="result_value"
+                required
+                placeholder="Baloto: 0814303541 / Lotería: 5839"
+                style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;">
+            </div>
+
+            <div style="margin-bottom:18px;padding:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;color:#9a3412;line-height:1.5;">
+              <b>Importante:</b><br/>
+              Para Baloto escribe las 5 balotas completas en 10 dígitos. Ejemplo: 0814303541.<br/>
+              Para loterías escribe el número completo de 4 cifras. Ejemplo: 5839.
+            </div>
+
+            <button
+              type="submit"
+              style="width:100%;padding:15px;background:#7c3aed;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">
+              Cargar resultado masivo
+            </button>
+          </form>
+
+          <div style="margin-top:18px;">
+            <a href="/admin/resultados-pendientes" style="color:#2563eb;font-weight:bold;">
+              Ver resultados pendientes
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/resultados/masivo", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const drawProvider = String(req.body.draw_provider || "").trim();
+    const drawDate = String(req.body.draw_date || "").trim();
+    const rawResultValue = String(req.body.result_value || "").trim();
+
+    if (!drawProvider || !drawDate || !rawResultValue) {
+      return res.status(400).send("Faltan datos para cargar el resultado masivo.");
+    }
+
+    const { data: campaigns, error: campaignsError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("draw_provider", drawProvider)
+      .eq("draw_date", drawDate)
+      .eq("status", "active")
+      .is("result_value", null);
+
+    if (campaignsError) throw campaignsError;
+
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <title>Sin campañas</title>
+        </head>
+        <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+          <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+            <h1>No hay campañas para actualizar</h1>
+            <p>No encontramos campañas activas, sin resultado, para ese sorteo y esa fecha.</p>
+
+            <a
+              href="/admin/resultados/masivo"
+              style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+              Volver
+            </a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    const processed = [];
+
+    for (const campaign of campaigns) {
+      const resultValue = normalizeBulkResultForCampaign(
+        campaign.draw_mode,
+        rawResultValue
+      );
+
+      const { data: winnerTicket, error: ticketError } = await supabase
+        .from("tickets")
+        .select("*")
+        .eq("rifa_id", campaign.id)
+        .eq("combination", resultValue)
+        .maybeSingle();
+
+      if (ticketError) throw ticketError;
+
+      const winnerTicketId = winnerTicket?.id || null;
+
+      const { error: updateError } = await supabase
+        .from("rifas")
+        .update({
+          result_value: resultValue,
+          winner_ticket_id: winnerTicketId,
+          status: "finished"
+        })
+        .eq("id", campaign.id)
+        .eq("status", "active")
+        .is("result_value", null);
+
+      if (updateError) throw updateError;
+
+      if (winnerTicketId) {
+        await sendWinnerWhatsApp(campaign.id, winnerTicketId);
+      }
+
+      processed.push({
+        title: campaign.title,
+        mode: getDrawModeLabel(campaign.draw_mode),
+        resultValue,
+        winner: Boolean(winnerTicketId)
+      });
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Resultado masivo cargado</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:900px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Resultado masivo cargado</h1>
+
+          <div style="margin-bottom:18px;padding:14px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px;color:#166534;font-weight:bold;">
+            Se procesaron ${processed.length} campañas de ${getDrawProviderLabel(drawProvider)} con fecha ${drawDate}.
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#eff6ff;">
+                <th style="padding:12px;text-align:left;">Campaña</th>
+                <th style="padding:12px;text-align:left;">Modalidad</th>
+                <th style="padding:12px;text-align:left;">Resultado aplicado</th>
+                <th style="padding:12px;text-align:left;">Ganador</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${processed.map(item => `
+                <tr>
+                  <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
+                    ${item.title}
+                  </td>
+
+                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                    ${item.mode}
+                  </td>
+
+                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                    ${item.resultValue}
+                  </td>
+
+                  <td style="padding:12px;border-bottom:1px solid #eee;">
+                    ${
+                      item.winner
+                        ? `<span style="background:#dcfce7;color:#166534;padding:7px 10px;border-radius:999px;font-weight:bold;">Sí</span>`
+                        : `<span style="background:#fee2e2;color:#991b1b;padding:7px 10px;border-radius:999px;font-weight:bold;">No</span>`
+                    }
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+
+          <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a
+              href="/admin/resultados-pendientes"
+              style="display:inline-block;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+              Ver pendientes
+            </a>
+
+            <a
+              href="/admin/resultados"
+              style="display:inline-block;padding:14px 18px;background:#111827;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+              Volver al admin
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+
 
 app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
   try {
