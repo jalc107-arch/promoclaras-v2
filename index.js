@@ -744,7 +744,7 @@ function campaignStatusLabel(status) {
 }
 
 function moneyCOP(value) {
-  return $${Math.round(Number(value || 0)).toLocaleString("es-CO")};
+  return `$${Math.round(Number(value || 0)).toLocaleString("es-CO")}`;
 }
 
 function calculateFinancialSummary(payments = []) {
@@ -774,51 +774,6 @@ function calculateFinancialSummary(payments = []) {
     wompiBaseFee,
     wompiVat,
     wompiEstimatedFee,
-    estimatedNetToOrganizer
-  };
-}
-
-function calculateCampaignFinancialSummary(campaign, orders = [], payments = []) {
-  const campaignOrders = (orders || []).filter(order => order.rifa_id === campaign.id);
-  const campaignOrderIds = campaignOrders.map(order => order.id);
-
-  const approvedPayments = (payments || []).filter(payment =>
-    campaignOrderIds.includes(payment.order_id) &&
-    payment.status === "approved"
-  );
-
-  const grossRevenue = approvedPayments.reduce((acc, payment) => {
-    return acc + Number(payment.amount || 0);
-  }, 0);
-
-  const approvedPaymentsCount = approvedPayments.length;
-
-  const soldQty = campaignOrders
-    .filter(order => order.payment_status === "paid")
-    .reduce((acc, order) => acc + Number(order.qty || 0), 0);
-
-  const platformFee = grossRevenue * 0.05;
-
-  const wompiBaseFee = approvedPayments.reduce((acc, payment) => {
-    const amount = Number(payment.amount || 0);
-    return acc + (amount * 0.0265) + 700;
-  }, 0);
-
-  const wompiVat = wompiBaseFee * 0.19;
-  const wompiEstimatedFee = wompiBaseFee + wompiVat;
-
-  const prizeDiscount = Number(campaign.prize_cash_value || 0);
-
-  const estimatedNetToOrganizer =
-    grossRevenue - platformFee - wompiEstimatedFee - prizeDiscount;
-
-  return {
-    grossRevenue,
-    approvedPaymentsCount,
-    soldQty,
-    platformFee,
-    wompiEstimatedFee,
-    prizeDiscount,
     estimatedNetToOrganizer
   };
 }
@@ -1674,7 +1629,15 @@ const baseUrl = APP_BASE_URL;
     const financialSummary = calculateFinancialSummary(payments);
     
 const campaignRows = (campaigns || []).map(c => {
-  const campaignFinancial = calculateCampaignFinancialSummary(c, orders, payments);
+  const campaignOrders = orders.filter(o => String(o.rifa_id) === String(c.id));
+  const campaignOrderIds = campaignOrders.map(o => o.id);
+  const campaignPayments = payments.filter(p => campaignOrderIds.includes(p.order_id));
+
+  const campaignFinancial = calculateCampaignFinancialSummary(
+    c,
+    campaignOrders,
+    campaignPayments
+  );
 
   const sold = Number(campaignFinancial.soldQty || c.sold_tickets || 0);
   const total = Number(c.max_tickets || 0);
@@ -1682,11 +1645,6 @@ const campaignRows = (campaigns || []).map(c => {
   const percent = total > 0
     ? Math.min(100, Math.round((sold / total) * 100))
     : 0;
-
-  const campaignOrders = orders.filter(o => o.rifa_id === c.id);
-const campaignOrderIds = campaignOrders.map(o => o.id);
-const campaignPayments = payments.filter(p => campaignOrderIds.includes(p.order_id));
-const campaignFinancial = calculateCampaignFinancialSummary(c, campaignOrders, campaignPayments);
 
   return `
   
