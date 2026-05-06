@@ -5516,12 +5516,12 @@ const adminFinancialSummary = calculateFinancialSummary(adminPayments);
 if (adminOrganizersError) throw adminOrganizersError;
 
 const adminCampaignRows = (campaigns || []).map(c => {
-  const campaignOrders = adminOrders.filter(o => o.rifa_id === c.id);
-  const campaignOrderIds = campaignOrders.map(o => o.id);
-  const campaignPayments = adminPayments.filter(p => campaignOrderIds.includes(p.order_id));
+  const campaignOrders = adminOrders.filter(o => String(o.rifa_id) === String(c.id));
+  const campaignOrderIds = campaignOrders.map(o => String(o.id));
+  const campaignPayments = adminPayments.filter(p => campaignOrderIds.includes(String(p.order_id)));
   const campaignFinancial = calculateCampaignFinancialSummary(c, campaignOrders, campaignPayments);
 
-  const organizer = (adminOrganizers || []).find(o => o.profile_id === c.owner_id);
+ const organizer = (adminOrganizers || []).find(o => String(o.profile_id) === String(c.owner_id));
 
   const payoutAllowed = canPayOrganizer(c);
 
