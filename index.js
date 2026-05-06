@@ -811,6 +811,10 @@ function calculateCampaignFinancialSummary(campaign, campaignOrders = [], campai
     return p.status === "approved" && paidOrderIds.has(p.order_id);
   });
 
+  const soldQty = (campaignOrders || [])
+  .filter(o => o.payment_status === "paid")
+  .reduce((acc, o) => acc + Number(o.qty || 0), 0);
+
   const grossRevenue = approvedPayments.reduce(
     (acc, p) => acc + Number(p.amount || 0),
     0
@@ -833,15 +837,16 @@ function calculateCampaignFinancialSummary(campaign, campaignOrders = [], campai
   const netToOrganizer = grossRevenue - platformFee - gatewayFee - prizeDeduction;
 
   return {
-    approvedPaymentsCount: approvedPayments.length,
-    grossRevenue,
-    platformFee,
-    gatewayFee,
-    prizeType,
-    prizeCashAmount,
-    prizeDeduction,
-    netToOrganizer
-  };
+  approvedPaymentsCount: approvedPayments.length,
+  soldQty,
+  grossRevenue,
+  platformFee,
+  gatewayFee,
+  prizeType,
+  prizeCashAmount,
+  prizeDeduction,
+  netToOrganizer
+};
 }
 
 function prizeTypeLabel(value) {
@@ -2121,12 +2126,12 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 ${
   (campaigns || []).map(campaign => {
-    const campaignOrders = orders.filter(order => order.rifa_id === campaign.id);
+    const campaignOrders = orders.filter(order => String(order.rifa_id) === String(campaign.id));
     const campaignOrderIds = campaignOrders.map(order => order.id);
 
     const campaignTickets = tickets.filter(ticket =>
-      campaignOrderIds.includes(ticket.order_id)
-    );
+  campaignOrderIds.map(String).includes(String(ticket.order_id))
+);
 
     return `
       <div style="margin-top:24px;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
