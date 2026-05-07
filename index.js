@@ -185,10 +185,10 @@ const DRAW_PROVIDERS = [
 ];
 
 const BALOTO_DRAW_MODES = [
-  { value: "baloto_2", label: "2 balotas" },
-  { value: "baloto_3", label: "3 balotas" },
-  { value: "baloto_4", label: "4 balotas" },
-  { value: "baloto_5", label: "5 balotas" }
+  { value: "baloto_2", label: "Baloto - 2 primeras balotas en orden ascendente" },
+  { value: "baloto_3", label: "Baloto - 3 primeras balotas en orden ascendente" },
+  { value: "baloto_4", label: "Baloto - 4 primeras balotas en orden ascendente" },
+  { value: "baloto_5", label: "Baloto - 5 balotas completas en orden ascendente" }
 ];
 
 const LOTERIA_DRAW_MODES = [
@@ -211,10 +211,10 @@ function getDrawModeLabel(value) {
 }
 
 function getResultPlaceholder(drawMode) {
-  if (drawMode === "baloto_2") return "Ej: 0814 para 08-14";
-  if (drawMode === "baloto_3") return "Ej: 081430 para 08-14-30";
-  if (drawMode === "baloto_4") return "Ej: 08143041 para 08-14-30-41";
-  if (drawMode === "baloto_5") return "Ej: 0814303541 para 08-14-30-35-41";
+  if (drawMode === "baloto_2") return "Ej: 0814303541. Escribe las 5 balotas oficiales; el sistema toma las 2 primeras en orden ascendente.";
+  if (drawMode === "baloto_3") return "Ej: 0814303541. Escribe las 5 balotas oficiales; el sistema toma las 3 primeras en orden ascendente.";
+  if (drawMode === "baloto_4") return "Ej: 0814303541. Escribe las 5 balotas oficiales; el sistema toma las 4 primeras en orden ascendente.";
+  if (drawMode === "baloto_5") return "Ej: 0814303541. Escribe las 5 balotas oficiales en orden o desorden.";
 
   if (drawMode === "loteria_2_primeras") return "Ej: 5839, toma 58";
   if (drawMode === "loteria_2_ultimas") return "Ej: 5839, toma 39";
@@ -256,10 +256,13 @@ function getMinimumQtyText(pricePerTicket) {
 }
 
 function getMaxTicketsByDrawMode(drawMode) {
-  if (drawMode === "baloto_2") return 903;
-  if (drawMode === "baloto_3") return 12341;
-  if (drawMode === "baloto_4") return 123410;
-  if (drawMode === "baloto_5") return 962598;
+  // BALOTO SIN SÚPER BALOTA
+  // Regla: se toman las balotas principales en orden ascendente.
+  // En modalidades 2, 3 y 4 se toman las primeras balotas del resultado ordenado.
+  if (drawMode === "baloto_2") return 780;       // 01-02 hasta 39-40
+  if (drawMode === "baloto_3") return 10660;     // 01-02-03 hasta 39-40-41
+  if (drawMode === "baloto_4") return 111930;    // 01-02-03-04 hasta 39-40-41-42
+  if (drawMode === "baloto_5") return 962598;    // 01-02-03-04-05 hasta 39-40-41-42-43
 
   if (drawMode === "loteria_2_primeras") return 100;
   if (drawMode === "loteria_2_ultimas") return 100;
@@ -328,66 +331,15 @@ function normalizeBulkResultForCampaign(drawMode, rawValue) {
 function normalizeResultValue(drawMode, rawValue) {
   const digits = String(rawValue || "").replace(/\D/g, "");
 
-  if (drawMode === "baloto_2") {
-    if (digits.length !== 4) {
-      throw new Error("Para Baloto 2 balotas debes escribir 4 dígitos. Ejemplo: 0814");
+if (drawMode.startsWith("baloto_")) {
+    const pickCount = getBalotoPickCount(drawMode);
+
+    if (!pickCount) {
+      throw new Error("Modalidad Baloto no válida.");
     }
 
-    const numbers = [
-      Number(digits.slice(0, 2)),
-      Number(digits.slice(2, 4))
-    ];
-
-    validateBalotoNumbers(numbers);
-
-    return numbers
-      .sort((a, b) => a - b)
-      .map(n => String(n).padStart(2, "0"))
-      .join("-");
-  }
-
-  if (drawMode === "baloto_3") {
-    if (digits.length !== 6) {
-      throw new Error("Para Baloto 3 balotas debes escribir 6 dígitos. Ejemplo: 081430");
-    }
-
-    const numbers = [
-      Number(digits.slice(0, 2)),
-      Number(digits.slice(2, 4)),
-      Number(digits.slice(4, 6))
-    ];
-
-    validateBalotoNumbers(numbers);
-
-    return numbers
-      .sort((a, b) => a - b)
-      .map(n => String(n).padStart(2, "0"))
-      .join("-");
-  }
-
-  if (drawMode === "baloto_4") {
-    if (digits.length !== 8) {
-      throw new Error("Para Baloto 4 balotas debes escribir 8 dígitos. Ejemplo: 08143041");
-    }
-
-    const numbers = [
-      Number(digits.slice(0, 2)),
-      Number(digits.slice(2, 4)),
-      Number(digits.slice(4, 6)),
-      Number(digits.slice(6, 8))
-    ];
-
-    validateBalotoNumbers(numbers);
-
-    return numbers
-      .sort((a, b) => a - b)
-      .map(n => String(n).padStart(2, "0"))
-      .join("-");
-  }
-
-  if (drawMode === "baloto_5") {
     if (digits.length !== 10) {
-      throw new Error("Para Baloto 5 balotas debes escribir 10 dígitos. Ejemplo: 0814303541");
+      throw new Error("Para Baloto debes escribir las 5 balotas principales en 10 dígitos. Ejemplo: 0814303541");
     }
 
     const numbers = [
@@ -400,8 +352,10 @@ function normalizeResultValue(drawMode, rawValue) {
 
     validateBalotoNumbers(numbers);
 
-    return numbers
-      .sort((a, b) => a - b)
+    const sortedNumbers = numbers.sort((a, b) => a - b);
+
+    return sortedNumbers
+      .slice(0, pickCount)
       .map(n => String(n).padStart(2, "0"))
       .join("-");
   }
@@ -461,6 +415,55 @@ function validateBalotoNumbers(numbers) {
       throw new Error("Las balotas deben estar entre 01 y 43.");
     }
   }
+}
+
+function getBalotoPickCount(drawMode) {
+  if (drawMode === "baloto_2") return 2;
+  if (drawMode === "baloto_3") return 3;
+  if (drawMode === "baloto_4") return 4;
+  if (drawMode === "baloto_5") return 5;
+  return 0;
+}
+
+function getMaxAllowedLastNumberForBalotoMode(drawMode) {
+  if (drawMode === "baloto_2") return 40;
+  if (drawMode === "baloto_3") return 41;
+  if (drawMode === "baloto_4") return 42;
+  if (drawMode === "baloto_5") return 43;
+  return 43;
+}
+
+function formatBalotoCombination(numbers) {
+  return [...numbers]
+    .sort((a, b) => a - b)
+    .map(n => String(n).padStart(2, "0"))
+    .join("-");
+}
+
+function isValidBalotoCombinationForMode(numbers, drawMode) {
+  const pickCount = getBalotoPickCount(drawMode);
+
+  if (!pickCount) return false;
+
+  if (!Array.isArray(numbers) || numbers.length !== pickCount) {
+    return false;
+  }
+
+  const uniqueNumbers = new Set(numbers);
+
+  if (uniqueNumbers.size !== numbers.length) {
+    return false;
+  }
+
+  if (numbers.some(n => !Number.isInteger(n) || n < 1 || n > 43)) {
+    return false;
+  }
+
+  const sortedNumbers = [...numbers].sort((a, b) => a - b);
+  const lastNumber = sortedNumbers[sortedNumbers.length - 1];
+  const maxAllowedLastNumber = getMaxAllowedLastNumberForBalotoMode(drawMode);
+
+  return lastNumber <= maxAllowedLastNumber;
 }
 
 function generateProviderOptions(selectedValue = "") {
@@ -891,20 +894,8 @@ function campaignStatusClass(status) {
 
 
 function generateTicketCode(drawMode) {
-  if (drawMode === "baloto_2") {
-    return generateBalotoCombination(2);
-  }
-
-  if (drawMode === "baloto_3") {
-    return generateBalotoCombination(3);
-  }
-
-  if (drawMode === "baloto_4") {
-    return generateBalotoCombination(4);
-  }
-
-  if (drawMode === "baloto_5") {
-    return generateBalotoCombination(5);
+  if (drawMode.startsWith("baloto_")) {
+    return generateBalotoCombination(drawMode);
   }
 
   if (drawMode === "loteria_2_primeras") {
@@ -930,20 +921,34 @@ function generateTicketCode(drawMode) {
   return crypto.randomUUID().slice(0, 8);
 }
 
-function generateBalotoCombination(quantity) {
-  const numbers = [];
+function generateBalotoCombination(drawMode) {
+  const quantity = getBalotoPickCount(drawMode);
 
-  while (numbers.length < quantity) {
-    const n = randomInt(1, 43);
+  if (!quantity) {
+    throw new Error("Modalidad Baloto no válida");
+  }
 
-    if (!numbers.includes(n)) {
-      numbers.push(n);
+  let attempts = 0;
+
+  while (attempts < 5000) {
+    attempts++;
+
+    const numbers = [];
+
+    while (numbers.length < quantity) {
+      const n = randomInt(1, 43);
+
+      if (!numbers.includes(n)) {
+        numbers.push(n);
+      }
+    }
+
+    if (isValidBalotoCombinationForMode(numbers, drawMode)) {
+      return formatBalotoCombination(numbers);
     }
   }
 
-  numbers.sort((a, b) => a - b);
-
-  return numbers.map(n => String(n).padStart(2, "0")).join("-");
+  throw new Error("No fue posible generar una combinación válida para esta modalidad de Baloto.");
 }
 
 async function assignTicketsToOrder(orderId) {
@@ -3361,11 +3366,23 @@ body {
       </p>
 
       <div style="margin-top:20px;color:#374151;line-height:1.7;">
-        <div><b>Premio:</b> ${campaign.prize || "-"}</div>
-        <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
-        <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
-        <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
-      </div>
+  <div><b>Premio:</b> ${campaign.prize || "-"}</div>
+  <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+  <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
+  <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
+
+  ${
+    campaign.draw_provider === "baloto"
+      ? `
+        <div style="margin-top:10px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;color:#1e3a8a;font-size:13px;line-height:1.5;">
+          <b>Regla Baloto:</b><br/>
+          Se toman únicamente las 5 balotas principales del resultado oficial, sin incluir la súper balota.
+          Las balotas se organizan de menor a mayor y, según la modalidad, se validan las primeras 2, 3, 4 o las 5 balotas completas.
+        </div>
+      `
+      : ""
+  }
+</div>
     </div>
 
     <div class="card">
