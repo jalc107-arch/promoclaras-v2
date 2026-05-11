@@ -582,20 +582,13 @@ function validateDrawDate(drawProvider, drawDate) {
 
 async function sendWhatsAppMessage(phone, message) {
   try {
-    if (!ULTRAMSG_INSTANCE_ID || !ULTRAMSG_TOKEN) {
-      console.log("UltraMsg no configurado");
-      return {
-        ok: false,
-        reason: "UltraMsg no configurado"
-      };
-    }
-
     const cleanPhone = String(phone || "").replace(/\D/g, "");
 
     if (!cleanPhone) {
-      console.log("Teléfono vacío para WhatsApp");
+      console.log("WhatsApp no preparado: teléfono vacío");
       return {
         ok: false,
+        skipped: true,
         reason: "Teléfono vacío"
       };
     }
@@ -604,33 +597,23 @@ async function sendWhatsAppMessage(phone, message) {
       ? cleanPhone
       : `57${cleanPhone}`;
 
-    const response = await fetch(
-      `https://api.ultramsg.com/${ULTRAMSG_INSTANCE_ID}/messages/chat`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          token: ULTRAMSG_TOKEN,
-          to: whatsappPhone,
-          body: message
-        })
-      }
-    );
-
-    const resultText = await response.text();
-
-    console.log("UltraMsg status:", response.status);
-    console.log("UltraMsg response:", resultText);
+    console.log("======================================");
+    console.log("WHATSAPP AUTOMÁTICO DESACTIVADO");
+    console.log("El cliente puede consultar sus códigos en la orden.");
+    console.log("Teléfono:", whatsappPhone);
+    console.log("Mensaje que se hubiera enviado:");
+    console.log(message);
+    console.log("======================================");
 
     return {
-      ok: response.ok,
-      status: response.status,
-      response: resultText
+      ok: false,
+      manual: true,
+      phone: whatsappPhone,
+      message
     };
   } catch (error) {
-    console.error("Error enviando WhatsApp UltraMsg:", error);
+    console.error("Error preparando WhatsApp manual:", error.message);
+
     return {
       ok: false,
       reason: error.message
