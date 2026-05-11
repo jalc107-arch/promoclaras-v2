@@ -6845,6 +6845,34 @@ app.post("/admin/campanas/:rifaId/giro-organizador", async (req, res) => {
   }
 });
 
+const WHATSAPP_VERIFY_TOKEN = String(process.env.WHATSAPP_VERIFY_TOKEN || "").trim();
+
+app.get("/webhooks/whatsapp", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
+    console.log("Webhook WhatsApp verificado correctamente");
+    return res.status(200).send(challenge);
+  }
+
+  console.log("Error verificando webhook WhatsApp");
+  return res.sendStatus(403);
+});
+
+app.post("/webhooks/whatsapp", async (req, res) => {
+  try {
+    console.log("Webhook WhatsApp recibido:");
+    console.log(JSON.stringify(req.body, null, 2));
+
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error("Error webhook WhatsApp:", error.message);
+    return res.sendStatus(500);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
