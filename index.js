@@ -70,8 +70,9 @@ const APP_BASE_URL = String(
   process.env.APP_BASE_URL || "https://promoclaras.com"
 ).replace(/\/$/, "");
 
-const ULTRAMSG_INSTANCE_ID = String(process.env.ULTRAMSG_INSTANCE_ID || "").trim();
-const ULTRAMSG_TOKEN = String(process.env.ULTRAMSG_TOKEN || "").trim();
+const WHATSAPP_CLOUD_TOKEN = String(process.env.WHATSAPP_CLOUD_TOKEN || "").trim();
+const WHATSAPP_PHONE_NUMBER_ID = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+const WHATSAPP_BUSINESS_ACCOUNT_ID = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -582,13 +583,20 @@ function validateDrawDate(drawProvider, drawDate) {
 
 async function sendWhatsAppMessage(phone, message) {
   try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.log("WhatsApp Cloud API no configurado");
+      return {
+        ok: false,
+        reason: "WhatsApp Cloud API no configurado"
+      };
+    }
+
     const cleanPhone = String(phone || "").replace(/\D/g, "");
 
     if (!cleanPhone) {
-      console.log("WhatsApp no preparado: teléfono vacío");
+      console.log("Teléfono vacío para WhatsApp");
       return {
         ok: false,
-        skipped: true,
         reason: "Teléfono vacío"
       };
     }
@@ -597,22 +605,39 @@ async function sendWhatsAppMessage(phone, message) {
       ? cleanPhone
       : `57${cleanPhone}`;
 
-    console.log("======================================");
-    console.log("WHATSAPP AUTOMÁTICO DESACTIVADO");
-    console.log("El cliente puede consultar sus códigos en la orden.");
-    console.log("Teléfono:", whatsappPhone);
-    console.log("Mensaje que se hubiera enviado:");
-    console.log(message);
-    console.log("======================================");
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: whatsappPhone,
+          type: "text",
+          text: {
+            preview_url: false,
+            body: message
+          }
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp Cloud API status:", response.status);
+    console.log("WhatsApp Cloud API response:", JSON.stringify(result, null, 2));
 
     return {
-      ok: false,
-      manual: true,
-      phone: whatsappPhone,
-      message
+      ok: response.ok,
+      status: response.status,
+      response: result
     };
   } catch (error) {
-    console.error("Error preparando WhatsApp manual:", error.message);
+    console.error("Error enviando WhatsApp Cloud API:", error);
 
     return {
       ok: false,
