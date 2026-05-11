@@ -6898,6 +6898,121 @@ app.post("/webhooks/whatsapp", async (req, res) => {
   }
 });
 
+app.get("/admin/test-whatsapp", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Prueba WhatsApp</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Prueba WhatsApp Cloud API</h1>
+
+          <form method="POST" action="/admin/test-whatsapp">
+            <div style="margin-bottom:14px;">
+              <label>Teléfono</label><br/>
+              <input
+                type="text"
+                name="phone"
+                placeholder="Ej: 3238123392"
+                required
+                style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
+              />
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <label>Mensaje</label><br/>
+              <textarea
+                name="message"
+                required
+                style="width:100%;min-height:150px;padding:14px;border:1px solid #ccc;border-radius:10px;"
+              >Hola, este es un mensaje de prueba de PromoClaras.</textarea>
+            </div>
+
+            <button
+              type="submit"
+              style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;">
+              Enviar prueba
+            </button>
+          </form>
+
+          <div style="margin-top:18px;">
+            <a href="/admin/resultados">Volver al admin</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/test-whatsapp", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const phone = String(req.body.phone || "").trim();
+    const message = String(req.body.message || "").trim();
+
+    if (!phone || !message) {
+      return res.status(400).send("Falta teléfono o mensaje.");
+    }
+
+    const result = await sendWhatsAppMessage(phone, message);
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Resultado prueba WhatsApp</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:700px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <h1>Resultado de prueba WhatsApp</h1>
+
+          <div style="padding:14px;background:${result.ok ? "#ecfdf5" : "#fee2e2"};border-radius:12px;color:${result.ok ? "#166534" : "#991b1b"};font-weight:bold;">
+            ${result.ok ? "Mensaje enviado correctamente." : "No se pudo enviar el mensaje."}
+          </div>
+
+          <pre style="margin-top:18px;background:#111827;color:#e5e7eb;padding:16px;border-radius:12px;overflow:auto;">${JSON.stringify(result, null, 2)}</pre>
+
+          <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a href="/admin/test-whatsapp" style="padding:12px 16px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+              Hacer otra prueba
+            </a>
+
+            <a href="/admin/resultados" style="padding:12px 16px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+              Volver al admin
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
