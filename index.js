@@ -646,6 +646,100 @@ async function sendWhatsAppMessage(phone, message) {
   }
 }
 
+async function sendWhatsAppTemplateConfirmacionCodigos(phone, buyerName, orderDetail, couponList, quantity, orderUrl) {
+  try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.log("WhatsApp Cloud API no configurado");
+      return {
+        ok: false,
+        reason: "WhatsApp Cloud API no configurado"
+      };
+    }
+
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    if (!cleanPhone) {
+      console.log("Teléfono vacío para WhatsApp");
+      return {
+        ok: false,
+        reason: "Teléfono vacío"
+      };
+    }
+
+    const whatsappPhone = cleanPhone.startsWith("57")
+      ? cleanPhone
+      : `57${cleanPhone}`;
+
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: whatsappPhone,
+          type: "template",
+          template: {
+            name: "confirmacion_codigos",
+            language: {
+              code: "es_CO"
+            },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: String(buyerName || "Cliente")
+                  },
+                  {
+                    type: "text",
+                    text: String(orderDetail || "Orden aprobada en PromoClaras")
+                  },
+                  {
+                    type: "text",
+                    text: String(couponList || "-")
+                  },
+                  {
+                    type: "text",
+                    text: String(quantity || "0")
+                  },
+                  {
+                    type: "text",
+                    text: String(orderUrl || "")
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp plantilla confirmacion_codigos status:", response.status);
+    console.log("WhatsApp plantilla confirmacion_codigos response:", JSON.stringify(result, null, 2));
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: result
+    };
+  } catch (error) {
+    console.error("Error enviando plantilla WhatsApp:", error);
+
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
 async function sendOrderCouponsWhatsApp(orderId) {
   try {
     const { data: order, error: orderError } = await supabase
@@ -697,34 +791,23 @@ async function sendOrderCouponsWhatsApp(orderId) {
     }
 
     const baseUrl = APP_BASE_URL;
+    const orderUrl = `${baseUrl}/orden/${order.id}`;
 
     const couponList = tickets
-  .map(t => `• ${t.combination || t.ticket_code || "-"}`)
-  .join("\n");
+      .map(t => t.combination || t.ticket_code || "-")
+      .join(", ");
 
-const couponLabel = tickets.length === 1
-  ? "Código promocional asignado"
-  : "Códigos promocionales asignados";
+    const buyerName = order.buyers?.full_name || "Cliente";
+    const orderDetail = "Orden aprobada en PromoClaras";
+    const quantity = String(tickets.length);
 
-const message = [
-  `Hola ${order.buyers?.full_name || ""}, tu pago fue aprobado en CampaClick.`,
-  ``,
-  `Campaña: ${order.rifas?.title || "-"}`,
-  ``,
-  `${couponLabel}:`,
-  couponList,
-  ``,
-  `Cantidad total: ${tickets.length}`,
-  ``,
-  `Consulta tu orden aquí:`,
-  `${baseUrl}/orden/${order.id}`,
-  ``,
-  `Gracias por participar.`
-].join("\n");
-
-    const result = await sendWhatsAppMessage(
+    const result = await sendWhatsAppTemplateConfirmacionCodigos(
       order.buyers?.phone,
-      message
+      buyerName,
+      orderDetail,
+      couponList,
+      quantity,
+      orderUrl
     );
 
     if (result.ok) {
