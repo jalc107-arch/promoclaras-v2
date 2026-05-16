@@ -4589,7 +4589,7 @@ Ya puedes continuar al pago de forma segura.
   <button
     type="submit"
     style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">
-    Pagar con Wompi
+    Pagar con Wompi, Nequi, PSE o tarjeta
   </button>
 
 </form>
