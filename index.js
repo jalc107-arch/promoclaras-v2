@@ -4587,10 +4587,21 @@ Ya puedes continuar al pago de forma segura.
   <input type="hidden" name="redirect-url" value="${redirectUrl}">
 
   <button
-    type="submit"
-    style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">
-    Pagar con Wompi, Nequi, PSE o tarjeta
-  </button>
+  type="submit"
+  style="
+    width:100%;
+    padding:20px;
+    background:#2563eb;
+    color:#fff;
+    border:none;
+    border-radius:14px;
+    font-weight:900;
+    font-size:20px;
+    cursor:pointer;
+    box-shadow:0 10px 24px rgba(37,99,235,.35);
+  ">
+  Pagar seguro con Nequi, PSE o tarjeta
+</button>
 
 </form>
 ` : `
