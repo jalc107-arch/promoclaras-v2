@@ -2247,8 +2247,6 @@ ${new Date(order.created_at).toLocaleString("es-CO")}
 
 </tr>
 
-</tr>
-
 `).join("")}
 
 </tbody>
