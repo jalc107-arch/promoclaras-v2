@@ -740,7 +740,7 @@ async function sendWhatsAppTemplateConfirmacionCodigos(phone, buyerName, orderDe
   }
 }
 
-async function sendOrderCouponsWhatsApp(orderId) {
+async function sendOrderCouponsWhatsApp(orderId, forceResend = false) {
   try {
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -755,14 +755,14 @@ async function sendOrderCouponsWhatsApp(orderId) {
     if (orderError) throw orderError;
     if (!order) throw new Error("Orden no encontrada");
 
-    if (order.whatsapp_sent) {
-      console.log("WhatsApp ya enviado para la orden:", orderId);
-      return {
-        ok: true,
-        skipped: true,
-        reason: "WhatsApp ya enviado"
-      };
-    }
+    if (order.whatsapp_sent && !forceResend) {
+  console.log("WhatsApp ya enviado para la orden:", orderId);
+  return {
+    ok: true,
+    skipped: true,
+    reason: "WhatsApp ya enviado"
+  };
+}
 
     if (order.payment_status !== "paid") {
       console.log("Orden aún no está pagada:", orderId);
@@ -2181,7 +2181,9 @@ Aún no tienes campañas creadas.
 <th>Teléfono</th>
 <th>Cantidad</th>
 <th>Pago</th>
+<th>WhatsApp</th>
 <th>Fecha</th>
+<th>Acción</th>
 </tr>
 </thead>
 
@@ -2203,8 +2205,47 @@ ${order.payment_status === "paid" ? "approved" : order.payment_status}</span>
 </td>
 
 <td>
+  <span class="badge ${order.whatsapp_sent ? "approved" : "pending"}">
+    ${order.whatsapp_sent ? "enviado" : "pendiente"}
+  </span>
+</td>
+
+<td>
 ${new Date(order.created_at).toLocaleString("es-CO")}
 </td>
+
+<td>
+  ${
+    order.payment_status === "paid"
+      ? `
+        <form method="POST" action="/organizers/${organizer.id}/ordenes/${order.id}/reenviar-whatsapp">
+          <button
+            type="submit"
+            onclick="return confirm('¿Reenviar los códigos por WhatsApp a este comprador?');"
+            style="
+              padding:9px 12px;
+              background:#16a34a;
+              color:white;
+              border:none;
+              border-radius:10px;
+              font-weight:bold;
+              cursor:pointer;
+              font-size:13px;
+              white-space:nowrap;
+            ">
+            Reenviar códigos
+          </button>
+        </form>
+      `
+      : `
+        <span style="color:#9ca3af;font-size:12px;">
+          No disponible
+        </span>
+      `
+  }
+</td>
+
+</tr>
 
 </tr>
 
@@ -2294,6 +2335,61 @@ ${
 </body>
 </html>
 `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-whatsapp", async (req, res) => {
+  try {
+    const { organizerId, orderId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        rifas(*)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (orderError) throw orderError;
+
+    if (!order) {
+      return res.status(404).send("Orden no encontrada");
+    }
+
+    if (String(order.rifas?.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para reenviar esta orden.");
+    }
+
+    if (order.payment_status !== "paid") {
+      return res.status(400).send("Solo puedes reenviar códigos de órdenes pagadas.");
+    }
+
+    const result = await sendOrderCouponsWhatsApp(orderId, true);
+
+    if (!result.ok) {
+      console.log("No se pudo reenviar WhatsApp:", result);
+    }
+
+    return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
