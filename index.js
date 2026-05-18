@@ -1803,44 +1803,271 @@ app.get("/organizers/login", (req, res) => {
   const registered = req.query.registered === "1";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+
   res.send(`
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Ingreso organizador</title>
+      <title>Ingreso organizador - CampaClick</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          min-height: 100vh;
+          font-family: Arial, sans-serif;
+          color: white;
+          background:
+            radial-gradient(circle at 15% 15%, rgba(37,99,235,.55), transparent 32%),
+            radial-gradient(circle at 85% 20%, rgba(124,58,237,.45), transparent 34%),
+            radial-gradient(circle at 50% 88%, rgba(22,163,74,.24), transparent 34%),
+            linear-gradient(135deg, #020617, #0f172a 45%, #111827);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          overflow-x: hidden;
+        }
+
+        body::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          background:
+            linear-gradient(120deg, rgba(255,255,255,.10), transparent 38%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.07), transparent 36%);
+          pointer-events: none;
+        }
+
+        .login-card {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 560px;
+          background: rgba(255,255,255,.13);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border: 1px solid rgba(255,255,255,.28);
+          border-radius: 30px;
+          padding: 36px;
+          box-shadow:
+            0 30px 90px rgba(0,0,0,.36),
+            inset 0 1px 0 rgba(255,255,255,.25);
+        }
+
+        .brand {
+          width: 72px;
+          height: 72px;
+          margin: 0 auto 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 24px;
+          background: rgba(255,255,255,.16);
+          border: 1px solid rgba(255,255,255,.32);
+          box-shadow:
+            0 16px 40px rgba(0,0,0,.22),
+            inset 0 1px 0 rgba(255,255,255,.35);
+          font-size: 34px;
+        }
+
+        h1 {
+          margin: 0;
+          text-align: center;
+          font-size: 36px;
+          font-weight: 900;
+          letter-spacing: .2px;
+          text-shadow: 0 8px 24px rgba(0,0,0,.24);
+        }
+
+        .subtitle {
+          margin: 12px auto 26px;
+          text-align: center;
+          color: rgba(255,255,255,.78);
+          line-height: 1.5;
+          font-size: 15px;
+        }
+
+        .success {
+          margin-bottom: 18px;
+          padding: 14px;
+          background: rgba(34,197,94,.18);
+          border: 1px solid rgba(134,239,172,.38);
+          border-radius: 16px;
+          color: #dcfce7;
+          font-weight: 700;
+          text-align: center;
+        }
+
+        .field {
+          margin-bottom: 16px;
+        }
+
+        label {
+          display: block;
+          margin-bottom: 7px;
+          color: rgba(255,255,255,.88);
+          font-weight: 700;
+          font-size: 14px;
+        }
+
+        input {
+          width: 100%;
+          padding: 15px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.25);
+          background: rgba(255,255,255,.13);
+          color: white;
+          outline: none;
+          font-size: 15px;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+          transition: border .2s ease, background .2s ease, box-shadow .2s ease;
+        }
+
+        input::placeholder {
+          color: rgba(255,255,255,.48);
+        }
+
+        input:focus {
+          border: 1px solid rgba(96,165,250,.8);
+          background: rgba(255,255,255,.18);
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.22),
+            inset 0 1px 0 rgba(255,255,255,.22);
+        }
+
+        button {
+          width: 100%;
+          margin-top: 6px;
+          padding: 16px;
+          border: none;
+          border-radius: 18px;
+          background:
+            linear-gradient(135deg, rgba(22,163,74,.96), rgba(37,99,235,.88));
+          color: white;
+          font-size: 17px;
+          font-weight: 900;
+          cursor: pointer;
+          box-shadow: 0 18px 40px rgba(22,163,74,.25);
+          transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+        }
+
+        button:hover {
+          transform: translateY(-2px);
+          opacity: .94;
+          box-shadow: 0 24px 54px rgba(22,163,74,.32);
+        }
+
+        .links {
+          margin-top: 20px;
+          display: grid;
+          gap: 10px;
+        }
+
+        .links a {
+          color: white;
+          font-weight: 800;
+          text-decoration: none;
+          padding: 13px 14px;
+          display: block;
+          text-align: center;
+          border-radius: 16px;
+          background: rgba(255,255,255,.11);
+          border: 1px solid rgba(255,255,255,.22);
+          transition: opacity .2s ease, transform .2s ease;
+        }
+
+        .links a:hover {
+          opacity: .88;
+          transform: translateY(-1px);
+        }
+
+        .links .secondary {
+          color: rgba(255,255,255,.74);
+          font-size: 13px;
+          background: transparent;
+          border: none;
+          padding: 6px;
+        }
+
+        @media (max-width: 640px) {
+          body {
+            padding: 14px;
+            align-items: flex-start;
+          }
+
+          .login-card {
+            padding: 28px 22px;
+            border-radius: 26px;
+          }
+
+          h1 {
+            font-size: 31px;
+          }
+        }
+      </style>
     </head>
-    <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-      <div style="max-width:520px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+    <body>
+      <main class="login-card">
+        <div class="brand">🎯</div>
+
         <h1>Ingreso organizador</h1>
 
-        ${registered ? `
-          <div style="margin-bottom:14px;padding:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px;color:#166534;">
-            Cuenta creada correctamente. Ahora inicia sesión.
-          </div>
-        ` : ""}
+        <p class="subtitle">
+          Accede a tu panel para administrar campañas, revisar ventas,
+          consultar códigos y gestionar resultados.
+        </p>
+
+        ${
+          registered
+            ? `
+              <div class="success">
+                Cuenta creada correctamente. Ahora inicia sesión.
+              </div>
+            `
+            : ""
+        }
 
         <form method="POST" action="/organizers/login">
-          <div style="margin-bottom:12px;">
-            <label>Correo</label><br/>
-            <input type="email" name="email" value="${email}" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Correo electrónico</label>
+            <input
+              type="email"
+              name="email"
+              value="${email}"
+              required
+              placeholder="Ej: correo@ejemplo.com"
+            >
           </div>
 
-          <div style="margin-bottom:16px;">
-            <label>Contraseña</label><br/>
-            <input type="password" name="password" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Contraseña</label>
+            <input
+              type="password"
+              name="password"
+              required
+              placeholder="Escribe tu contraseña"
+            >
           </div>
 
-          <button type="submit" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;">
+          <button type="submit">
             Ingresar
           </button>
         </form>
 
-        <div style="margin-top:14px;">
-          <a href="/organizers/register">Crear cuenta</a>
+        <div class="links">
+          <a href="/organizers/register">Crear cuenta de organizador</a>
+          <a class="secondary" href="/">Volver al inicio</a>
         </div>
-      </div>
+      </main>
     </body>
     </html>
   `);
