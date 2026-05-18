@@ -1474,48 +1474,271 @@ app.get("/health", async (req, res) => {
 
 app.get("/organizers/register", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+
   res.send(`
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Registro organizador</title>
+      <title>Registro organizador - CampaClick</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          min-height: 100vh;
+          font-family: Arial, sans-serif;
+          color: white;
+          background:
+            radial-gradient(circle at 15% 15%, rgba(59,130,246,.50), transparent 30%),
+            radial-gradient(circle at 85% 20%, rgba(168,85,247,.42), transparent 30%),
+            radial-gradient(circle at 50% 90%, rgba(34,197,94,.20), transparent 32%),
+            linear-gradient(135deg, #020617, #0f172a 45%, #111827);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+        }
+
+        body::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          background:
+            linear-gradient(120deg, rgba(255,255,255,.08), transparent 36%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.08), transparent 35%);
+          pointer-events: none;
+        }
+
+        .card {
+          width: 100%;
+          max-width: 560px;
+          position: relative;
+          z-index: 1;
+          background: rgba(255,255,255,.13);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border: 1px solid rgba(255,255,255,.28);
+          border-radius: 30px;
+          padding: 34px;
+          box-shadow:
+            0 30px 90px rgba(0,0,0,.36),
+            inset 0 1px 0 rgba(255,255,255,.25);
+        }
+
+        .brand {
+          width: 72px;
+          height: 72px;
+          margin: 0 auto 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 24px;
+          background: rgba(255,255,255,.16);
+          border: 1px solid rgba(255,255,255,.32);
+          box-shadow:
+            0 16px 40px rgba(0,0,0,.22),
+            inset 0 1px 0 rgba(255,255,255,.35);
+          font-size: 34px;
+        }
+
+        h1 {
+          margin: 0;
+          text-align: center;
+          font-size: 34px;
+          font-weight: 900;
+          letter-spacing: .2px;
+          text-shadow: 0 8px 24px rgba(0,0,0,.24);
+        }
+
+        .subtitle {
+          margin: 12px auto 26px;
+          text-align: center;
+          color: rgba(255,255,255,.78);
+          line-height: 1.5;
+          font-size: 15px;
+        }
+
+        label {
+          display: block;
+          margin-bottom: 7px;
+          color: rgba(255,255,255,.88);
+          font-weight: 700;
+          font-size: 14px;
+        }
+
+        .field {
+          margin-bottom: 16px;
+        }
+
+        input {
+          width: 100%;
+          padding: 15px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.25);
+          background: rgba(255,255,255,.13);
+          color: white;
+          outline: none;
+          font-size: 15px;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+          transition: border .2s ease, background .2s ease, box-shadow .2s ease;
+        }
+
+        input::placeholder {
+          color: rgba(255,255,255,.48);
+        }
+
+        input:focus {
+          border: 1px solid rgba(96,165,250,.8);
+          background: rgba(255,255,255,.18);
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.22),
+            inset 0 1px 0 rgba(255,255,255,.22);
+        }
+
+        button {
+          width: 100%;
+          margin-top: 6px;
+          padding: 16px;
+          border: none;
+          border-radius: 18px;
+          background:
+            linear-gradient(135deg, rgba(37,99,235,.95), rgba(124,58,237,.88));
+          color: white;
+          font-size: 17px;
+          font-weight: 900;
+          cursor: pointer;
+          box-shadow: 0 18px 40px rgba(37,99,235,.28);
+          transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+        }
+
+        button:hover {
+          transform: translateY(-2px);
+          opacity: .94;
+          box-shadow: 0 24px 54px rgba(37,99,235,.34);
+        }
+
+        .login-link {
+          margin-top: 18px;
+          text-align: center;
+        }
+
+        .login-link a {
+          color: white;
+          font-weight: 800;
+          text-decoration: none;
+          padding: 11px 14px;
+          display: inline-block;
+          border-radius: 14px;
+          background: rgba(255,255,255,.11);
+          border: 1px solid rgba(255,255,255,.22);
+          transition: opacity .2s ease, transform .2s ease;
+        }
+
+        .login-link a:hover {
+          opacity: .88;
+          transform: translateY(-1px);
+        }
+
+        .back {
+          margin-top: 14px;
+          text-align: center;
+        }
+
+        .back a {
+          color: rgba(255,255,255,.72);
+          text-decoration: none;
+          font-size: 13px;
+        }
+
+        @media (max-width: 640px) {
+          body {
+            padding: 14px;
+            align-items: flex-start;
+          }
+
+          .card {
+            padding: 26px 22px;
+            border-radius: 26px;
+          }
+
+          h1 {
+            font-size: 29px;
+          }
+        }
+      </style>
     </head>
-    <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
-      <div style="max-width:520px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+    <body>
+      <main class="card">
+        <div class="brand">🎯</div>
+
         <h1>Crear cuenta de organizador</h1>
 
+        <p class="subtitle">
+          Registra tu perfil para crear campañas promocionales, solicitar verificación
+          y administrar tus ventas desde CampaClick.
+        </p>
+
         <form method="POST" action="/organizers/register">
-          <div style="margin-bottom:12px;">
-            <label>Nombre completo</label><br/>
-            <input type="text" name="full_name" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Nombre completo</label>
+            <input
+              type="text"
+              name="full_name"
+              required
+              placeholder="Ej: Juan Pérez"
+            >
           </div>
 
-          <div style="margin-bottom:12px;">
-            <label>Correo</label><br/>
-            <input type="email" name="email" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Correo electrónico</label>
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="Ej: correo@ejemplo.com"
+            >
           </div>
 
-          <div style="margin-bottom:12px;">
-            <label>Teléfono</label><br/>
-            <input type="text" name="phone" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Teléfono</label>
+            <input
+              type="text"
+              name="phone"
+              placeholder="Ej: 3001234567"
+            >
           </div>
 
-          <div style="margin-bottom:16px;">
-            <label>Contraseña</label><br/>
-            <input type="password" name="password" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+          <div class="field">
+            <label>Contraseña</label>
+            <input
+              type="password"
+              name="password"
+              required
+              placeholder="Crea una contraseña segura"
+            >
           </div>
 
-          <button type="submit" style="width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;">
+          <button type="submit">
             Crear cuenta
           </button>
         </form>
 
-        <div style="margin-top:14px;">
+        <div class="login-link">
           <a href="/organizers/login">Ya tengo cuenta</a>
         </div>
-      </div>
+
+        <div class="back">
+          <a href="/">Volver al inicio</a>
+        </div>
+      </main>
     </body>
     </html>
   `);
