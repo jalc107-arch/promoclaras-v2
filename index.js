@@ -6356,27 +6356,198 @@ app.get("/admin/login", (req, res) => {
     <head>
       <meta charset="utf-8"/>
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
-      <title>Admin</title>
+      <title>Ingreso administrador - CampaClick</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          min-height: 100vh;
+          font-family: Arial, sans-serif;
+          color: white;
+          background:
+            radial-gradient(circle at 18% 15%, rgba(37,99,235,.62), transparent 34%),
+            radial-gradient(circle at 82% 20%, rgba(124,58,237,.50), transparent 34%),
+            radial-gradient(circle at 50% 90%, rgba(14,165,233,.18), transparent 35%),
+            linear-gradient(135deg, #020617, #0f172a 48%, #111827);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          overflow: hidden;
+        }
+
+        body::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          background:
+            linear-gradient(120deg, rgba(255,255,255,.10), transparent 35%),
+            radial-gradient(circle at 55% 35%, rgba(255,255,255,.08), transparent 34%);
+          pointer-events: none;
+        }
+
+        .glass-card {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 520px;
+          background: rgba(255,255,255,.13);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border: 1px solid rgba(255,255,255,.28);
+          border-radius: 32px;
+          padding: 34px;
+          box-shadow:
+            0 30px 90px rgba(0,0,0,.36),
+            inset 0 1px 0 rgba(255,255,255,.25);
+        }
+
+        .brand {
+          width: 72px;
+          height: 72px;
+          margin: 0 auto 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 26px;
+          background: rgba(255,255,255,.14);
+          border: 1px solid rgba(255,255,255,.30);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          box-shadow:
+            0 18px 48px rgba(0,0,0,.28),
+            inset 0 1px 0 rgba(255,255,255,.30);
+          font-size: 34px;
+        }
+
+        h1 {
+          margin: 0 0 8px;
+          text-align: center;
+          font-size: 36px;
+          font-weight: 900;
+          letter-spacing: .3px;
+          text-shadow: 0 10px 28px rgba(0,0,0,.35);
+        }
+
+        .subtitle {
+          text-align: center;
+          margin: 0 0 26px;
+          color: rgba(255,255,255,.74);
+          line-height: 1.5;
+          font-size: 15px;
+        }
+
+        label {
+          display: block;
+          margin-bottom: 8px;
+          color: rgba(255,255,255,.86);
+          font-weight: bold;
+        }
+
+        input {
+          width: 100%;
+          padding: 15px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(255,255,255,.26);
+          background: rgba(255,255,255,.12);
+          color: white;
+          outline: none;
+          font-size: 16px;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+        }
+
+        input:focus {
+          border-color: rgba(96,165,250,.85);
+          box-shadow:
+            0 0 0 4px rgba(37,99,235,.22),
+            inset 0 1px 0 rgba(255,255,255,.18);
+        }
+
+        button {
+          width: 100%;
+          margin-top: 20px;
+          padding: 16px;
+          border: none;
+          border-radius: 18px;
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+          color: white;
+          font-size: 17px;
+          font-weight: 900;
+          cursor: pointer;
+          box-shadow: 0 18px 40px rgba(37,99,235,.30);
+          transition: transform .2s ease, opacity .2s ease;
+        }
+
+        button:hover {
+          transform: translateY(-2px);
+          opacity: .94;
+        }
+
+        .back {
+          display: block;
+          margin-top: 18px;
+          text-align: center;
+          color: rgba(255,255,255,.78);
+          font-weight: bold;
+          text-decoration: none;
+        }
+
+        .back:hover {
+          color: white;
+        }
+
+        @media (max-width: 600px) {
+          body {
+            align-items: flex-start;
+            padding-top: 34px;
+          }
+
+          .glass-card {
+            padding: 26px;
+            border-radius: 28px;
+          }
+
+          h1 {
+            font-size: 30px;
+          }
+        }
+      </style>
     </head>
-    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-      <div style="max-width:420px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+    <body>
+      <div class="glass-card">
+        <div class="brand">🛡️</div>
+
         <h1>Ingreso administrador</h1>
 
+        <p class="subtitle">
+          Accede al panel de control para revisar organizadores, campañas, resultados y liquidaciones.
+        </p>
+
         <form method="POST" action="/admin/login">
-          <label>Clave administrador</label><br/>
+          <label>Clave administrador</label>
+
           <input
             type="password"
             name="password"
             required
-            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 18px;"
+            placeholder="Ingresa la clave de administrador"
           />
 
-          <button
-            type="submit"
-            style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;">
+          <button type="submit">
             Ingresar
           </button>
         </form>
+
+        <a class="back" href="/">
+          Volver al inicio
+        </a>
       </div>
     </body>
     </html>
