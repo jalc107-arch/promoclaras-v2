@@ -3201,6 +3201,34 @@ app.get("/campanas/:slug", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
+const { data: campaignOrganizer } = await supabase
+  .from("organizers")
+  .select("full_name, phone")
+  .eq("profile_id", campaign.owner_id)
+  .maybeSingle();
+
+const organizerPhoneClean = String(campaignOrganizer?.phone || "").replace(/\D/g, "");
+const organizerWhatsAppPhone = organizerPhoneClean
+  ? organizerPhoneClean.startsWith("57")
+    ? organizerPhoneClean
+    : `57${organizerPhoneClean}`
+  : "";
+
+const contactOrganizerMessage = encodeURIComponent(
+  [
+    `Hola, estoy interesado(a) en esta campaña de CampaClick.`,
+    ``,
+    `Campaña: ${campaign.title || "-"}`,
+    `Premio: ${campaign.prize || "-"}`,
+    `Valor por código promocional: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}`,
+    ``,
+    `Necesito ayuda o más información sobre la campaña.`,
+    ``,
+    `Link de la campaña:`,
+    `${APP_BASE_URL}/campanas/${campaign.slug}`
+  ].join("\n")
+);
+    
     const totalCoupons = Number(campaign.max_tickets || 0);
     const soldCoupons = Number(campaign.sold_tickets || 0);
     
@@ -3592,6 +3620,19 @@ body {
         href="/consultar">
         Consultar mis Códigos promocionales
       </a>
+
+      ${
+        organizerWhatsAppPhone
+          ? `
+            <a
+              class="button button-whatsapp"
+              target="_blank"
+              href="https://wa.me/${organizerWhatsAppPhone}?text=${contactOrganizerMessage}">
+              Contactar al organizador
+            </a>
+          `
+          : ""
+      }
 
       <a
         class="button button-whatsapp"
