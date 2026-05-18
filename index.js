@@ -4357,134 +4357,257 @@ app.get("/campanas", async (req, res) => {
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: Arial, sans-serif;
-  background: #f3f6fb;
-  color: #111827;
+  color: white;
+  background:
+    radial-gradient(circle at 15% 12%, rgba(37,99,235,.62), transparent 34%),
+    radial-gradient(circle at 85% 20%, rgba(124,58,237,.50), transparent 34%),
+    radial-gradient(circle at 50% 90%, rgba(22,163,74,.22), transparent 35%),
+    linear-gradient(135deg, #020617, #0f172a 48%, #111827);
+  padding: 0;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(255,255,255,.10), transparent 35%),
+    radial-gradient(circle at 55% 35%, rgba(255,255,255,.07), transparent 34%);
+  pointer-events: none;
 }
 
 .header {
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
-  color: white;
-  padding: 48px 20px;
+  position: relative;
+  z-index: 1;
+  padding: 58px 20px 88px;
   text-align: center;
+}
+
+.brand {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 26px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.30);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.30);
+  font-size: 34px;
 }
 
 .header h1 {
   margin: 0;
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 900;
+  letter-spacing: .4px;
+  text-shadow: 0 10px 28px rgba(0,0,0,.35);
 }
 
 .header p {
-  margin-top: 10px;
-  font-size: 17px;
-  opacity: .92;
+  margin: 12px auto 0;
+  max-width: 720px;
+  font-size: 18px;
+  color: rgba(255,255,255,.80);
+  line-height: 1.5;
 }
 
 .container {
-  max-width: 1150px;
-  margin: -28px auto 0;
-  padding: 0 20px 40px;
+  position: relative;
+  z-index: 1;
+  max-width: 1160px;
+  margin: -48px auto 0;
+  padding: 0 20px 44px;
 }
 
-.card {
-  background: white;
-  border-radius: 22px;
-  padding: 26px;
-  box-shadow: 0 14px 40px rgba(0,0,0,.10);
+.glass-card {
+  background: rgba(255,255,255,.13);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 32px;
+  padding: 28px;
+  box-shadow:
+    0 30px 90px rgba(0,0,0,.36),
+    inset 0 1px 0 rgba(255,255,255,.25);
+}
+
+.top-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.top-actions a {
+  text-decoration: none;
+  padding: 13px 18px;
+  border-radius: 16px;
+  font-weight: 900;
+  color: white;
+  transition: transform .2s ease, opacity .2s ease;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.top-actions a:hover {
+  transform: translateY(-2px);
+  opacity: .92;
+}
+
+.btn-home {
+  background: rgba(15,23,42,.72);
+}
+
+.btn-consult {
+  background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(124,58,237,.82));
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 18px;
 }
 
 .campaign {
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  padding: 20px;
-  background: #f9fafb;
+  min-height: 330px;
+  padding: 24px;
+  border-radius: 28px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.24);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 22px 60px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.18);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 260px;
+  transition: transform .22s ease, box-shadow .22s ease, background .22s ease;
+}
+
+.campaign:hover {
+  transform: translateY(-4px);
+  background: rgba(255,255,255,.16);
+  box-shadow:
+    0 28px 72px rgba(0,0,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.24);
 }
 
 .campaign h2 {
-  margin: 0 0 10px;
-  font-size: 21px;
-  color: #111827;
+  margin: 0 0 12px;
+  font-size: 23px;
+  color: white;
+  line-height: 1.2;
+  text-shadow: 0 8px 22px rgba(0,0,0,.25);
 }
 
 .description {
-  color: #4b5563;
-  line-height: 1.5;
+  color: rgba(255,255,255,.78);
+  line-height: 1.55;
   font-size: 14px;
-  margin-bottom: 14px;
-}
-
-.info {
-  color: #374151;
-  font-size: 14px;
-  line-height: 1.7;
   margin-bottom: 16px;
 }
 
+.info {
+  color: rgba(255,255,255,.82);
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 18px;
+}
+
+.info b {
+  color: white;
+}
+
 .price {
-  font-size: 26px;
+  display: inline-block;
+  font-size: 32px;
   font-weight: 900;
-  color: #16a34a;
-  margin-bottom: 14px;
+  color: #4ade80;
+  margin-bottom: 16px;
+  text-shadow: 0 10px 26px rgba(0,0,0,.32);
 }
 
 .btn {
   display: block;
   width: 100%;
   text-align: center;
-  padding: 14px;
-  background: #2563eb;
+  padding: 15px;
   color: white;
   text-decoration: none;
-  border-radius: 13px;
-  font-weight: bold;
+  border-radius: 18px;
+  font-weight: 900;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  opacity: .93;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, rgba(37,99,235,.98), rgba(124,58,237,.86));
+  box-shadow: 0 18px 40px rgba(37,99,235,.25);
 }
 
 .btn-secondary {
-  background: #111827;
+  background: rgba(15,23,42,.78);
+  border: 1px solid rgba(255,255,255,.18);
   margin-top: 10px;
 }
 
 .empty {
   padding: 24px;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-  color: #92400e;
-  border-radius: 16px;
+  background: rgba(245,158,11,.18);
+  border: 1px solid rgba(253,230,138,.35);
+  color: #fef3c7;
+  border-radius: 22px;
   text-align: center;
-  font-weight: bold;
-}
-
-.top-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.top-actions a {
-  text-decoration: none;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-weight: bold;
-  color: white;
+  font-weight: 900;
 }
 
 .footer {
+  position: relative;
+  z-index: 1;
   text-align: center;
   padding: 26px;
-  color: #6b7280;
+  color: rgba(255,255,255,.62);
   font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .header {
+    padding: 38px 16px 72px;
+  }
+
+  .header h1 {
+    font-size: 36px;
+  }
+
+  .header p {
+    font-size: 15px;
+  }
+
+  .container {
+    margin-top: -42px;
+    padding: 0 14px 34px;
+  }
+
+  .glass-card {
+    padding: 20px;
+    border-radius: 28px;
+  }
+
+  .campaign {
+    min-height: auto;
+  }
 }
 </style>
 </head>
@@ -4492,16 +4615,17 @@ body {
 <body>
 
 <div class="header">
+  <div class="brand">🎯</div>
   <h1>Campañas activas</h1>
-  <p>Consulta las campañas disponibles y participa de forma segura.</p>
+  <p>Consulta las campañas disponibles y participa de forma segura con códigos asignados automáticamente.</p>
 </div>
 
 <div class="container">
-  <div class="card">
+  <div class="glass-card">
 
     <div class="top-actions">
-      <a href="/" style="background:#111827;">Inicio</a>
-      <a href="/consultar" style="background:#2563eb;">Consultar mis códigos</a>
+      <a class="btn-home" href="/">Inicio</a>
+      <a class="btn-consult" href="/consultar">Consultar mis códigos</a>
     </div>
 
     ${
@@ -4530,7 +4654,7 @@ body {
                 </div>
 
                 <div>
-                  <a class="btn" href="/campanas/${campaign.slug}">
+                  <a class="btn btn-primary" href="/campanas/${campaign.slug}">
                     Ver campaña
                   </a>
 
