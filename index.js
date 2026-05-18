@@ -1151,72 +1151,107 @@ app.get("/", (req, res) => {
           margin: 0;
           min-height: 100vh;
           font-family: Arial, sans-serif;
+          color: white;
           background:
-            radial-gradient(circle at top left, rgba(37,99,235,.18), transparent 32%),
-            linear-gradient(135deg, #eef4ff, #f8fafc);
-          color: #111827;
+            radial-gradient(circle at 15% 15%, rgba(59,130,246,.55), transparent 30%),
+            radial-gradient(circle at 85% 20%, rgba(168,85,247,.45), transparent 28%),
+            radial-gradient(circle at 50% 90%, rgba(34,197,94,.22), transparent 32%),
+            linear-gradient(135deg, #020617, #0f172a 45%, #111827);
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 24px;
+          overflow-x: hidden;
+        }
+
+        body::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          background:
+            linear-gradient(120deg, rgba(255,255,255,.08), transparent 35%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.08), transparent 35%);
+          pointer-events: none;
         }
 
         .shell {
           width: 100%;
-          max-width: 980px;
-          background: rgba(255,255,255,.92);
-          border: 1px solid #e5e7eb;
-          border-radius: 28px;
-          box-shadow: 0 24px 70px rgba(15,23,42,.14);
+          max-width: 1060px;
+          position: relative;
+          z-index: 1;
+        }
+
+        .glass-main {
+          background: rgba(255, 255, 255, 0.12);
+          backdrop-filter: blur(22px);
+          -webkit-backdrop-filter: blur(22px);
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          border-radius: 30px;
+          box-shadow:
+            0 30px 90px rgba(0,0,0,.36),
+            inset 0 1px 0 rgba(255,255,255,.25);
           overflow: hidden;
         }
 
         .hero {
-          padding: 42px 34px 28px;
+          padding: 54px 34px 34px;
           text-align: center;
-          background: linear-gradient(135deg, #1d4ed8, #2563eb);
-          color: white;
+          background:
+            linear-gradient(135deg, rgba(37,99,235,.42), rgba(124,58,237,.26)),
+            rgba(255,255,255,.06);
+          border-bottom: 1px solid rgba(255,255,255,.18);
         }
 
         .brand {
-          display: inline-flex;
+          width: 82px;
+          height: 82px;
+          margin: 0 auto 18px;
+          display: flex;
           align-items: center;
           justify-content: center;
-          width: 72px;
-          height: 72px;
-          border-radius: 22px;
-          background: rgba(255,255,255,.18);
-          font-size: 34px;
-          margin-bottom: 14px;
+          border-radius: 26px;
+          background: rgba(255, 255, 255, 0.16);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid rgba(255,255,255,.32);
+          box-shadow:
+            0 16px 40px rgba(0,0,0,.20),
+            inset 0 1px 0 rgba(255,255,255,.35);
+          font-size: 38px;
         }
 
         h1 {
           margin: 0;
-          font-size: 44px;
-          letter-spacing: .3px;
+          font-size: 52px;
+          font-weight: 900;
+          letter-spacing: .4px;
+          text-shadow: 0 8px 26px rgba(0,0,0,.24);
         }
 
         .subtitle {
-          margin: 14px auto 0;
-          max-width: 720px;
+          margin: 16px auto 0;
+          max-width: 760px;
+          color: rgba(255,255,255,.86);
           font-size: 18px;
-          line-height: 1.5;
-          opacity: .94;
+          line-height: 1.55;
         }
 
         .content {
-          padding: 30px 34px 34px;
+          padding: 30px 34px 36px;
         }
 
         .notice {
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          color: #1e3a8a;
-          padding: 16px;
-          border-radius: 18px;
+          background: rgba(255,255,255,.12);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(255,255,255,.24);
+          color: rgba(255,255,255,.90);
+          padding: 17px;
+          border-radius: 22px;
           line-height: 1.5;
           margin-bottom: 22px;
           text-align: center;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
         }
 
         .grid {
@@ -1226,63 +1261,98 @@ app.get("/", (req, res) => {
         }
 
         .action {
+          position: relative;
+          overflow: hidden;
           display: block;
-          padding: 22px 18px;
-          border-radius: 18px;
+          padding: 24px 18px;
+          border-radius: 24px;
           text-decoration: none;
           color: white;
           font-weight: 800;
           text-align: center;
-          box-shadow: 0 10px 24px rgba(15,23,42,.12);
-          transition: transform .15s ease, opacity .15s ease;
+          background: rgba(255,255,255,.12);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          border: 1px solid rgba(255,255,255,.26);
+          box-shadow:
+            0 18px 40px rgba(0,0,0,.22),
+            inset 0 1px 0 rgba(255,255,255,.24);
+          transition: transform .22s ease, opacity .22s ease, box-shadow .22s ease;
+        }
+
+        .action::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,.24), transparent 42%);
+          opacity: .7;
+          pointer-events: none;
         }
 
         .action:hover {
-          transform: translateY(-2px);
-          opacity: .95;
+          transform: translateY(-4px) scale(1.01);
+          opacity: .96;
+          box-shadow:
+            0 24px 54px rgba(0,0,0,.30),
+            inset 0 1px 0 rgba(255,255,255,.28);
+        }
+
+        .action span,
+        .action small {
+          position: relative;
+          z-index: 1;
         }
 
         .action span {
           display: block;
-          font-size: 20px;
-          margin-bottom: 6px;
+          font-size: 21px;
+          margin-bottom: 7px;
+          text-shadow: 0 4px 14px rgba(0,0,0,.20);
         }
 
         .action small {
           display: block;
           font-size: 13px;
           font-weight: 500;
-          opacity: .92;
+          opacity: .88;
           line-height: 1.4;
         }
 
         .blue {
-          background: linear-gradient(135deg, #1d4ed8, #2563eb);
+          background:
+            linear-gradient(135deg, rgba(37,99,235,.72), rgba(29,78,216,.52)),
+            rgba(255,255,255,.12);
         }
 
         .green {
-          background: linear-gradient(135deg, #15803d, #16a34a);
+          background:
+            linear-gradient(135deg, rgba(22,163,74,.72), rgba(21,128,61,.52)),
+            rgba(255,255,255,.12);
         }
 
         .dark {
-          background: linear-gradient(135deg, #020617, #111827);
+          background:
+            linear-gradient(135deg, rgba(15,23,42,.84), rgba(2,6,23,.70)),
+            rgba(255,255,255,.10);
         }
 
         .purple {
-          background: linear-gradient(135deg, #5b21b6, #7c3aed);
+          background:
+            linear-gradient(135deg, rgba(124,58,237,.78), rgba(91,33,182,.56)),
+            rgba(255,255,255,.12);
         }
 
         .admin-wide {
-  grid-column: 1 / -1;
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
-}
+          grid-column: 1 / -1;
+          max-width: 540px;
+          width: 100%;
+          margin: 0 auto;
+        }
 
         .footer {
           margin-top: 24px;
           text-align: center;
-          color: #6b7280;
+          color: rgba(255,255,255,.68);
           font-size: 13px;
           line-height: 1.5;
         }
@@ -1294,15 +1364,15 @@ app.get("/", (req, res) => {
           }
 
           .hero {
-            padding: 34px 22px 24px;
+            padding: 42px 22px 26px;
           }
 
           h1 {
-            font-size: 36px;
+            font-size: 38px;
           }
 
           .subtitle {
-            font-size: 16px;
+            font-size: 15px;
           }
 
           .content {
@@ -1312,56 +1382,66 @@ app.get("/", (req, res) => {
           .grid {
             grid-template-columns: 1fr;
           }
+
+          .admin-wide {
+            max-width: 100%;
+          }
         }
       </style>
     </head>
 
     <body>
       <main class="shell">
-        <section class="hero">
-          <div class="brand">🎯</div>
-          <h1>CampaClick</h1>
-          <p class="subtitle">
-            Plataforma para crear, administrar y consultar campañas promocionales con asignación automática de códigos después del pago aprobado.
-          </p>
-        </section>
+        <section class="glass-main">
+          <div class="hero">
+            <div class="brand">🎯</div>
 
-        <section class="content">
-          <div class="notice">
-            Desde aquí puedes consultar tus códigos promocionales, ingresar como organizador, crear tu cuenta o acceder al panel administrador.
+            <h1>CampaClick</h1>
+
+            <p class="subtitle">
+              Plataforma moderna para crear, administrar y consultar campañas promocionales
+              con asignación automática de códigos después del pago aprobado.
+            </p>
           </div>
 
-          <div class="grid">
-            <a class="action blue" href="/consultar">
-              <span>Consultar mis códigos</span>
-              <small>Revisa tus órdenes y códigos promocionales asignados.</small>
-            </a>
+          <section class="content">
+            <div class="notice">
+              Consulta tus códigos promocionales, explora campañas activas, ingresa como organizador
+              o administra la plataforma desde un solo lugar.
+            </div>
 
-            <a class="action blue" href="/campanas">
-            <span>Ver campañas activas</span>
-            <small>Explora las campañas disponibles para participar.</small>
-            </a>
+            <div class="grid">
+              <a class="action blue" href="/consultar">
+                <span>Consultar mis códigos</span>
+                <small>Revisa tus órdenes y códigos promocionales asignados.</small>
+              </a>
 
-            <a class="action green" href="/organizers/login">
-              <span>Ingreso organizador</span>
-              <small>Administra tus campañas, ventas y resultados.</small>
-            </a>
+              <a class="action blue" href="/campanas">
+                <span>Ver campañas activas</span>
+                <small>Explora las campañas disponibles para participar.</small>
+              </a>
 
-            <a class="action dark" href="/organizers/register">
-              <span>Crear cuenta</span>
-              <small>Registra tu perfil para solicitar verificación.</small>
-            </a>
+              <a class="action green" href="/organizers/login">
+                <span>Ingreso organizador</span>
+                <small>Administra tus campañas, ventas y resultados.</small>
+              </a>
 
-            <a class="action purple admin-wide" href="/admin/login">
-              <span>Ingreso administrador</span>
-              <small>Revisión de organizadores, campañas y resultados.</small>
-            </a>
-          </div>
+              <a class="action dark" href="/organizers/register">
+                <span>Crear cuenta</span>
+                <small>Registra tu perfil para solicitar verificación.</small>
+              </a>
 
-          <div class="footer">
-            © CampaClick — Plataforma de campañas promocionales<br/>
-            Los códigos se asignan automáticamente después del pago aprobado.
-          </div>
+              <a class="action purple admin-wide" href="/admin/login">
+                <span>Ingreso administrador</span>
+                <small>Revisión de organizadores, campañas y resultados.</small>
+              </a>
+            </div>
+
+            <div class="footer">
+              © CampaClick — Plataforma de campañas promocionales<br/>
+              Los códigos se asignan automáticamente después del pago aprobado.
+            </div>
+          </section>
         </section>
       </main>
     </body>
