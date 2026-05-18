@@ -3306,15 +3306,42 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #f3f6fb;
   color: #111827;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(37,99,235,.35), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(34,197,94,.22), transparent 24%),
+    radial-gradient(circle at 50% 90%, rgba(255,255,255,.70), transparent 30%),
+    linear-gradient(135deg, #dbeafe 0%, #eef4ff 45%, #f8fafc 100%);
 }
 
 .header {
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(29,78,216,.82), rgba(37,99,235,.62));
   padding: 58px 20px 70px;
   color: white;
   text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,.28);
+  box-shadow: 0 22px 60px rgba(37,99,235,.22);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(255,255,255,.24), transparent 38%),
+    radial-gradient(circle at top right, rgba(255,255,255,.20), transparent 28%);
+  pointer-events: none;
+}
+
+.header h1,
+.header p {
+  position: relative;
+  z-index: 1;
 }
 
 .header h1 {
@@ -3327,28 +3354,52 @@ body {
 .header p {
   margin-top: 12px;
   font-size: 18px;
-  opacity: .92;
+  opacity: .95;
 }
 
 .container {
   max-width: 1050px;
   margin: -45px auto 0;
   padding: 0 20px 35px;
+  position: relative;
+  z-index: 2;
 }
 
 .card {
-  background: white;
-  border-radius: 22px;
+  position: relative;
+  overflow: hidden;
+  background: rgba(255,255,255,.38);
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 26px;
   padding: 28px;
-  box-shadow: 0 14px 40px rgba(0,0,0,.10);
+  box-shadow:
+    0 22px 55px rgba(15,23,42,.12),
+    inset 0 1px 0 rgba(255,255,255,.55);
   margin-bottom: 24px;
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 1px;
+  background: rgba(255,255,255,.75);
 }
 
 .progress-card {
-  background: #f9fbff;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  background: rgba(255,255,255,.28);
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 22px;
   padding: 26px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.58),
+    0 14px 38px rgba(30,41,59,.08);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
 }
 
 .progress-header {
@@ -3368,7 +3419,7 @@ body {
 
 .progress-description {
   margin-top: 7px;
-  color: #6b7280;
+  color: #4b5563;
   font-size: 15px;
 }
 
@@ -3392,24 +3443,31 @@ body {
   font-weight: bold;
   background: ${publicStatusColor};
   color: white;
+  box-shadow:
+    0 8px 20px rgba(15,23,42,.12),
+    inset 0 1px 0 rgba(255,255,255,.35);
 }
 
 .progress-bar-wrap {
   width: 100%;
   height: 20px;
-  background: #e5e7eb;
+  background: rgba(255,255,255,.42);
   border-radius: 999px;
   overflow: hidden;
   margin-bottom: 16px;
+  border: 1px solid rgba(255,255,255,.45);
+  box-shadow: inset 0 2px 8px rgba(15,23,42,.08);
 }
 
 .progress-bar {
   height: 100%;
   width: ${soldPercentage}%;
-  background: linear-gradient(90deg, #16a34a, #22c55e);
+  background: linear-gradient(90deg, rgba(22,163,74,.95), rgba(34,197,94,.85));
   border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    0 0 18px rgba(34,197,94,.35);
 }
-
 
 .info-grid {
   display: grid;
@@ -3424,21 +3482,26 @@ body {
 }
 
 .description {
-  color: #4b5563;
+  color: #374151;
   line-height: 1.6;
   margin: 0;
   font-size: 16px;
 }
 
 .price-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  background: rgba(255,255,255,.30);
+  border: 1px solid rgba(255,255,255,.46);
+  border-radius: 22px;
   padding: 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.58),
+    0 16px 36px rgba(30,41,59,.10);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
 }
 
 .price-label {
-  color: #6b7280;
+  color: #4b5563;
   font-size: 15px;
   margin-bottom: 8px;
 }
@@ -3451,51 +3514,78 @@ body {
 }
 
 .button {
+  position: relative;
+  overflow: hidden;
   display: block;
   width: 100%;
   padding: 17px;
-  background: #2563eb;
   color: white;
   text-decoration: none;
   text-align: center;
-  border-radius: 14px;
+  border-radius: 17px;
   font-size: 19px;
-  font-weight: bold;
+  font-weight: 900;
+  background: linear-gradient(135deg, rgba(37,99,235,.86), rgba(59,130,246,.68));
+  border: 1px solid rgba(255,255,255,.32);
+  box-shadow:
+    0 13px 28px rgba(37,99,235,.25),
+    inset 0 1px 0 rgba(255,255,255,.38);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.button::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  right: 1px;
+  height: 48%;
+  border-radius: 16px;
+  background: linear-gradient(to bottom, rgba(255,255,255,.34), rgba(255,255,255,.07));
+  pointer-events: none;
 }
 
 .button:hover {
-  opacity: .93;
+  transform: translateY(-2px);
+  opacity: .98;
+  box-shadow:
+    0 18px 38px rgba(37,99,235,.32),
+    inset 0 1px 0 rgba(255,255,255,.42);
 }
 
 .button-dark {
-  background: #111827;
+  background: linear-gradient(135deg, rgba(17,24,39,.90), rgba(31,41,55,.76));
 }
 
 .button-secondary {
-  background: #111827;
+  background: linear-gradient(135deg, rgba(17,24,39,.90), rgba(31,41,55,.76));
   margin-top: 12px;
 }
 
 .button-whatsapp {
-  background: #16a34a;
+  background: linear-gradient(135deg, rgba(22,163,74,.90), rgba(34,197,94,.70));
   margin-top: 12px;
 }
 
 .finished-box {
   margin-top: 15px;
   padding: 16px;
-  background: #fee2e2;
+  background: rgba(255,255,255,.38);
   color: #991b1b;
-  border: 1px solid #fecaca;
-  border-radius: 14px;
+  border: 1px solid rgba(248,113,113,.32);
+  border-radius: 16px;
   font-weight: bold;
   text-align: center;
   line-height: 1.4;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .small-note {
   margin-top: 12px;
-  color: #6b7280;
+  color: #4b5563;
   font-size: 13px;
   text-align: center;
 }
