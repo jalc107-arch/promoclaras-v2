@@ -4595,16 +4595,16 @@ app.get("/consultar", async (req, res) => {
         if (ordersError) throw ordersError;
 
         orders = (ordersData || []).sort((a, b) => {
-  const aPaid = a.payment_status === "paid" ? 1 : 0;
-  const bPaid = b.payment_status === "paid" ? 1 : 0;
+          const aPaid = a.payment_status === "paid" ? 1 : 0;
+          const bPaid = b.payment_status === "paid" ? 1 : 0;
 
-  return bPaid - aPaid;
-});
+          return bPaid - aPaid;
+        });
       }
     }
 
     const baseUrl = APP_BASE_URL;
-    
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -4613,156 +4613,436 @@ app.get("/consultar", async (req, res) => {
       <head>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Consultar mis Códigos promocionales</title>
+        <title>Consultar mis códigos - CampaClick</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            background:
+              radial-gradient(circle at 15% 15%, rgba(37,99,235,.55), transparent 32%),
+              radial-gradient(circle at 85% 20%, rgba(124,58,237,.45), transparent 34%),
+              radial-gradient(circle at 50% 88%, rgba(22,163,74,.24), transparent 34%),
+              linear-gradient(135deg, #020617, #0f172a 45%, #111827);
+            padding: 26px;
+          }
+
+          body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background:
+              linear-gradient(120deg, rgba(255,255,255,.10), transparent 38%),
+              radial-gradient(circle at 50% 50%, rgba(255,255,255,.07), transparent 36%);
+            pointer-events: none;
+          }
+
+          .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 980px;
+            margin: 0 auto;
+            padding-top: 30px;
+          }
+
+          .glass-card {
+            background: rgba(255,255,255,.13);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 30px;
+            padding: 34px;
+            box-shadow:
+              0 30px 90px rgba(0,0,0,.36),
+              inset 0 1px 0 rgba(255,255,255,.25);
+          }
+
+          .brand {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 24px;
+            background: rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.32);
+            box-shadow:
+              0 16px 40px rgba(0,0,0,.22),
+              inset 0 1px 0 rgba(255,255,255,.35);
+            font-size: 32px;
+          }
+
+          h1 {
+            margin: 0;
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: .2px;
+            text-shadow: 0 8px 24px rgba(0,0,0,.24);
+          }
+
+          .subtitle {
+            margin: 12px 0 26px;
+            color: rgba(255,255,255,.78);
+            line-height: 1.5;
+            font-size: 16px;
+          }
+
+          label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,.88);
+            font-weight: 800;
+            font-size: 14px;
+          }
+
+          input {
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.25);
+            background: rgba(255,255,255,.13);
+            color: white;
+            outline: none;
+            font-size: 16px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+            transition: border .2s ease, background .2s ease, box-shadow .2s ease;
+          }
+
+          input::placeholder {
+            color: rgba(255,255,255,.48);
+          }
+
+          input:focus {
+            border: 1px solid rgba(96,165,250,.85);
+            background: rgba(255,255,255,.18);
+            box-shadow:
+              0 0 0 4px rgba(37,99,235,.22),
+              inset 0 1px 0 rgba(255,255,255,.22);
+          }
+
+          .btn {
+            display: block;
+            width: 100%;
+            margin-top: 16px;
+            padding: 16px;
+            border: none;
+            border-radius: 18px;
+            color: white;
+            font-size: 17px;
+            font-weight: 900;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease;
+          }
+
+          .btn:hover {
+            transform: translateY(-2px);
+            opacity: .94;
+          }
+
+          .btn-primary {
+            background: linear-gradient(135deg, rgba(37,99,235,.98), rgba(124,58,237,.88));
+            box-shadow: 0 18px 40px rgba(37,99,235,.28);
+          }
+
+          .btn-green {
+            background: linear-gradient(135deg, rgba(22,163,74,.96), rgba(37,99,235,.80));
+            box-shadow: 0 18px 40px rgba(22,163,74,.25);
+          }
+
+          .btn-dark {
+            background: rgba(15,23,42,.72);
+            border: 1px solid rgba(255,255,255,.18);
+          }
+
+          .btn-blue {
+            background: rgba(37,99,235,.78);
+            border: 1px solid rgba(255,255,255,.18);
+          }
+
+          .back-link {
+            display: inline-block;
+            margin-top: 18px;
+            color: rgba(255,255,255,.82);
+            font-weight: 800;
+            text-decoration: none;
+          }
+
+          .back-link:hover {
+            color: white;
+          }
+
+          .alert {
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 18px;
+            font-weight: 800;
+            background: rgba(245,158,11,.20);
+            border: 1px solid rgba(253,230,138,.35);
+            color: #fef3c7;
+          }
+
+          .orders-title {
+            margin: 30px 0 16px;
+            font-size: 24px;
+            font-weight: 900;
+          }
+
+          .orders-grid {
+            display: grid;
+            gap: 16px;
+          }
+
+          .order-card {
+            background: rgba(255,255,255,.12);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,.22);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow:
+              0 18px 50px rgba(0,0,0,.24),
+              inset 0 1px 0 rgba(255,255,255,.18);
+          }
+
+          .order-title {
+            font-size: 20px;
+            font-weight: 900;
+            margin-bottom: 12px;
+          }
+
+          .info-line {
+            margin-top: 8px;
+            color: rgba(255,255,255,.82);
+            line-height: 1.4;
+          }
+
+          .info-line b {
+            color: white;
+          }
+
+          .coupon-wrap {
+            margin-top: 14px;
+          }
+
+          .coupon-list {
+            margin-top: 10px;
+            display: flex;
+            gap: 9px;
+            flex-wrap: wrap;
+          }
+
+          .coupon {
+            background: rgba(37,99,235,.85);
+            color: white;
+            padding: 9px 13px;
+            border-radius: 999px;
+            font-weight: 900;
+            border: 1px solid rgba(255,255,255,.22);
+            box-shadow: 0 10px 24px rgba(37,99,235,.20);
+          }
+
+          .pending-text {
+            margin-top: 12px;
+            color: #fef3c7;
+            line-height: 1.5;
+            font-weight: 700;
+          }
+
+          .actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 18px;
+          }
+
+          .actions .btn {
+            margin-top: 0;
+            padding: 14px;
+            font-size: 14px;
+          }
+
+          @media (max-width: 720px) {
+            body {
+              padding: 14px;
+            }
+
+            .container {
+              padding-top: 10px;
+            }
+
+            .glass-card {
+              padding: 26px 20px;
+              border-radius: 26px;
+            }
+
+            h1 {
+              font-size: 30px;
+            }
+
+            .subtitle {
+              font-size: 14px;
+            }
+          }
+        </style>
       </head>
 
-      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:850px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+      <body>
+        <main class="container">
+          <section class="glass-card">
+            <div class="brand">🔎</div>
 
-          <h1 style="margin-top:0;">Consultar mis Códigos promocionales</h1>
+            <h1>Consultar mis códigos</h1>
 
-          <p style="color:#6b7280;">
-            Ingresa el número de teléfono usado en la compra para consultar tus órdenes y Códigos promocionales asignados.
-          </p>
+            <p class="subtitle">
+              Ingresa el número de teléfono usado en la compra para consultar tus órdenes
+              y códigos promocionales asignados.
+            </p>
 
-          <form method="GET" action="/consultar" style="margin-top:20px;margin-bottom:28px;">
-            <label>Teléfono</label><br/>
+            <form method="GET" action="/consultar">
+              <label>Teléfono</label>
 
-            <input
-              type="text"
-              name="phone"
-              value="${phone}"
-              placeholder="Ej: 3238123392"
-              required
-              style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 14px;"
-            />
+              <input
+                type="text"
+                name="phone"
+                value="${phone}"
+                placeholder="Ej: 3238123392"
+                required
+              />
 
-            <button
-              type="submit"
-              style="width:100%;padding:15px;background:#2563eb;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">
-              Consultar
-            </button>
-          </form>
+              <button class="btn btn-primary" type="submit">
+                Consultar códigos
+              </button>
+            </form>
 
-          ${
-            phone && orders.length === 0
-              ? `
-                <div style="padding:16px;background:#fef3c7;color:#92400e;border-radius:12px;font-weight:bold;">
-                  No encontramos órdenes asociadas a ese teléfono.
-                </div>
-              `
-              : ""
-          }
+            <a class="back-link" href="/">
+              ← Volver al inicio
+            </a>
 
-          ${
-            orders.length > 0
-              ? `
-                <h2>Órdenes encontradas</h2>
+            ${
+              phone && orders.length === 0
+                ? `
+                  <div class="alert">
+                    No encontramos órdenes asociadas a ese teléfono.
+                  </div>
+                `
+                : ""
+            }
 
-                <div style="display:grid;gap:16px;">
-                  ${orders.map(order => {
-                    const coupons = (order.tickets || [])
-  .map(t => t.combination || t.ticket_code || "-")
-  .join(", ");
+            ${
+              orders.length > 0
+                ? `
+                  <h2 class="orders-title">Órdenes encontradas</h2>
 
-const paid = order.payment_status === "paid";
+                  <div class="orders-grid">
+                    ${orders.map(order => {
+                      const coupons = (order.tickets || [])
+                        .map(t => t.combination || t.ticket_code || "-")
+                        .join(", ");
 
-                    let paymentStatusLabel = order.payment_status || "created";
+                      const paid = order.payment_status === "paid";
 
-if (order.payment_status === "paid") {
-  paymentStatusLabel = "Pago aprobado";
-}
+                      let paymentStatusLabel = order.payment_status || "created";
 
-if (order.payment_status === "created") {
-  paymentStatusLabel = "Pago pendiente";
-}
+                      if (order.payment_status === "paid") {
+                        paymentStatusLabel = "Pago aprobado";
+                      }
 
-if (order.payment_status === "failed") {
-  paymentStatusLabel = "Pago fallido";
-}
+                      if (order.payment_status === "created") {
+                        paymentStatusLabel = "Pago pendiente";
+                      }
 
-const shareText = encodeURIComponent(
-  `Hola, estos son mis Códigos promocionales de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
-);
+                      if (order.payment_status === "failed") {
+                        paymentStatusLabel = "Pago fallido";
+                      }
 
-return `
-                      <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#f9fafb;">
-                        <div style="font-size:18px;font-weight:bold;color:#111827;">
-                          ${order.rifas?.title || "Campaña"}
-                        </div>
+                      const shareText = encodeURIComponent(
+                        `Hola, estos son mis códigos promocionales de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+                      );
 
-                        <div style="margin-top:8px;color:#374151;">
-                          <b>Estado:</b> ${paymentStatusLabel}
-                        </div>
+                      return `
+                        <div class="order-card">
+                          <div class="order-title">
+                            ${order.rifas?.title || "Campaña"}
+                          </div>
 
-                        <div style="margin-top:8px;color:#374151;">
-                          <b>Cantidad:</b> ${order.qty}
-                        </div>
+                          <div class="info-line">
+                            <b>Estado:</b> ${paymentStatusLabel}
+                          </div>
 
-                        <div style="margin-top:8px;color:#374151;">
-                          <b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}
-                        </div>
+                          <div class="info-line">
+                            <b>Cantidad:</b> ${order.qty}
+                          </div>
 
-                        ${
-                          coupons
-                            ? `
-                              <div style="margin-top:12px;">
-                                <b>Cupones:</b>
-                                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-                                  ${(order.tickets || []).map(t => `
-                                    <span style="background:#1e3a8a;color:white;padding:8px 12px;border-radius:999px;font-weight:bold;">
-                                      ${t.combination || t.ticket_code || "-"}
-                                    </span>
-                                  `).join("")}
+                          <div class="info-line">
+                            <b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}
+                          </div>
+
+                          ${
+                            coupons
+                              ? `
+                                <div class="coupon-wrap">
+                                  <b>Códigos asignados:</b>
+
+                                  <div class="coupon-list">
+                                    ${(order.tickets || []).map(t => `
+                                      <span class="coupon">
+                                        ${t.combination || t.ticket_code || "-"}
+                                      </span>
+                                    `).join("")}
+                                  </div>
                                 </div>
-                              </div>
-                            `
-                            : `
-                              <div style="margin-top:12px;color:#92400e;">
-                                Aún no hay Códigos promocionales asignados. Si ya pagaste, espera unos segundos y vuelve a consultar.
-                              </div>
-                            `
-                        }
+                              `
+                              : `
+                                <div class="pending-text">
+                                  Aún no hay códigos promocionales asignados. Si ya pagaste,
+                                  espera unos segundos y vuelve a consultar.
+                                </div>
+                              `
+                          }
 
-                       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">
-  <a
-    href="/orden/${order.id}"
-    style="display:block;padding:13px;background:#16a34a;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-    ${paid ? "Ver orden" : "Continuar pago"}
-  </a>
+                          <div class="actions">
+                            <a class="btn btn-green" href="/orden/${order.id}">
+                              ${paid ? "Ver orden" : "Continuar pago"}
+                            </a>
 
-  <a
-    href="/campanas/${order.rifas?.slug || ""}"
-    style="display:block;padding:13px;background:#111827;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-    Ver campaña
-  </a>
+                            <a class="btn btn-dark" href="/campanas/${order.rifas?.slug || ""}">
+                              Ver campaña
+                            </a>
 
-  ${
-    coupons
-      ? `
-        <a
-          target="_blank"
-          href="https://wa.me/?text=${shareText}"
-          style="display:block;padding:13px;background:#2563eb;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
-          Compartir Códigos promocionales
-        </a>
-      `
-      : ""
-  }
-</div>
-                      </div>
-                    `;
-                  }).join("")}
-                </div>
-              `
-              : ""
-          }
-
-          <div style="margin-top:24px;">
-            <a href="/" style="color:#2563eb;font-weight:bold;">Volver al inicio</a>
-          </div>
-
-        </div>
+                            ${
+                              coupons
+                                ? `
+                                  <a
+                                    class="btn btn-blue"
+                                    target="_blank"
+                                    href="https://wa.me/?text=${shareText}">
+                                    Compartir códigos
+                                  </a>
+                                `
+                                : ""
+                            }
+                          </div>
+                        </div>
+                      `;
+                    }).join("")}
+                  </div>
+                `
+                : ""
+            }
+          </section>
+        </main>
       </body>
       </html>
     `);
