@@ -5189,38 +5189,38 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
-   if (campaign.status !== "active") {
-  if (campaign.status === "finished") {
-    return res.redirect(`/resultado/${campaign.id}`);
-  }
+    if (campaign.status !== "active") {
+      if (campaign.status === "finished") {
+        return res.redirect(`/resultado/${campaign.id}`);
+      }
 
-  return res.status(403).send(`
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1"/>
-      <title>Campaña no disponible</title>
-    </head>
-    <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-      <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-        <h1>Campaña no disponible</h1>
-        <p>Esta campaña aún no está habilitada para compras.</p>
+      return res.status(403).send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8"/>
+          <meta name="viewport" content="width=device-width, initial-scale=1"/>
+          <title>Campaña no disponible</title>
+        </head>
+        <body style="font-family:Arial;background:#020617;color:white;padding:40px;">
+          <div style="max-width:620px;margin:auto;background:rgba(255,255,255,.12);backdrop-filter:blur(20px);padding:30px;border-radius:28px;text-align:center;">
+            <h1>Campaña no disponible</h1>
+            <p>Esta campaña aún no está habilitada para compras.</p>
 
-        <a
-          href="/campanas/${campaign.slug}"
-          style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
-          Volver a la campaña
-        </a>
-      </div>
-    </body>
-    </html>
-  `);
-}
+            <a
+              href="/campanas/${campaign.slug}"
+              style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
+              Volver a la campaña
+            </a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
 
     const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
     const minimumQtyText = getMinimumQtyText(campaign.price_per_ticket);
-    
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -5231,104 +5231,299 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
         <title>Comprar - ${campaign.title}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            background:
+              radial-gradient(circle at 15% 12%, rgba(37,99,235,.62), transparent 32%),
+              radial-gradient(circle at 85% 18%, rgba(124,58,237,.52), transparent 34%),
+              radial-gradient(circle at 45% 92%, rgba(16,185,129,.18), transparent 34%),
+              linear-gradient(135deg, #020617, #0f172a 48%, #111827);
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+          }
+
+          body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background:
+              linear-gradient(120deg, rgba(255,255,255,.10), transparent 35%),
+              radial-gradient(circle at 55% 35%, rgba(255,255,255,.08), transparent 34%);
+            pointer-events: none;
+          }
+
+          .glass-card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 820px;
+            background: rgba(255,255,255,.13);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 34px;
+            padding: 34px;
+            box-shadow:
+              0 30px 90px rgba(0,0,0,.36),
+              inset 0 1px 0 rgba(255,255,255,.24);
+          }
+
+          .top-badge {
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 28px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.30);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow:
+              0 18px 48px rgba(0,0,0,.28),
+              inset 0 1px 0 rgba(255,255,255,.30);
+            font-size: 36px;
+          }
+
+          h1 {
+            margin: 0;
+            text-align: center;
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: .3px;
+            line-height: 1.15;
+            text-shadow: 0 10px 28px rgba(0,0,0,.35);
+          }
+
+          .price {
+            margin: 18px auto 24px;
+            width: fit-content;
+            padding: 12px 22px;
+            border-radius: 999px;
+            background: rgba(34,197,94,.16);
+            border: 1px solid rgba(134,239,172,.38);
+            color: #86efac;
+            font-size: 32px;
+            font-weight: 900;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+          }
+
+          .form-grid {
+            display: grid;
+            gap: 16px;
+          }
+
+          label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,.86);
+            font-weight: bold;
+          }
+
+          input {
+            width: 100%;
+            padding: 15px 16px;
+            border-radius: 17px;
+            border: 1px solid rgba(255,255,255,.26);
+            background: rgba(255,255,255,.12);
+            color: white;
+            outline: none;
+            font-size: 16px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.16);
+          }
+
+          input::placeholder {
+            color: rgba(255,255,255,.48);
+          }
+
+          input:focus {
+            border-color: rgba(96,165,250,.85);
+            box-shadow:
+              0 0 0 4px rgba(37,99,235,.22),
+              inset 0 1px 0 rgba(255,255,255,.18);
+          }
+
+          .info-box {
+            margin-top: 6px;
+            padding: 15px;
+            border-radius: 20px;
+            background: rgba(255,255,255,.11);
+            border: 1px solid rgba(255,255,255,.22);
+            color: rgba(255,255,255,.82);
+            line-height: 1.5;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+          }
+
+          .rule-box {
+            margin-top: 12px;
+            padding: 16px;
+            border-radius: 22px;
+            background: rgba(37,99,235,.20);
+            border: 1px solid rgba(147,197,253,.35);
+            color: rgba(255,255,255,.88);
+            line-height: 1.5;
+          }
+
+          .pay-button {
+            width: 100%;
+            margin-top: 22px;
+            padding: 18px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            font-size: 19px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow:
+              0 18px 42px rgba(37,99,235,.34),
+              inset 0 1px 0 rgba(255,255,255,.20);
+            transition: transform .2s ease, opacity .2s ease;
+          }
+
+          .pay-button:hover {
+            transform: translateY(-2px);
+            opacity: .94;
+          }
+
+          .back {
+            display: block;
+            margin-top: 18px;
+            text-align: center;
+            color: rgba(255,255,255,.78);
+            font-weight: bold;
+            text-decoration: none;
+          }
+
+          .back:hover {
+            color: white;
+          }
+
+          .small-note {
+            margin-top: 14px;
+            text-align: center;
+            color: rgba(255,255,255,.62);
+            font-size: 13px;
+            line-height: 1.4;
+          }
+
+          @media (max-width: 700px) {
+            body {
+              align-items: flex-start;
+              padding: 16px;
+            }
+
+            .glass-card {
+              padding: 24px;
+              border-radius: 30px;
+            }
+
+            h1 {
+              font-size: 29px;
+            }
+
+            .price {
+              font-size: 28px;
+            }
+          }
+        </style>
       </head>
 
-      <body style="
-        font-family:Arial,sans-serif;
-        background:#f3f6fb;
-        padding:40px;
-      ">
+      <body>
+        <div class="glass-card">
+          <div class="top-badge">🎯</div>
 
-      <div style="
-        max-width:700px;
-        margin:auto;
-        background:white;
-        padding:30px;
-        border-radius:18px;
-        box-shadow:0 10px 30px rgba(0,0,0,.08);
-      ">
+          <h1>${campaign.title}</h1>
 
-      <h1>${campaign.title}</h1>
+          <div class="price">
+            $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+          </div>
 
-      <div style="margin-bottom:20px;color:#16a34a;font-size:28px;font-weight:bold;">
-        $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
-      </div>
+          <form method="POST" action="/campanas/${campaign.slug}/comprar">
+            <div class="form-grid">
 
-      <form method="POST" action="/campanas/${campaign.slug}/comprar">
+              <div>
+                <label>Nombre completo</label>
+                <input
+                  type="text"
+                  name="buyer_name"
+                  required
+                  placeholder="Escribe tu nombre completo"
+                >
+              </div>
 
-        <div style="margin-bottom:14px;">
-          <label>Nombre completo</label><br/>
-          <input
-            type="text"
-            name="buyer_name"
-            required
-            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
-          >
+              <div>
+                <label>Teléfono</label>
+                <input
+                  type="text"
+                  name="buyer_phone"
+                  required
+                  placeholder="Ej: 3238123392"
+                >
+              </div>
+
+              <div>
+                <label>Correo electrónico</label>
+                <input
+                  type="email"
+                  name="buyer_email"
+                  placeholder="Opcional"
+                >
+              </div>
+
+              <div>
+                <label>Cantidad de códigos</label>
+
+                <input
+                  type="number"
+                  name="qty"
+                  min="${minimumQty}"
+                  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
+                  value="${minimumQty}"
+                  required
+                >
+
+                <div class="info-box">
+                  Compra mínima para esta campaña:
+                  <b>${minimumQty}</b> ${minimumQty === 1 ? "código promocional" : "códigos promocionales"}.
+                </div>
+
+                <div class="rule-box">
+                  <b>Regla de compra:</b><br/>
+                  ${minimumQtyText}
+                </div>
+              </div>
+
+            </div>
+
+            <button class="pay-button" type="submit">
+              Continuar al pago
+            </button>
+          </form>
+
+          <div class="small-note">
+            Tus códigos promocionales se asignan automáticamente después del pago aprobado.
+          </div>
+
+          <a class="back" href="/campanas/${campaign.slug}">
+            Volver a la campaña
+          </a>
         </div>
-
-        <div style="margin-bottom:14px;">
-          <label>Teléfono</label><br/>
-          <input
-            type="text"
-            name="buyer_phone"
-            required
-            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
-          >
-        </div>
-
-        <div style="margin-bottom:14px;">
-          <label>Correo electrónico</label><br/>
-          <input
-            type="email"
-            name="buyer_email"
-            style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
-          >
-        </div>
-
-        <div style="margin-bottom:20px;">
-  <label>Cantidad de Códigos</label><br/>
-
- <input
-  type="number"
-  name="qty"
-  min="${minimumQty}"
-  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
-  value="${minimumQty}"
-  required
-  style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;"
->
-
-<div style="margin-top:8px;color:#6b7280;font-size:13px;line-height:1.4;">
-  Compra mínima para esta campaña: <b>${minimumQty}</b> ${minimumQty === 1 ? "cupón" : "cupones"}.
-</div>
-
-  <div style="margin-top:8px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;color:#1e3a8a;font-size:14px;line-height:1.4;">
-    <b>Regla de compra:</b><br/>
-    ${minimumQtyText}
-  </div>
-</div>
-
-        <button
-          type="submit"
-          style="
-            width:100%;
-            padding:16px;
-            background:#2563eb;
-            color:white;
-            border:none;
-            border-radius:12px;
-            font-size:18px;
-            font-weight:bold;
-            cursor:pointer;
-          "
-        >
-          Continuar al pago
-        </button>
-
-      </form>
-
-      </div>
-
       </body>
       </html>
     `);
