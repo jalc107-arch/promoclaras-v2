@@ -4902,7 +4902,11 @@ body {
   background: rgba(255,255,255,.30);
   border: 1px solid rgba(255,255,255,.46);
   border-radius: 22px;
-  padding: 24px;
+  padding: 28px;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.58),
     0 16px 36px rgba(30,41,59,.10);
@@ -4955,15 +4959,15 @@ body {
 .price-card > a.button:first-of-type {
   padding: 24px 18px;
   font-size: 24px;
-  letter-spacing: .8px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   background:
-    linear-gradient(135deg, #16a34a 0%, #2563eb 50%, #7c3aed 100%);
-  border: 2px solid rgba(255,255,255,.65);
+    linear-gradient(135deg, #16a34a 0%, #2563eb 48%, #7c3aed 100%);
+  border: 2px solid rgba(255,255,255,.70);
   box-shadow:
-    0 24px 55px rgba(37,99,235,.40),
-    0 0 0 7px rgba(34,197,94,.13),
-    inset 0 1px 0 rgba(255,255,255,.60);
+    0 24px 55px rgba(37,99,235,.42),
+    0 0 0 8px rgba(34,197,94,.12),
+    inset 0 1px 0 rgba(255,255,255,.65);
   animation: pulseButton 1.8s infinite;
 }
 
