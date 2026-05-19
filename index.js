@@ -129,6 +129,29 @@ function slugify(text) {
     .replace(/-+/g, "-");
 }
 
+function normalizeReferralCode(value) {
+  return String(value || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Ñ/g, "N")
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 20);
+}
+
+function generateReferralCode(fullName, phone) {
+  const namePart = normalizeReferralCode(fullName)
+    .slice(0, 8);
+
+  const phonePart = String(phone || "")
+    .replace(/\D/g, "")
+    .slice(-4);
+
+  const randomPart = String(Math.floor(100 + Math.random() * 900));
+
+  return normalizeReferralCode(`${namePart}${phonePart}${randomPart}`);
+}
+
 function generateWompiIntegritySignature(reference, amountInCents, currency, integritySecret) {
   const raw = `${reference}${amountInCents}${currency}${integritySecret}`;
   return crypto.createHash("sha256").update(raw).digest("hex");
@@ -822,6 +845,230 @@ async function sendOrderCouponsWhatsApp(orderId, forceResend = false) {
     return result;
   } catch (error) {
     console.error("Error enviando Códigos por WhatsApp:", error);
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
+async function processReferralReward(orderId) {
+  try {
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        buyers(*),
+        rifas(*)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (orderError) throw orderError;
+    if (!order) return { ok: false, reason: "Orden no encontrada" };
+
+    if (!order.referrer_id) {
+      return { ok: true, skipped: true, reason: "Orden sin referido" };
+    }
+
+    if (order.is_referral_reward) {
+      return { ok: true, skipped: true, reason: "Orden de cortesía por referido" };
+    }
+
+    if (order.payment_status !== "paid") {
+      return { ok: true, skipped: true, reason: "Orden no pagada" };
+    }
+
+    if (!order.rifas?.referral_program_enabled) {
+      return { ok: true, skipped: true, reason: "Programa de referidos no activo" };
+    }
+
+    const requiredApprovedOrders = Number(order.rifas?.referral_required_approved_orders || 15);
+
+    const { data: referrer, error: referrerError } = await supabase
+      .from("campaign_referrers")
+      .select("*")
+      .eq("id", order.referrer_id)
+      .single();
+
+    if (referrerError) throw referrerError;
+
+    const referrerPhone = String(referrer.phone || "").replace(/\D/g, "");
+    const buyerPhone = String(order.buyers?.phone || "").replace(/\D/g, "");
+
+    if (referrerPhone && buyerPhone && referrerPhone === buyerPhone) {
+      return { ok: true, skipped: true, reason: "Compra propia no cuenta como referido" };
+    }
+
+    const { data: existingBuyerReferral, error: existingBuyerReferralError } = await supabase
+      .from("campaign_referrals")
+      .select("*")
+      .eq("rifa_id", order.rifa_id)
+      .eq("referrer_id", order.referrer_id)
+      .eq("buyer_id", order.buyer_id)
+      .maybeSingle();
+
+    if (existingBuyerReferralError) throw existingBuyerReferralError;
+
+    if (!existingBuyerReferral) {
+      const { error: referralInsertError } = await supabase
+        .from("campaign_referrals")
+        .insert({
+          rifa_id: order.rifa_id,
+          referrer_id: order.referrer_id,
+          order_id: order.id,
+          buyer_id: order.buyer_id,
+          status: "approved",
+          counted_at: new Date().toISOString()
+        });
+
+      if (referralInsertError) throw referralInsertError;
+    }
+
+    const { count: approvedCount, error: countError } = await supabase
+      .from("campaign_referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("rifa_id", order.rifa_id)
+      .eq("referrer_id", order.referrer_id)
+      .eq("status", "approved");
+
+    if (countError) throw countError;
+
+    const rewardsShouldExist = Math.floor(Number(approvedCount || 0) / requiredApprovedOrders);
+
+    if (rewardsShouldExist <= 0) {
+      return {
+        ok: true,
+        skipped: true,
+        approvedCount,
+        reason: "Aún no cumple la meta de referidos"
+      };
+    }
+
+    const { count: existingRewards, error: existingRewardsError } = await supabase
+      .from("referral_rewards")
+      .select("id", { count: "exact", head: true })
+      .eq("rifa_id", order.rifa_id)
+      .eq("referrer_id", order.referrer_id);
+
+    if (existingRewardsError) throw existingRewardsError;
+
+    if (Number(existingRewards || 0) >= rewardsShouldExist) {
+      return {
+        ok: true,
+        skipped: true,
+        approvedCount,
+        existingRewards,
+        reason: "La cortesía correspondiente ya fue creada"
+      };
+    }
+
+    const { data: freshCampaign, error: freshCampaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", order.rifa_id)
+      .single();
+
+    if (freshCampaignError) throw freshCampaignError;
+
+    if (Number(freshCampaign.available_tickets || 0) < 1) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: "No hay códigos disponibles para entregar cortesía"
+      };
+    }
+
+    let rewardBuyer = null;
+
+    const { data: existingBuyer, error: existingBuyerError } = await supabase
+      .from("buyers")
+      .select("*")
+      .eq("phone", referrerPhone)
+      .maybeSingle();
+
+    if (existingBuyerError) throw existingBuyerError;
+
+    if (existingBuyer) {
+      rewardBuyer = existingBuyer;
+    } else {
+      const { data: newBuyer, error: newBuyerError } = await supabase
+        .from("buyers")
+        .insert({
+          full_name: referrer.full_name,
+          phone: referrerPhone,
+          email: null
+        })
+        .select()
+        .single();
+
+      if (newBuyerError) throw newBuyerError;
+      rewardBuyer = newBuyer;
+    }
+
+    const { data: rewardOrder, error: rewardOrderError } = await supabase
+      .from("orders")
+      .insert({
+        rifa_id: order.rifa_id,
+        buyer_id: rewardBuyer.id,
+        qty: 1,
+        subtotal: 0,
+        total_paid: 0,
+        commission: 0,
+        payment_status: "paid",
+        referral_code: referrer.referral_code,
+        referrer_id: referrer.id,
+        is_referral_reward: true
+      })
+      .select()
+      .single();
+
+    if (rewardOrderError) throw rewardOrderError;
+
+    await supabase
+      .from("payments")
+      .insert({
+        order_id: rewardOrder.id,
+        provider: "referral_reward",
+        external_reference: `ref_${Date.now()}_${rewardOrder.id.slice(0, 8)}`,
+        amount: 0,
+        status: "approved"
+      });
+
+    await assignTicketsToOrder(rewardOrder.id);
+
+    const newSoldTickets = Number(freshCampaign.sold_tickets || 0) + 1;
+    const newAvailableTickets = Number(freshCampaign.max_tickets || 0) - newSoldTickets;
+
+    await supabase
+      .from("rifas")
+      .update({
+        sold_tickets: newSoldTickets,
+        available_tickets: newAvailableTickets
+      })
+      .eq("id", order.rifa_id);
+
+    await supabase
+      .from("referral_rewards")
+      .insert({
+        rifa_id: order.rifa_id,
+        referrer_id: referrer.id,
+        order_id: rewardOrder.id,
+        reward_number: Number(existingRewards || 0) + 1,
+        required_approved_orders: requiredApprovedOrders,
+        status: "created"
+      });
+
+    await sendOrderCouponsWhatsApp(rewardOrder.id, true);
+
+    return {
+      ok: true,
+      rewardCreated: true,
+      approvedCount,
+      rewardOrderId: rewardOrder.id
+    };
+  } catch (error) {
+    console.error("Error procesando referido:", error);
     return {
       ok: false,
       reason: error.message
@@ -2506,6 +2753,24 @@ Los códigos promocionales se asignan automáticamente después del pago aprobad
       </div>
     `
 }
+
+<a
+  href="/organizers/${organizer.id}/campanas/${c.id}/referidos"
+  style="
+    display:block;
+    padding:8px 12px;
+    background:#7c3aed;
+    color:white;
+    text-decoration:none;
+    border-radius:10px;
+    font-weight:bold;
+    font-size:13px;
+    margin-top:7px;
+  "
+>
+  Referidos
+</a>
+
 </td>
       </tr>
 `;
@@ -2918,6 +3183,302 @@ app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-whatsapp", async (r
     }
 
     return res.redirect(`/organizers/${organizerId}/panel`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para ver estos referidos.");
+    }
+
+    const { data: referrers, error: referrersError } = await supabase
+      .from("campaign_referrers")
+      .select("*")
+      .eq("rifa_id", rifaId)
+      .order("created_at", { ascending: false });
+
+    if (referrersError) throw referrersError;
+
+    const referrerIds = (referrers || []).map(r => r.id);
+
+    let referrals = [];
+    let rewards = [];
+
+    if (referrerIds.length > 0) {
+      const { data: referralsData, error: referralsError } = await supabase
+        .from("campaign_referrals")
+        .select("*")
+        .in("referrer_id", referrerIds);
+
+      if (referralsError) throw referralsError;
+      referrals = referralsData || [];
+
+      const { data: rewardsData, error: rewardsError } = await supabase
+        .from("referral_rewards")
+        .select("*")
+        .in("referrer_id", referrerIds);
+
+      if (rewardsError) throw rewardsError;
+      rewards = rewardsData || [];
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Referidos - ${campaign.title}</title>
+      </head>
+
+      <body style="font-family:Arial;background:#f3f6fb;padding:30px;">
+        <div style="max-width:1100px;margin:auto;background:white;padding:26px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h1 style="margin:0;">Referidos de campaña</h1>
+              <p style="color:#6b7280;margin:8px 0 0;">
+                Campaña: <b>${campaign.title}</b>
+              </p>
+            </div>
+
+            <a
+              href="/organizers/${organizer.id}/panel"
+              style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
+              Volver al panel
+            </a>
+          </div>
+
+          <div style="margin-top:20px;padding:16px;background:${campaign.referral_program_enabled ? "#ecfdf5" : "#fee2e2"};border-radius:14px;color:${campaign.referral_program_enabled ? "#166534" : "#991b1b"};font-weight:bold;line-height:1.5;">
+            ${
+              campaign.referral_program_enabled
+                ? `Programa activo. Por cada ${campaign.referral_required_approved_orders || 15} compras aprobadas, el referido gana 1 código promocional de cortesía.`
+                : `El programa de referidos no está activo para esta campaña.`
+            }
+          </div>
+
+          <div style="margin-top:22px;padding:18px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;">
+            <h2 style="margin-top:0;">Crear referido</h2>
+
+            <form method="POST" action="/organizers/${organizer.id}/campanas/${campaign.id}/referidos">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+                <div>
+                  <label>Nombre completo</label>
+                  <input name="full_name" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;">
+                </div>
+
+                <div>
+                  <label>Teléfono</label>
+                  <input name="phone" required placeholder="Ej: 3001234567" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;">
+                </div>
+
+                <div>
+                  <label>Código personalizado opcional</label>
+                  <input name="referral_code" placeholder="Ej: JUAN123" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;">
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                style="margin-top:14px;width:100%;padding:14px;background:#16a34a;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">
+                Crear referido
+              </button>
+            </form>
+          </div>
+
+          <div style="margin-top:26px;overflow:auto;">
+            <h2>Referidos registrados</h2>
+
+            <table style="width:100%;min-width:900px;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#eff6ff;">
+                  <th style="padding:12px;text-align:left;">Nombre</th>
+                  <th style="padding:12px;text-align:left;">Teléfono</th>
+                  <th style="padding:12px;text-align:left;">Código</th>
+                  <th style="padding:12px;text-align:left;">Link</th>
+                  <th style="padding:12px;text-align:left;">Aprobadas</th>
+                  <th style="padding:12px;text-align:left;">Cortesías</th>
+                  <th style="padding:12px;text-align:left;">Compartir</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  referrers && referrers.length > 0
+                    ? referrers.map(referrer => {
+                        const approvedCount = referrals.filter(r =>
+                          String(r.referrer_id) === String(referrer.id) &&
+                          r.status === "approved"
+                        ).length;
+
+                        const rewardCount = rewards.filter(r =>
+                          String(r.referrer_id) === String(referrer.id)
+                        ).length;
+
+                        const link = `${APP_BASE_URL}/campanas/${campaign.slug}?ref=${encodeURIComponent(referrer.referral_code)}`;
+
+                        const shareText = encodeURIComponent(
+                          [
+                            `Te invito a participar en esta campaña de CampaClick.`,
+                            ``,
+                            `Campaña: ${campaign.title}`,
+                            `Premio: ${campaign.prize || "-"}`,
+                            `Valor por código promocional: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}`,
+                            ``,
+                            `Link para participar:`,
+                            `${link}`,
+                            ``,
+                            `Los códigos se asignan automáticamente después del pago aprobado.`
+                          ].join("\\n")
+                        );
+
+                        return `
+                          <tr>
+                            <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">${referrer.full_name}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;">${referrer.phone}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;">
+                              <span style="background:#dbeafe;color:#1e40af;padding:7px 10px;border-radius:999px;font-weight:bold;">
+                                ${referrer.referral_code}
+                              </span>
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;">
+                              <input readonly value="${link}" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;">
+                            </td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">${approvedCount}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">${rewardCount}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;">
+                              <a
+                                target="_blank"
+                                href="https://wa.me/?text=${shareText}"
+                                style="display:inline-block;padding:9px 12px;background:#22c55e;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+                                WhatsApp
+                              </a>
+                            </td>
+                          </tr>
+                        `;
+                      }).join("")
+                    : `
+                      <tr>
+                        <td colspan="7" style="padding:18px;text-align:center;color:#6b7280;">
+                          Aún no hay referidos registrados para esta campaña.
+                        </td>
+                      </tr>
+                    `
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const fullName = String(req.body.full_name || "").trim();
+    const phone = String(req.body.phone || "").replace(/\D/g, "");
+    let referralCode = normalizeReferralCode(req.body.referral_code);
+
+    if (!fullName || !phone) {
+      return res.status(400).send("Faltan nombre o teléfono del referido.");
+    }
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para crear referidos en esta campaña.");
+    }
+
+    if (!referralCode) {
+      referralCode = generateReferralCode(fullName, phone);
+    }
+
+    const { error: insertError } = await supabase
+      .from("campaign_referrers")
+      .insert({
+        rifa_id: campaign.id,
+        full_name: fullName,
+        phone,
+        referral_code: referralCode,
+        status: "active"
+      });
+
+    if (insertError) {
+      return res.status(400).send(`
+        No fue posible crear el referido. Puede que el código "${referralCode}" ya exista para esta campaña.
+        <br/><br/>
+        <a href="/organizers/${organizerId}/campanas/${rifaId}/referidos">Volver</a>
+      `);
+    }
+
+    return res.redirect(`/organizers/${organizerId}/campanas/${rifaId}/referidos`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
@@ -3511,6 +4072,41 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
               <input type="date" name="draw_date" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
+            <div style="margin-bottom:18px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;">
+  <h3 style="margin-top:0;color:#166534;">Programa de referidos</h3>
+
+  <label style="display:flex;align-items:flex-start;gap:10px;line-height:1.5;">
+    <input
+      type="checkbox"
+      name="referral_program_enabled"
+      value="true"
+      style="width:auto;margin-top:4px;"
+    >
+    <span>
+      Activar programa de referidos para esta campaña.
+      Los referidores podrán recibir códigos promocionales de cortesía según las compras aprobadas que generen.
+    </span>
+  </label>
+
+  <div style="margin-top:14px;">
+    <label>Cantidad de compras aprobadas necesarias para entregar 1 código de cortesía</label>
+
+    <input
+      type="number"
+      name="referral_required_approved_orders"
+      min="5"
+      max="50"
+      value="15"
+      style="width:100%;padding:12px;border-radius:12px;border:1px solid #ddd;"
+    >
+
+    <small style="display:block;margin-top:8px;color:#166534;line-height:1.4;">
+      Recomendado: 15. Mínimo permitido: 5. Máximo permitido: 50.
+      Solo cuentan transacciones aprobadas por Wompi.
+    </small>
+  </div>
+</div>
+
             <div style="margin-bottom:18px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
   <label style="display:flex;gap:10px;align-items:flex-start;line-height:1.5;">
     <input type="checkbox" name="campaign_terms_accepted" value="true" required style="margin-top:4px;">
@@ -3576,6 +4172,21 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     const pricePerTicket = Number(req.body.price_per_ticket || 0);
     const drawDate = String(req.body.draw_date || "").trim();
     const campaignTermsAccepted = req.body.campaign_terms_accepted === "true";
+    const referralProgramEnabled = req.body.referral_program_enabled === "true";
+
+let referralRequiredApprovedOrders = Number(req.body.referral_required_approved_orders || 15);
+
+if (!Number.isInteger(referralRequiredApprovedOrders)) {
+  referralRequiredApprovedOrders = 15;
+}
+
+if (referralRequiredApprovedOrders < 5) {
+  referralRequiredApprovedOrders = 5;
+}
+
+if (referralRequiredApprovedOrders > 50) {
+  referralRequiredApprovedOrders = 50;
+}
 
     if (!title || !prize || !drawProvider || !drawMode || !drawDate) {
       return res.status(400).send("Faltan campos obligatorios");
@@ -3704,7 +4315,12 @@ prize_cash_amount: prizeType === "money" ? prizeCashAmount : 0,
 prize_delivery_status: "pending",
 payout_status: "pending",
         platform_fee_percent: 5,
-        campaign_terms_accepted: true,
+
+referral_program_enabled: referralProgramEnabled,
+referral_required_approved_orders: referralRequiredApprovedOrders,
+referral_reward_qty: 1,
+
+campaign_terms_accepted: true,
         campaign_terms_accepted_at: new Date().toISOString(),
         payment_gateway_fee_note: "Wompi cobra costos propios de procesamiento, aproximadamente 2.65% + $700 + IVA por transacción exitosa."
       });
@@ -3720,6 +4336,8 @@ payout_status: "pending",
 app.get("/campanas/:slug", async (req, res) => {
   try {
     const { slug } = req.params;
+
+    const referralCode = normalizeReferralCode(req.query.ref);
 
     const { data: campaign, error } = await supabase
       .from("rifas")
@@ -4215,6 +4833,19 @@ body {
       `
       : ""
   }
+
+  ${
+  campaign.referral_program_enabled
+    ? `
+      <div style="margin-top:10px;padding:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px;color:#166534;font-size:13px;line-height:1.5;">
+        <b>Programa de referidos promocionales:</b><br/>
+        Por cada ${campaign.referral_required_approved_orders || 15} compras aprobadas realizadas mediante un enlace de referido válido,
+        la persona referidora podrá recibir 1 código promocional de cortesía para participar en esta misma campaña.
+        Este beneficio no es canjeable por dinero ni constituye comisión económica.
+      </div>
+    `
+    : ""
+}
 </div>
     </div>
 
@@ -4230,10 +4861,10 @@ body {
   campaign.status === "active"
     ? `
       <a
-        class="button"
-        href="/campanas/${campaign.slug}/comprar">
-        Participar ahora
-      </a>
+  class="button"
+  href="/campanas/${campaign.slug}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">
+  Participar ahora
+</a>
 
       <a
         class="button button-secondary"
@@ -5179,6 +5810,8 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
   try {
     const { slug } = req.params;
 
+    const referralCode = normalizeReferralCode(req.query.ref);
+
     const { data: campaign, error } = await supabase
       .from("rifas")
       .select("*")
@@ -5455,6 +6088,7 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
           </div>
 
           <form method="POST" action="/campanas/${campaign.slug}/comprar">
+          <input type="hidden" name="referral_code" value="${referralCode}">
             <div class="form-grid">
 
               <div>
@@ -5542,6 +6176,7 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
     const cleanBuyerPhone = buyerPhone.replace(/\D/g, "");
     const buyerEmail = String(req.body.buyer_email || "").trim();
     const qty = Number(req.body.qty || 0);
+    const referralCode = normalizeReferralCode(req.body.referral_code);
 
     if (!buyerName || !cleanBuyerPhone) {
   return res.status(400).send("Faltan nombre o teléfono");
@@ -5659,6 +6294,28 @@ if (qty > availableTickets) {
     </html>
   `);
 }
+
+    let referrerId = null;
+
+if (campaign.referral_program_enabled && referralCode) {
+  const { data: referrer, error: referrerError } = await supabase
+    .from("campaign_referrers")
+    .select("*")
+    .eq("rifa_id", campaign.id)
+    .eq("referral_code", referralCode)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (referrerError) throw referrerError;
+
+  if (referrer) {
+    const referrerPhone = String(referrer.phone || "").replace(/\D/g, "");
+
+    if (referrerPhone !== cleanBuyerPhone) {
+      referrerId = referrer.id;
+    }
+  }
+}
     
     let buyer = null;
 
@@ -5694,14 +6351,16 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
-        rifa_id: campaign.id,
-        buyer_id: buyer.id,
-        qty,
-        subtotal,
-        total_paid: totalPaid,
-        commission,
-        payment_status: "created"
-      })
+  rifa_id: campaign.id,
+  buyer_id: buyer.id,
+  qty,
+  subtotal,
+  total_paid: totalPaid,
+  commission,
+  payment_status: "created",
+  referral_code: referralCode || null,
+  referrer_id: referrerId
+})
       .select()
       .single();
 
@@ -5832,6 +6491,7 @@ if (wompiTransactionId && payment.status !== "approved") {
 }
 
 await sendOrderCouponsWhatsApp(orderId);
+await processReferralReward(orderId);
 
 return res.redirect(`/orden/${orderId}`);
   }
@@ -6168,6 +6828,7 @@ if (updateOrderError) throw updateOrderError;
 
 if (localOrderStatus === "paid") {
   await sendOrderCouponsWhatsApp(payment.order_id);
+  await processReferralReward(payment.order_id);
 }
 
 return res.status(200).send("ok");
