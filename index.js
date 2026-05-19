@@ -3142,6 +3142,251 @@ select {
   }
 }
 
+/* ================================
+   AJUSTE VISUAL FINAL PANEL ORGANIZADOR
+   Estilo más limpio, menos saturado
+================================ */
+
+body {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(59,130,246,.28), transparent 30%),
+    radial-gradient(circle at 85% 15%, rgba(20,184,166,.16), transparent 28%),
+    linear-gradient(135deg, #07111f 0%, #0f172a 48%, #111827 100%) !important;
+  color: #f8fafc !important;
+}
+
+body::before {
+  background:
+    linear-gradient(120deg, rgba(255,255,255,.05), transparent 38%),
+    radial-gradient(circle at 50% 35%, rgba(255,255,255,.04), transparent 34%) !important;
+}
+
+.header {
+  background:
+    linear-gradient(135deg, rgba(15,23,42,.86), rgba(30,64,175,.42)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.12) !important;
+  box-shadow: 0 18px 60px rgba(0,0,0,.32) !important;
+}
+
+.header h1 {
+  color: #ffffff !important;
+}
+
+.header p {
+  color: rgba(226,232,240,.82) !important;
+}
+
+.container {
+  max-width: 1240px !important;
+}
+
+.card,
+.table-card {
+  background: rgba(15,23,42,.58) !important;
+  border: 1px solid rgba(148,163,184,.22) !important;
+  box-shadow:
+    0 24px 70px rgba(0,0,0,.30),
+    inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+.table-card {
+  background:
+    linear-gradient(180deg, rgba(15,23,42,.70), rgba(15,23,42,.54)) !important;
+}
+
+.table-card h2 {
+  color: #f8fafc !important;
+  letter-spacing: .2px;
+}
+
+table {
+  border-spacing: 0 8px !important;
+}
+
+thead tr {
+  background: transparent !important;
+}
+
+th {
+  background: rgba(30,41,59,.92) !important;
+  color: #cbd5e1 !important;
+  border-bottom: none !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+th:first-child {
+  border-radius: 14px 0 0 14px;
+}
+
+th:last-child {
+  border-radius: 0 14px 14px 0;
+}
+
+tbody tr {
+  background: rgba(255,255,255,.055) !important;
+  border-radius: 16px !important;
+}
+
+td {
+  background: rgba(255,255,255,.045) !important;
+  border-bottom: none !important;
+  color: #e5e7eb !important;
+}
+
+tbody tr td:first-child {
+  border-radius: 16px 0 0 16px;
+}
+
+tbody tr td:last-child {
+  border-radius: 0 16px 16px 0;
+}
+
+td b,
+td strong {
+  color: #ffffff !important;
+}
+
+/* Tarjetas internas dentro de la tabla */
+td div[style*="background:#f9fafb"],
+td div[style*="background:#eff6ff"],
+td div[style*="background:#ecfdf5"],
+td div[style*="background:#fff7ed"],
+td div[style*="background:#fee2e2"] {
+  background: rgba(15,23,42,.72) !important;
+  border: 1px solid rgba(148,163,184,.24) !important;
+  color: #e5e7eb !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+/* Textos secundarios */
+td div[style*="color:#374151"],
+td div[style*="color:#6b7280"],
+td span[style*="color:#374151"],
+td span[style*="color:#6b7280"] {
+  color: #cbd5e1 !important;
+}
+
+/* Dinero / neto */
+td div[style*="color:#065f46"],
+td div[style*="color:#166534"] {
+  color: #86efac !important;
+}
+
+/* Alertas */
+td div[style*="color:#92400e"],
+td div[style*="color:#9a3412"] {
+  color: #fde68a !important;
+}
+
+/* Rechazos */
+td div[style*="color:#991b1b"],
+td div[style*="color:#7f1d1d"] {
+  color: #fecaca !important;
+}
+
+/* Barra de avance */
+td div[style*="background:#e5e7eb"] {
+  background: rgba(148,163,184,.25) !important;
+}
+
+td div[style*="background:#16a34a"] {
+  background: linear-gradient(90deg, #22c55e, #86efac) !important;
+}
+
+/* Badges */
+.badge {
+  border: 1px solid rgba(255,255,255,.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+}
+
+.approved {
+  background: rgba(34,197,94,.16) !important;
+  color: #bbf7d0 !important;
+}
+
+.pending {
+  background: rgba(245,158,11,.16) !important;
+  color: #fde68a !important;
+}
+
+/* Botones del encabezado */
+.header a[href*="campanas/nueva"] {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  color: white !important;
+}
+
+.header a[href*="verificacion"] {
+  background: rgba(255,255,255,.12) !important;
+  color: #e0f2fe !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+}
+
+.header a[href*="logout"] {
+  background: rgba(2,6,23,.76) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255,255,255,.18) !important;
+}
+
+/* Botones dentro de tablas */
+td a[style*="background:#2563eb"] {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+}
+
+td a[style*="background:#16a34a"],
+td button[style*="background:#16a34a"] {
+  background: linear-gradient(135deg, #22c55e, #15803d) !important;
+}
+
+td a[style*="background:#22c55e"] {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+}
+
+td a[style*="background:#7c3aed"] {
+  background: linear-gradient(135deg, #6366f1, #4338ca) !important;
+}
+
+/* Caja de verificación aprobada */
+.container > div[style*="background:#ecfdf5"] {
+  background: rgba(34,197,94,.14) !important;
+  border: 1px solid rgba(134,239,172,.28) !important;
+  color: #bbf7d0 !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+/* Scroll */
+.table-card::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-card::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.08);
+  border-radius: 999px;
+}
+
+.table-card::-webkit-scrollbar-thumb {
+  background: rgba(148,163,184,.45);
+  border-radius: 999px;
+}
+
+/* Móvil */
+@media (max-width: 800px) {
+  .header {
+    background: linear-gradient(135deg, #0f172a, #1e3a8a) !important;
+  }
+
+  .table-card {
+    border-radius: 24px !important;
+  }
+
+  th,
+  td {
+    font-size: 12px !important;
+  }
+}
+
 </style>
 </head>
 
