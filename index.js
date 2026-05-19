@@ -4923,6 +4923,13 @@ body {
   margin-bottom: 18px;
 }
 
+.price-card {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .button {
   position: relative;
   overflow: hidden;
@@ -4946,17 +4953,17 @@ body {
 }
 
 .price-card > a.button:first-of-type {
-  padding: 22px 18px;
-  font-size: 23px;
-  letter-spacing: .3px;
+  padding: 24px 18px;
+  font-size: 24px;
+  letter-spacing: .8px;
   text-transform: uppercase;
   background:
-    linear-gradient(135deg, rgba(34,197,94,.98), rgba(37,99,235,.95), rgba(124,58,237,.90));
-  border: 2px solid rgba(255,255,255,.55);
+    linear-gradient(135deg, #16a34a 0%, #2563eb 50%, #7c3aed 100%);
+  border: 2px solid rgba(255,255,255,.65);
   box-shadow:
-    0 22px 48px rgba(34,197,94,.35),
-    0 0 0 6px rgba(34,197,94,.12),
-    inset 0 1px 0 rgba(255,255,255,.55);
+    0 24px 55px rgba(37,99,235,.40),
+    0 0 0 7px rgba(34,197,94,.13),
+    inset 0 1px 0 rgba(255,255,255,.60);
   animation: pulseButton 1.8s infinite;
 }
 
