@@ -4870,9 +4870,9 @@ body {
 
 .info-grid {
   display: grid;
-  grid-template-columns: .9fr 1.1fr;
-  gap: 22px;
-  align-items: start;
+  grid-template-columns: 420px 1fr;
+  gap: 26px;
+  align-items: stretch;
 }
 
 /* Información de campaña a la derecha */
@@ -4927,12 +4927,6 @@ body {
   margin-bottom: 18px;
 }
 
-.price-card {
-  min-height: 360px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
 
 .button {
   position: relative;
@@ -4956,19 +4950,20 @@ body {
   transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
 }
 
-.price-card > a.button:first-of-type {
-  padding: 24px 18px;
-  font-size: 24px;
-  letter-spacing: 1px;
+.button-main {
+  padding: 26px 18px !important;
+  font-size: 25px !important;
+  letter-spacing: 1.3px !important;
   text-transform: uppercase;
   background:
-    linear-gradient(135deg, #16a34a 0%, #2563eb 48%, #7c3aed 100%);
-  border: 2px solid rgba(255,255,255,.70);
+    linear-gradient(135deg, #00c853 0%, #2563eb 48%, #7c3aed 100%) !important;
+  border: 2px solid rgba(255,255,255,.78) !important;
+  border-radius: 22px !important;
   box-shadow:
-    0 24px 55px rgba(37,99,235,.42),
-    0 0 0 8px rgba(34,197,94,.12),
-    inset 0 1px 0 rgba(255,255,255,.65);
-  animation: pulseButton 1.8s infinite;
+    0 28px 60px rgba(37,99,235,.46),
+    0 0 0 9px rgba(34,197,94,.13),
+    inset 0 1px 0 rgba(255,255,255,.72) !important;
+  animation: pulseButton 1.7s infinite;
 }
 
 @keyframes pulseButton {
@@ -5183,7 +5178,7 @@ body {
   campaign.status === "active"
     ? `
       <a
-  class="button"
+  class="button button-main"
   href="/campanas/${campaign.slug}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">
   Participar ahora
 </a>
