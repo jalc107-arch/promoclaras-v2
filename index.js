@@ -2986,6 +2986,162 @@ a:hover {
     min-width: 900px;
   }
 }
+
+/* AJUSTE FINAL DE LEGIBILIDAD PANEL ORGANIZADOR */
+
+.table-card,
+.card {
+  color: #ffffff;
+}
+
+.table-card h2,
+.card h2,
+.card h3 {
+  color: #ffffff;
+}
+
+th {
+  color: rgba(255,255,255,.95) !important;
+  background: rgba(255,255,255,.18) !important;
+}
+
+td {
+  color: rgba(255,255,255,.92) !important;
+  border-bottom: 1px solid rgba(255,255,255,.14) !important;
+}
+
+td b,
+td strong {
+  color: #ffffff !important;
+}
+
+td div,
+td span,
+td p,
+td small {
+  color: rgba(255,255,255,.90);
+}
+
+/* Corrige cajas blancas internas */
+td div[style*="background:#f9fafb"],
+td div[style*="background:#eff6ff"],
+td div[style*="background:#ecfdf5"],
+td div[style*="background:#fff7ed"],
+td div[style*="background:#fee2e2"] {
+  background: rgba(255,255,255,.15) !important;
+  border: 1px solid rgba(255,255,255,.28) !important;
+  color: rgba(255,255,255,.94) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* Corrige textos oscuros escritos en estilos inline */
+td div[style*="color:#111827"],
+td div[style*="color:#374151"],
+td div[style*="color:#6b7280"],
+td div[style*="color:#065f46"],
+td div[style*="color:#166534"],
+td div[style*="color:#92400e"],
+td div[style*="color:#991b1b"],
+td div[style*="color:#7f1d1d"],
+td span[style*="color:#111827"],
+td span[style*="color:#374151"],
+td span[style*="color:#6b7280"],
+td span[style*="color:#065f46"],
+td span[style*="color:#166534"],
+td span[style*="color:#92400e"],
+td span[style*="color:#991b1b"],
+td span[style*="color:#7f1d1d"] {
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Títulos internos de tarjetas */
+td div[style*="font-weight:bold"],
+td div[style*="font-weight: bold"] {
+  color: #ffffff !important;
+}
+
+/* Neto, dinero y valores positivos */
+td div[style*="color:#065f46"],
+td div[style*="color:#166534"] {
+  color: #86efac !important;
+}
+
+/* Avisos pendientes */
+td div[style*="color:#92400e"],
+td div[style*="color:#9a3412"] {
+  color: #fde68a !important;
+}
+
+/* Rechazos o errores */
+td div[style*="color:#991b1b"],
+td div[style*="color:#7f1d1d"] {
+  color: #fecaca !important;
+}
+
+/* Barras de avance */
+td div[style*="background:#e5e7eb"] {
+  background: rgba(255,255,255,.25) !important;
+}
+
+/* Botones deshabilitados grises */
+td div[style*="background:#e5e7eb"][style*="color:#6b7280"] {
+  background: rgba(255,255,255,.18) !important;
+  color: rgba(255,255,255,.70) !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+}
+
+/* Bordes viejos claros */
+tr td[style*="border-bottom:1px solid #e5e7eb"],
+tr td[style*="border-bottom:1px solid #eee"] {
+  border-bottom: 1px solid rgba(255,255,255,.14) !important;
+}
+
+/* Bloque de códigos promocionales asignados */
+div[style*="border:1px solid #e5e7eb"] {
+  border-color: rgba(255,255,255,.24) !important;
+}
+
+div[style*="background:#eff6ff"] {
+  background: rgba(255,255,255,.14) !important;
+  color: #ffffff !important;
+}
+
+/* Inputs dentro del panel */
+input,
+textarea,
+select {
+  color: #111827 !important;
+  background: rgba(255,255,255,.94) !important;
+}
+
+/* Scroll horizontal más visible */
+.table-card::-webkit-scrollbar {
+  height: 12px;
+}
+
+.table-card::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+}
+
+.table-card::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.42);
+  border-radius: 999px;
+}
+
+/* Mejor lectura en móvil */
+@media (max-width: 800px) {
+  td,
+  th {
+    font-size: 13px;
+  }
+
+  .table-card {
+    padding: 16px;
+  }
+}
+
 </style>
 </head>
 
