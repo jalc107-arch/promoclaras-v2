@@ -4875,12 +4875,12 @@ body {
   align-items: start;
 }
 
-/* Pasa la tarjeta de botones/precio a la izquierda */
+/* Información de campaña a la derecha */
 .info-grid > .card:first-child {
   order: 2;
 }
 
-/* Pasa la información de campaña a la derecha */
+/* Precio y botones a la izquierda */
 .info-grid > .card:last-child {
   order: 1;
 }
@@ -5061,6 +5061,14 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .info-grid > .card:first-child {
+  order: 2;
+}
+
+.info-grid > .card:last-child {
+  order: 1;
+}
+
   .progress-right {
     text-align: left;
   }
@@ -5214,12 +5222,7 @@ body {
             Esta campaña no se encuentra disponible.
           </div>
 
-          <a
-            class="button button-secondary"
-            style="margin-top:16px;"
-            href="/consultar">
-            Consultar mis Códigos promocionales
-          </a>
+          
         `
         : `
           <div class="finished-box" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
@@ -5227,13 +5230,7 @@ body {
             Aún no se permiten compras.
           </div>
 
-          <a
-            class="button button-secondary"
-            style="margin-top:16px;"
-            href="/consultar">
-            Consultar mis Códigos promocionales
-          </a>
-        `
+                  `
 }
       </div>
     </div>
