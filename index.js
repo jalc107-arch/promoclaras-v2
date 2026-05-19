@@ -4870,8 +4870,19 @@ body {
 
 .info-grid {
   display: grid;
-  grid-template-columns: 1.1fr .9fr;
+  grid-template-columns: .9fr 1.1fr;
   gap: 22px;
+  align-items: start;
+}
+
+/* Pasa la tarjeta de botones/precio a la izquierda */
+.info-grid > .card:first-child {
+  order: 2;
+}
+
+/* Pasa la información de campaña a la derecha */
+.info-grid > .card:last-child {
+  order: 1;
 }
 
 .section-title {
@@ -4932,6 +4943,47 @@ body {
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
   transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.price-card > a.button:first-of-type {
+  padding: 22px 18px;
+  font-size: 23px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  background:
+    linear-gradient(135deg, rgba(34,197,94,.98), rgba(37,99,235,.95), rgba(124,58,237,.90));
+  border: 2px solid rgba(255,255,255,.55);
+  box-shadow:
+    0 22px 48px rgba(34,197,94,.35),
+    0 0 0 6px rgba(34,197,94,.12),
+    inset 0 1px 0 rgba(255,255,255,.55);
+  animation: pulseButton 1.8s infinite;
+}
+
+@keyframes pulseButton {
+  0% {
+    transform: scale(1);
+    box-shadow:
+      0 22px 48px rgba(34,197,94,.35),
+      0 0 0 6px rgba(34,197,94,.12),
+      inset 0 1px 0 rgba(255,255,255,.55);
+  }
+
+  50% {
+    transform: scale(1.025);
+    box-shadow:
+      0 26px 58px rgba(37,99,235,.45),
+      0 0 0 10px rgba(37,99,235,.14),
+      inset 0 1px 0 rgba(255,255,255,.60);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 22px 48px rgba(34,197,94,.35),
+      0 0 0 6px rgba(34,197,94,.12),
+      inset 0 1px 0 rgba(255,255,255,.55);
+  }
 }
 
 .button::before {
@@ -5117,12 +5169,7 @@ body {
   Participar ahora
 </a>
 
-      <a
-        class="button button-secondary"
-        href="/consultar">
-        Consultar mis Códigos promocionales
-      </a>
-
+      
       ${
         organizerWhatsAppPhone
           ? `
@@ -5140,7 +5187,7 @@ body {
         class="button button-whatsapp"
         target="_blank"
         href="https://wa.me/?text=${whatsappShareText}">
-        Compartir por WhatsApp
+        Compartir campaña por WhatsApp
       </a>
 
       <div class="small-note">
