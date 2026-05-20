@@ -9860,6 +9860,37 @@ app.post("/admin/test-whatsapp", async (req, res) => {
   }
 });
 
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: https://www.promoclaras.com/sitemap.xml`);
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  res.type("application/xml");
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.promoclaras.com/</loc>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.promoclaras.com/campanas</loc>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.promoclaras.com/consultar</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.promoclaras.com/organizers/login</loc>
+    <priority>0.6</priority>
+  </url>
+</urlset>`);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
