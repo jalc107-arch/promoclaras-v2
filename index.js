@@ -1385,9 +1385,26 @@ app.get("/", (req, res) => {
     <!DOCTYPE html>
     <html lang="es">
     <head>
-      <meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1"/>
-      <title>CampaClick</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+  <title>CampaClick | Campañas promocionales con códigos automáticos</title>
+
+  <meta name="description" content="CampaClick es una plataforma para crear y participar en campañas promocionales con códigos asignados automáticamente después del pago aprobado.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://www.promoclaras.com/">
+
+  <meta property="og:title" content="CampaClick | Campañas promocionales">
+  <meta property="og:description" content="Participa en campañas promocionales con códigos asignados automáticamente después del pago aprobado.">
+  <meta property="og:url" content="https://www.promoclaras.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CampaClick">
+  <meta property="og:image" content="https://www.promoclaras.com/campaclick-share.jpg">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CampaClick | Campañas promocionales">
+  <meta name="twitter:description" content="Códigos promocionales asignados automáticamente después del pago aprobado.">
+  <meta name="twitter:image" content="https://www.promoclaras.com/campaclick-share.jpg">
 
       <style>
         * {
