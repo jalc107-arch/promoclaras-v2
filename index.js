@@ -31,6 +31,10 @@ app.get("/campaclick-share.jpg", (req, res) => {
 
 app.use("/img", express.static("public/img"));
 
+app.get("/google927c009d9a2214fc.html", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send("google-site-verification: google927c009d9a2214fc.html");
+});
 
 app.use(
   session({
