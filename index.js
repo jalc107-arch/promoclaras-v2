@@ -3952,8 +3952,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
       style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
     >
       <option value="">Todos</option>
-      <option value="approved">Aprobados</option>
-      <option value="paid">Pagados</option>
+      <option value="paid">Pagos aprobados</option>
       <option value="created">Pendientes / creados</option>
       <option value="failed">Fallidos</option>
     </select>
@@ -4038,7 +4037,14 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
                         );
 
                         return `
-                          <tr>
+  <tr
+    class="order-row"
+    data-buyer="${String(order.buyers?.full_name || "").toLowerCase()}"
+    data-phone="${String(order.buyers?.phone || "").replace(/\D/g, "")}"
+    data-payment="${String(order.payment_status || "").toLowerCase()}"
+    data-whatsapp="${order.whatsapp_sent ? "enviado" : "pendiente"}"
+    data-codes="${orderTickets.length > 0 ? "con" : "sin"}"
+  >
                             <td>${order.buyers?.full_name || "-"}</td>
                             <td>${order.buyers?.phone || "-"}</td>
                             <td>${order.qty || 0}</td>
@@ -4126,6 +4132,96 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
           </div>
 
         </div>
+
+<script>
+  function applyOrderFilters() {
+    const searchValue = String(document.getElementById("filterSearch")?.value || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const cleanSearchPhone = searchValue.replace(/\D/g, "");
+
+    const paymentValue = String(document.getElementById("filterPayment")?.value || "").toLowerCase();
+    const whatsappValue = String(document.getElementById("filterWhatsapp")?.value || "").toLowerCase();
+    const codesValue = String(document.getElementById("filterCodes")?.value || "").toLowerCase();
+
+    const rows = document.querySelectorAll(".order-row");
+
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const buyer = String(row.dataset.buyer || "").toLowerCase();
+      const phone = String(row.dataset.phone || "");
+      const payment = String(row.dataset.payment || "").toLowerCase();
+      const whatsapp = String(row.dataset.whatsapp || "").toLowerCase();
+      const codes = String(row.dataset.codes || "").toLowerCase();
+
+      let show = true;
+
+      if (searchValue) {
+        const matchBuyer = buyer.includes(searchValue);
+        const matchPhone = cleanSearchPhone && phone.includes(cleanSearchPhone);
+
+        if (!matchBuyer && !matchPhone) {
+          show = false;
+        }
+      }
+
+      if (paymentValue && payment !== paymentValue) {
+        show = false;
+      }
+
+      if (whatsappValue && whatsapp !== whatsappValue) {
+        show = false;
+      }
+
+      if (codesValue && codes !== codesValue) {
+        show = false;
+      }
+
+      row.style.display = show ? "" : "none";
+
+      if (show) {
+        visibleCount++;
+      }
+    });
+
+    const counter = document.getElementById("filterResultCount");
+
+    if (counter) {
+      counter.textContent = "Registros visibles: " + visibleCount + " de " + rows.length;
+    }
+  }
+
+  function clearOrderFilters() {
+    const search = document.getElementById("filterSearch");
+    const payment = document.getElementById("filterPayment");
+    const whatsapp = document.getElementById("filterWhatsapp");
+    const codes = document.getElementById("filterCodes");
+
+    if (search) search.value = "";
+    if (payment) payment.value = "";
+    if (whatsapp) whatsapp.value = "";
+    if (codes) codes.value = "";
+
+    applyOrderFilters();
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    ["filterSearch", "filterPayment", "filterWhatsapp", "filterCodes"].forEach(id => {
+      const element = document.getElementById(id);
+
+      if (!element) return;
+
+      element.addEventListener("input", applyOrderFilters);
+      element.addEventListener("change", applyOrderFilters);
+    });
+
+    applyOrderFilters();
+  });
+</script>
+        
       </body>
       </html>
     `);
@@ -4183,7 +4279,7 @@ app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-whatsapp", async (r
       console.log("No se pudo reenviar WhatsApp:", result);
     }
 
-    return res.redirect(`/organizers/${organizerId}/panel`);
+    return res.redirect(`/organizers/${organizerId}/campanas/${order.rifa_id}/detalle`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
