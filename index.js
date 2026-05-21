@@ -3920,6 +3920,100 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
           <div class="card">
             <h2>Órdenes y códigos de esta campaña</h2>
 
+            <div style="
+  margin:16px 0 18px;
+  padding:14px;
+  background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:18px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;
+">
+
+  <div>
+    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+      Buscar comprador o teléfono
+    </label>
+    <input
+      id="filterSearch"
+      type="text"
+      placeholder="Nombre o teléfono"
+      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
+    >
+  </div>
+
+  <div>
+    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+      Estado de pago
+    </label>
+    <select
+      id="filterPayment"
+      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
+    >
+      <option value="">Todos</option>
+      <option value="approved">Aprobados</option>
+      <option value="paid">Pagados</option>
+      <option value="created">Pendientes / creados</option>
+      <option value="failed">Fallidos</option>
+    </select>
+  </div>
+
+  <div>
+    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+      WhatsApp
+    </label>
+    <select
+      id="filterWhatsapp"
+      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
+    >
+      <option value="">Todos</option>
+      <option value="enviado">Enviados</option>
+      <option value="pendiente">Pendientes</option>
+    </select>
+  </div>
+
+  <div>
+    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+      Códigos
+    </label>
+    <select
+      id="filterCodes"
+      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
+    >
+      <option value="">Todos</option>
+      <option value="con">Con códigos asignados</option>
+      <option value="sin">Sin códigos asignados</option>
+    </select>
+  </div>
+
+  <div style="display:flex;align-items:end;">
+    <button
+      type="button"
+      onclick="clearOrderFilters()"
+      style="
+        width:100%;
+        padding:12px;
+        background:#111827;
+        color:white;
+        border:none;
+        border-radius:12px;
+        font-weight:bold;
+        cursor:pointer;
+      "
+    >
+      Limpiar filtros
+    </button>
+  </div>
+
+</div>
+
+<div
+  id="filterResultCount"
+  style="margin-bottom:12px;color:white;font-weight:bold;"
+>
+</div>
+
             <table>
               <thead>
                 <tr>
