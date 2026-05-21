@@ -2587,17 +2587,19 @@ let tickets = [];
 
 if (campaignIds.length > 0) {
   const { data: ordersData, error: ordersError } = await supabase
-    .from("orders")
-    .select(`
-      *,
-      buyers(*)
-    `)
-    .in("rifa_id", campaignIds)
-    .order("created_at", { ascending: false });
+  .from("orders")
+  .select(`
+    *,
+    buyers(*),
+    rifas(id,title,slug)
+  `)
+  .in("rifa_id", campaignIds)
+  .order("rifa_id", { ascending: true })
+  .order("created_at", { ascending: false });
 
-  if (ordersError) throw ordersError;
-  orders = ordersData || [];
-
+if (ordersError) throw ordersError;
+orders = ordersData || [];
+  
   const orderIds = orders.map(o => o.id);
 
   if (orderIds.length > 0) {
@@ -3589,12 +3591,13 @@ Aún no tienes campañas creadas.
 
 <div class="table-card" style="margin-top:30px;">
 
-<h2>Últimas órdenes</h2>
+<h2>Últimas órdenes por campaña</h2>
 
 <table>
 
 <thead>
 <tr>
+<th>Campaña</th>
 <th>Comprador</th>
 <th>Teléfono</th>
 <th>Cantidad</th>
@@ -3607,65 +3610,78 @@ Aún no tienes campañas creadas.
 
 <tbody>
 
-${orders.map(order=>`
+${
+  orders.length > 0
+    ? orders.map(order => `
+      <tr>
 
-<tr>
+      <td>
+        <b>${order.rifas?.title || "-"}</b>
+      </td>
 
-<td>${order.buyers?.full_name || "-"}</td>
+      <td>${order.buyers?.full_name || "-"}</td>
 
-<td>${order.buyers?.phone || "-"}</td>
+      <td>${order.buyers?.phone || "-"}</td>
 
-<td>${order.qty}</td>
+      <td>${order.qty}</td>
 
-<td>
-<span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
-${order.payment_status === "paid" ? "approved" : order.payment_status}</span>
-</td>
-
-<td>
-  <span class="badge ${order.whatsapp_sent ? "approved" : "pending"}">
-    ${order.whatsapp_sent ? "enviado" : "pendiente"}
-  </span>
-</td>
-
-<td>
-${new Date(order.created_at).toLocaleString("es-CO")}
-</td>
-
-<td>
-  ${
-    order.payment_status === "paid"
-      ? `
-        <form method="POST" action="/organizers/${organizer.id}/ordenes/${order.id}/reenviar-whatsapp">
-          <button
-            type="submit"
-            onclick="return confirm('¿Reenviar los códigos por WhatsApp a este comprador?');"
-            style="
-              padding:9px 12px;
-              background:#16a34a;
-              color:white;
-              border:none;
-              border-radius:10px;
-              font-weight:bold;
-              cursor:pointer;
-              font-size:13px;
-              white-space:nowrap;
-            ">
-            Reenviar códigos
-          </button>
-        </form>
-      `
-      : `
-        <span style="color:#9ca3af;font-size:12px;">
-          No disponible
+      <td>
+        <span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
+          ${order.payment_status === "paid" ? "approved" : order.payment_status}
         </span>
-      `
-  }
-</td>
+      </td>
 
-</tr>
+      <td>
+        <span class="badge ${order.whatsapp_sent ? "approved" : "pending"}">
+          ${order.whatsapp_sent ? "enviado" : "pendiente"}
+        </span>
+      </td>
 
-`).join("")}
+      <td>
+        ${new Date(order.created_at).toLocaleString("es-CO")}
+      </td>
+
+      <td>
+        ${
+          order.payment_status === "paid"
+            ? `
+              <form method="POST" action="/organizers/${organizer.id}/ordenes/${order.id}/reenviar-whatsapp">
+                <button
+                  type="submit"
+                  onclick="return confirm('¿Reenviar los códigos por WhatsApp a este comprador?');"
+                  style="
+                    padding:9px 12px;
+                    background:#16a34a;
+                    color:white;
+                    border:none;
+                    border-radius:10px;
+                    font-weight:bold;
+                    cursor:pointer;
+                    font-size:13px;
+                    white-space:nowrap;
+                  ">
+                  Reenviar códigos
+                </button>
+              </form>
+            `
+            : `
+              <span style="color:#9ca3af;font-size:12px;">
+                No disponible
+              </span>
+            `
+        }
+      </td>
+
+      </tr>
+    `).join("")
+    : `
+      <tr>
+        <td colspan="8" style="padding:18px;text-align:center;color:#6b7280;">
+          Aún no hay órdenes registradas.
+        </td>
+      </tr>
+    `
+}
 
 </tbody>
 
@@ -3683,7 +3699,7 @@ ${
     const campaignOrderIds = campaignOrders.map(order => order.id);
 
     const campaignTickets = tickets.filter(ticket =>
-  campaignOrderIds.map(String).includes(String(ticket.order_id))
+  String(ticket.rifa_id) === String(campaign.id)
 );
 
     return `
