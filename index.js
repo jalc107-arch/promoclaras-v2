@@ -9131,7 +9131,58 @@ const adminCampaignRows = (campaigns || []).map(c => {
     `;
   }
 
-  return `
+ return `
+    <tr>
+      <td colspan="9" style="padding:0;border-bottom:none;">
+        <div style="
+          margin-top:18px;
+          margin-bottom:8px;
+          padding:14px;
+          background:#f8fafc;
+          border:1px solid #e5e7eb;
+          border-radius:14px;
+        ">
+          <div style="font-weight:bold;font-size:16px;margin-bottom:10px;color:#111827;">
+            Liquidación individual de campaña: ${c.title || "-"}
+          </div>
+
+          <div style="
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+            gap:10px;
+          ">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;">
+              <div style="color:#1e3a8a;font-weight:bold;font-size:12px;">Recaudo aprobado</div>
+              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
+                ${moneyCOP(campaignFinancial.grossRevenue)}
+              </div>
+            </div>
+
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;">
+              <div style="color:#166534;font-weight:bold;font-size:12px;">Comisión CampaClick 5%</div>
+              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
+                ${moneyCOP(campaignFinancial.platformFee)}
+              </div>
+            </div>
+
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;">
+              <div style="color:#9a3412;font-weight:bold;font-size:12px;">Wompi estimado</div>
+              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
+                ${moneyCOP(campaignFinancial.gatewayFee)}
+              </div>
+            </div>
+
+            <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:12px;padding:12px;">
+              <div style="color:#065f46;font-weight:bold;font-size:12px;">Neto aproximado a girar</div>
+              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
+                ${moneyCOP(campaignFinancial.netToOrganizer)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+
     <tr>
       <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
         ${c.title || "-"}
