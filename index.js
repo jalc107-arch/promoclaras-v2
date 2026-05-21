@@ -6900,7 +6900,7 @@ if (isLottery) {
               <div>
                 <label>Cantidad de códigos</label>
 
-                <input
+               <input
   type="number"
   id="qty"
   name="qty"
@@ -6908,7 +6908,6 @@ if (isLottery) {
   max="${Math.min(20, Number(campaign.available_tickets || 0))}"
   value="${minimumQty}"
   required
-  onchange="syncSelectedCount(this)"
 >
 
                 <div class="info-box">
@@ -6939,20 +6938,15 @@ ${
         <div class="lottery-board">
           ${
             availableLotteryNumbers.map(number => `
-              <label class="lottery-number">
-                <input
-  type="number"
-  id="qty"
-  name="qty"
-  min="${minimumQty}"
-  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
-  value="${minimumQty}"
-  required
-  onchange="resetSelectedNumbers()"
->
-                <span>${number}</span>
-              </label>
-            `).join("")
+  <label class="lottery-number">
+    <input
+      type="checkbox"
+      name="selected_numbers"
+      value="${number}"
+    >
+    <span>${number}</span>
+  </label>
+`).join("")
           }
         </div>
 
