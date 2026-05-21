@@ -3865,6 +3865,78 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
               border-radius: 22px;
             }
           }
+
+.order-filters {
+  margin: 18px 0 20px;
+  padding: 18px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 20px;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr 180px;
+  gap: 14px;
+  align-items: end;
+}
+
+.order-filters label {
+  display: block;
+  margin-bottom: 7px;
+  font-weight: 900;
+  color: white;
+  font-size: 14px;
+}
+
+.order-filters input,
+.order-filters select {
+  width: 100%;
+  height: 46px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,.28);
+  background: rgba(255,255,255,.94);
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+}
+
+.filter-button-box {
+  display: flex;
+  align-items: end;
+}
+
+.filter-button-box button {
+  width: 100%;
+  height: 46px;
+  padding: 0 16px;
+  background: #111827;
+  color: white;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .order-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-search-box {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 650px) {
+  .order-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-search-box {
+    grid-column: auto;
+  }
+}
+          
         </style>
       </head>
 
@@ -3920,52 +3992,37 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
           <div class="card">
             <h2>Órdenes y códigos de esta campaña</h2>
 
-            <div style="
-  margin:16px 0 18px;
-  padding:14px;
-  background:rgba(255,255,255,.10);
-  border:1px solid rgba(255,255,255,.22);
-  border-radius:18px;
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:12px;
-">
+            <div class="order-filters">
 
-  <div>
-    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+  <div class="filter-search-box">
+    <label>
       Buscar comprador o teléfono
     </label>
     <input
       id="filterSearch"
       type="text"
       placeholder="Nombre o teléfono"
-      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
     >
   </div>
 
   <div>
-    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+    <label>
       Estado de pago
     </label>
-    <select
-      id="filterPayment"
-      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
-    >
+    <select id="filterPayment">
       <option value="">Todos</option>
-      <option value="paid">Pagos aprobados</option>
+      <option value="approved">Aprobados</option>
+      <option value="paid">Pagados</option>
       <option value="created">Pendientes / creados</option>
       <option value="failed">Fallidos</option>
     </select>
   </div>
 
   <div>
-    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+    <label>
       WhatsApp
     </label>
-    <select
-      id="filterWhatsapp"
-      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
-    >
+    <select id="filterWhatsapp">
       <option value="">Todos</option>
       <option value="enviado">Enviados</option>
       <option value="pendiente">Pendientes</option>
@@ -3973,38 +4030,29 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
   </div>
 
   <div>
-    <label style="display:block;margin-bottom:6px;font-weight:bold;color:white;">
+    <label>
       Códigos
     </label>
-    <select
-      id="filterCodes"
-      style="width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;"
-    >
+    <select id="filterCodes">
       <option value="">Todos</option>
       <option value="con">Con códigos asignados</option>
       <option value="sin">Sin códigos asignados</option>
     </select>
   </div>
 
-  <div style="display:flex;align-items:end;">
-    <button
-      type="button"
-      onclick="clearOrderFilters()"
-      style="
-        width:100%;
-        padding:12px;
-        background:#111827;
-        color:white;
-        border:none;
-        border-radius:12px;
-        font-weight:bold;
-        cursor:pointer;
-      "
-    >
+  <div class="filter-button-box">
+    <button type="button" onclick="clearOrderFilters()">
       Limpiar filtros
     </button>
   </div>
 
+</div>
+
+<div
+  id="filterResultCount"
+  style="margin-bottom:12px;color:white;font-weight:bold;"
+>
+</div>
 </div>
 
 <div
