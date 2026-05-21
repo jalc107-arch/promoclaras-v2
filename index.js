@@ -7169,7 +7169,8 @@ if (isLotteryCampaign(campaign)) {
           <h1>Número no disponible</h1>
 
           <p>
-            Uno o varios números seleccionados ya fueron vendidos. Por favor vuelve a escoger.
+            Uno o varios números seleccionados ya fueron vendidos.
+            Por favor vuelve a escoger números disponibles.
           </p>
 
           <a
@@ -7183,8 +7184,8 @@ if (isLotteryCampaign(campaign)) {
     `);
   }
 }
-    
-    const availableTickets = Number(campaign.available_tickets || 0);
+
+const availableTickets = Number(campaign.available_tickets || 0);
 
 if (qty > availableTickets) {
   return res.status(400).send(`
@@ -7216,72 +7217,6 @@ if (qty > availableTickets) {
 }
 
 const manualLotteryCombinations = finalSelectedNumbers;
-    
-  } catch (selectionError) {
-    return res.status(400).send(`
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Selección inválida</title>
-      </head>
-      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-          <h1>Selección inválida</h1>
-
-          <p>
-            ${selectionError.message}
-          </p>
-
-          <a
-            href="/campanas/${campaign.slug}/comprar"
-            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
-            Volver a seleccionar
-          </a>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-
-  const { data: existingSelectedTickets, error: existingSelectedError } = await supabase
-    .from("tickets")
-    .select("combination")
-    .eq("rifa_id", campaign.id)
-    .in("combination", manualLotteryCombinations);
-
-  if (existingSelectedError) throw existingSelectedError;
-
-  if (existingSelectedTickets && existingSelectedTickets.length > 0) {
-    return res.status(400).send(`
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Número no disponible</title>
-      </head>
-      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
-          <h1>Número no disponible</h1>
-
-          <p>
-            Uno o varios números seleccionados ya fueron comprados por otra persona.
-            Por favor vuelve a escoger números disponibles.
-          </p>
-
-          <a
-            href="/campanas/${campaign.slug}/comprar"
-            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
-            Volver a seleccionar
-          </a>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-}
     
     let referrerId = null;
 
