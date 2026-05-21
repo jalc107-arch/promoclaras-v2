@@ -4054,8 +4054,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
 </div>
 
             <table>
-            
-              <thead>
+            <thead>
                 <tr>
                   <th>Comprador</th>
                   <th>Teléfono</th>
