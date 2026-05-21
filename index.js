@@ -9157,7 +9157,7 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
 
     if (error) throw error;
 
-   await sendWhatsAppMessage(
+   const whatsappResult = await sendWhatsAppMessage(
   organizer.phone,
   [
     `Hola ${organizer.full_name || ""}.`,
@@ -9171,6 +9171,8 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
   ].join("\n")
 );
 
+console.log("Resultado WhatsApp aprobación organizador:", JSON.stringify(whatsappResult, null, 2));
+    
     return res.redirect("/admin/organizadores");
   } catch (error) {
     return res.status(500).send(error.message);
