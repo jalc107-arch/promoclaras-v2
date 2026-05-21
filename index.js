@@ -6497,6 +6497,29 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
     const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
     const minimumQtyText = getMinimumQtyText(campaign.price_per_ticket);
 
+const isLottery = isLotteryCampaign(campaign);
+
+let usedLotteryNumbers = [];
+let availableLotteryNumbers = [];
+
+if (isLottery) {
+  const { data: existingTickets, error: existingTicketsError } = await supabase
+    .from("tickets")
+    .select("combination")
+    .eq("rifa_id", campaign.id);
+
+  if (existingTicketsError) throw existingTicketsError;
+
+  usedLotteryNumbers = (existingTickets || [])
+    .map(t => String(t.combination || ""))
+    .filter(Boolean);
+
+  const usedSet = new Set(usedLotteryNumbers);
+
+  availableLotteryNumbers = getAllLotteryNumbersByDrawMode(campaign.draw_mode)
+    .filter(number => !usedSet.has(number));
+}
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -6698,6 +6721,87 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
             line-height: 1.4;
           }
 
+          .lottery-board-box {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255,255,255,.11);
+  border: 1px solid rgba(255,255,255,.24);
+  color: rgba(255,255,255,.88);
+}
+
+.lottery-board-box h3 {
+  margin: 0 0 8px;
+  color: white;
+  font-size: 21px;
+}
+
+.lottery-board-box p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+  color: rgba(255,255,255,.76);
+}
+
+.selected-counter {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 15px;
+  background: rgba(37,99,235,.20);
+  border: 1px solid rgba(147,197,253,.30);
+  font-weight: bold;
+  text-align: center;
+}
+
+.lottery-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 9px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.lottery-number {
+  cursor: pointer;
+}
+
+.lottery-number input {
+  display: none;
+}
+
+.lottery-number span {
+  display: block;
+  padding: 11px 8px;
+  border-radius: 14px;
+  text-align: center;
+  font-weight: 900;
+  background: rgba(255,255,255,.14);
+  color: white;
+  border: 1px solid rgba(255,255,255,.24);
+  transition: transform .15s ease, background .15s ease, border .15s ease;
+}
+
+.lottery-number input:checked + span {
+  background: linear-gradient(135deg, #22c55e, #2563eb);
+  border-color: rgba(255,255,255,.65);
+  transform: scale(1.04);
+}
+
+.lottery-board::-webkit-scrollbar {
+  width: 10px;
+}
+
+.lottery-board::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.10);
+  border-radius: 999px;
+}
+
+.lottery-board::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.36);
+  border-radius: 999px;
+}
+
+
           @media (max-width: 700px) {
             body {
               align-items: flex-start;
@@ -6767,13 +6871,15 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
                 <label>Cantidad de códigos</label>
 
                 <input
-                  type="number"
-                  name="qty"
-                  min="${minimumQty}"
-                  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
-                  value="${minimumQty}"
-                  required
-                >
+  type="number"
+  id="qty"
+  name="qty"
+  min="${minimumQty}"
+  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
+  value="${minimumQty}"
+  required
+  onchange="syncSelectedCount()"
+>
 
                 <div class="info-box">
                   Compra mínima para esta campaña:
@@ -6784,6 +6890,47 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
                   <b>Regla de compra:</b><br/>
                   ${minimumQtyText}
                 </div>
+
+${
+  isLottery
+    ? `
+      <div class="lottery-board-box">
+        <h3>Escoge tus números disponibles</h3>
+
+        <p>
+          Selecciona exactamente la misma cantidad de números que vas a comprar.
+          Los números que ya fueron vendidos no aparecen disponibles.
+        </p>
+
+        <div class="selected-counter">
+          Seleccionados: <b id="selectedCount">0</b> / <b id="requiredCount">${minimumQty}</b>
+        </div>
+
+        <div class="lottery-board">
+          ${
+            availableLotteryNumbers.map(number => `
+              <label class="lottery-number">
+                <input
+                  type="checkbox"
+                  name="selected_numbers"
+                  value="${number}"
+                  onchange="syncSelectedCount()"
+                >
+                <span>${number}</span>
+              </label>
+            `).join("")
+          }
+        </div>
+
+        <div class="small-note">
+          Esta selección manual solo aplica para campañas de lotería.
+          En Baloto los códigos siguen siendo asignados automáticamente.
+        </div>
+      </div>
+    `
+    : ""
+}
+                
               </div>
 
             </div>
@@ -6801,6 +6948,26 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
             Volver a la campaña
           </a>
         </div>
+
+<script>
+  function syncSelectedCount() {
+    const qtyInput = document.getElementById("qty");
+    const requiredCount = document.getElementById("requiredCount");
+    const selectedCount = document.getElementById("selectedCount");
+    const selectedNumbers = document.querySelectorAll('input[name="selected_numbers"]:checked');
+
+    if (requiredCount && qtyInput) {
+      requiredCount.textContent = qtyInput.value || "0";
+    }
+
+    if (selectedCount) {
+      selectedCount.textContent = selectedNumbers.length;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", syncSelectedCount);
+</script>
+        
       </body>
       </html>
     `);
