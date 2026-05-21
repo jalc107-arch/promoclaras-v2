@@ -1369,7 +1369,7 @@ function generateBalotoCombination(drawMode) {
   throw new Error("No fue posible generar una combinación válida para esta modalidad de Baloto.");
 }
 
-async function assignTicketsToOrder(orderId) {
+async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(`
@@ -1379,6 +1379,7 @@ async function assignTicketsToOrder(orderId) {
       rifa_id,
       rifas (
         id,
+        draw_provider,
         draw_mode,
         max_tickets
       )
@@ -1391,59 +1392,79 @@ async function assignTicketsToOrder(orderId) {
 
   const qty = Number(orderData.qty || 0);
   const maxTickets = Number(orderData.rifas?.max_tickets || 0);
+  const drawMode = orderData.rifas?.draw_mode;
 
   const { data: existingTickets, error: existingError } = await supabase
-  .from("tickets")
-  .select("ticket_code, combination")
-  .eq("rifa_id", orderData.rifa_id);
+    .from("tickets")
+    .select("ticket_code, combination")
+    .eq("rifa_id", orderData.rifa_id);
 
   if (existingError) throw existingError;
 
   const usedTicketCodes = new Set(
-  (existingTickets || []).map(t => String(t.ticket_code))
-);
+    (existingTickets || []).map(t => String(t.ticket_code))
+  );
 
-const usedCombinations = new Set(
-  (existingTickets || []).map(t => String(t.combination))
-);
+  const usedCombinations = new Set(
+    (existingTickets || []).map(t => String(t.combination))
+  );
 
   const assignedTickets = [];
   let current = 1;
 
-while (assignedTickets.length < qty && current <= maxTickets) {
-  const ticketCode = String(current).padStart(4, "0");
+  const isManualLottery = manualCombinations.length > 0;
 
-  if (usedTicketCodes.has(ticketCode)) {
+  if (isManualLottery) {
+    if (manualCombinations.length !== qty) {
+      throw new Error("La cantidad de números seleccionados no coincide con la cantidad comprada.");
+    }
+
+    for (const combination of manualCombinations) {
+      if (usedCombinations.has(combination)) {
+        throw new Error(`El número ${combination} ya no está disponible.`);
+      }
+    }
+  }
+
+  while (assignedTickets.length < qty && current <= maxTickets) {
+    const ticketCode = String(current).padStart(4, "0");
+
+    if (usedTicketCodes.has(ticketCode)) {
+      current++;
+      continue;
+    }
+
+    let combination = "";
+
+    if (isManualLottery) {
+      combination = manualCombinations[assignedTickets.length];
+    } else {
+      let attempts = 0;
+
+      do {
+        combination = generateTicketCode(drawMode);
+        attempts++;
+      } while (usedCombinations.has(combination) && attempts < 1000);
+
+      if (!combination || usedCombinations.has(combination)) {
+        throw new Error("No fue posible generar combinación única");
+      }
+    }
+
+    assignedTickets.push({
+      rifa_id: orderData.rifa_id,
+      order_id: orderData.id,
+      buyer_id: orderData.buyer_id,
+      ticket_code: ticketCode,
+      combination,
+      status: "active"
+    });
+
+    usedTicketCodes.add(ticketCode);
+    usedCombinations.add(combination);
+
     current++;
-    continue;
   }
-
-  let combination = "";
-  let attempts = 0;
-
-  do {
-    combination = generateTicketCode(orderData.rifas?.draw_mode);
-    attempts++;
-  } while (usedCombinations.has(combination) && attempts < 1000);
-
-  if (!combination || usedCombinations.has(combination)) {
-    throw new Error("No fue posible generar combinación única");
-  }
-
-  assignedTickets.push({
-    rifa_id: orderData.rifa_id,
-    order_id: orderData.id,
-    buyer_id: orderData.buyer_id,
-    ticket_code: ticketCode,
-    combination,
-    status: "active"
-  });
-
-  usedTicketCodes.add(ticketCode);
-  usedCombinations.add(combination);
-
-  current++;
-}
 
   if (assignedTickets.length < qty) {
     throw new Error("No hay suficientes tickets disponibles");
@@ -6988,6 +7009,18 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
     const qty = Number(req.body.qty || 0);
     const referralCode = normalizeReferralCode(req.body.referral_code);
 
+    let selectedNumbers = req.body.selected_numbers || [];
+
+if (!Array.isArray(selectedNumbers)) {
+  selectedNumbers = selectedNumbers ? [selectedNumbers] : [];
+}
+
+    let selectedNumbers = req.body.selected_numbers || [];
+
+if (!Array.isArray(selectedNumbers)) {
+  selectedNumbers = selectedNumbers ? [selectedNumbers] : [];
+}
+
     if (!buyerName || !cleanBuyerPhone) {
   return res.status(400).send("Faltan nombre o teléfono");
 }
@@ -7074,6 +7107,80 @@ if (qty < minimumQty) {
   `);
 }    
 
+let finalSelectedNumbers = [];
+
+if (isLotteryCampaign(campaign)) {
+  try {
+    finalSelectedNumbers = validateManualLotterySelection(
+      campaign.draw_mode,
+      selectedNumbers,
+      qty
+    );
+  } catch (selectionError) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Selección inválida</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Selección inválida</h1>
+
+          <p>
+            ${selectionError.message}
+          </p>
+
+          <a
+            href="/campanas/${campaign.slug}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a escoger números
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
+  const { data: existingTickets, error: existingTicketsError } = await supabase
+    .from("tickets")
+    .select("combination")
+    .eq("rifa_id", campaign.id)
+    .in("combination", finalSelectedNumbers);
+
+  if (existingTicketsError) throw existingTicketsError;
+
+  if (existingTickets && existingTickets.length > 0) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Número no disponible</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Número no disponible</h1>
+
+          <p>
+            Uno o varios números seleccionados ya fueron vendidos. Por favor vuelve a escoger.
+          </p>
+
+          <a
+            href="/campanas/${campaign.slug}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a escoger números
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+}
+    
     const availableTickets = Number(campaign.available_tickets || 0);
 
 if (qty > availableTickets) {
@@ -7105,6 +7212,81 @@ if (qty > availableTickets) {
   `);
 }
 
+let manualLotteryCombinations = [];
+
+if (isLotteryCampaign(campaign)) {
+  try {
+    manualLotteryCombinations = validateManualLotterySelection(
+      campaign.draw_mode,
+      selectedNumbers,
+      qty
+    );
+  } catch (selectionError) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Selección inválida</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Selección inválida</h1>
+
+          <p>
+            ${selectionError.message}
+          </p>
+
+          <a
+            href="/campanas/${campaign.slug}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a seleccionar
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
+  const { data: existingSelectedTickets, error: existingSelectedError } = await supabase
+    .from("tickets")
+    .select("combination")
+    .eq("rifa_id", campaign.id)
+    .in("combination", manualLotteryCombinations);
+
+  if (existingSelectedError) throw existingSelectedError;
+
+  if (existingSelectedTickets && existingSelectedTickets.length > 0) {
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Número no disponible</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Número no disponible</h1>
+
+          <p>
+            Uno o varios números seleccionados ya fueron comprados por otra persona.
+            Por favor vuelve a escoger números disponibles.
+          </p>
+
+          <a
+            href="/campanas/${campaign.slug}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a seleccionar
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+}
+    
     let referrerId = null;
 
 if (campaign.referral_program_enabled && referralCode) {
@@ -7159,20 +7341,21 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
     const commission = 0;
 
     const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-  rifa_id: campaign.id,
-  buyer_id: buyer.id,
-  qty,
-  subtotal,
-  total_paid: totalPaid,
-  commission,
-  payment_status: "created",
-  referral_code: referralCode || null,
-  referrer_id: referrerId
-})
-      .select()
-      .single();
+  .from("orders")
+  .insert({
+    rifa_id: campaign.id,
+    buyer_id: buyer.id,
+    qty,
+    subtotal,
+    total_paid: totalPaid,
+    commission,
+    payment_status: "created",
+    referral_code: referralCode || null,
+    referrer_id: referrerId,
+    selected_numbers: manualLotteryCombinations.length > 0 ? manualLotteryCombinations : null
+  })
+  .select()
+  .single();
 
     if (orderError) throw orderError;
 
@@ -7273,6 +7456,8 @@ if (wompiTransactionId && payment.status !== "approved") {
 
    if (!existingTickets || existingTickets.length === 0) {
   await assignTicketsToOrder(orderId);
+
+     
 
   const { data: updatedOrderData } = await supabase
     .from("orders")
