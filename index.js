@@ -3873,7 +3873,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
   border: 1px solid rgba(255,255,255,.22);
   border-radius: 20px;
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr 180px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(170px, 1fr) minmax(150px, .8fr) minmax(150px, .8fr) minmax(150px, .7fr);
   gap: 14px;
   align-items: end;
 }
@@ -4010,12 +4010,11 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
       Estado de pago
     </label>
     <select id="filterPayment">
-      <option value="">Todos</option>
-      <option value="approved">Aprobados</option>
-      <option value="paid">Pagados</option>
-      <option value="created">Pendientes / creados</option>
-      <option value="failed">Fallidos</option>
-    </select>
+  <option value="">Todos</option>
+  <option value="paid">Aprobados / pagados</option>
+  <option value="created">Pendientes / creados</option>
+  <option value="failed">Fallidos</option>
+</select>
   </div>
 
   <div>
@@ -4053,15 +4052,9 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
   style="margin-bottom:12px;color:white;font-weight:bold;"
 >
 </div>
-</div>
-
-<div
-  id="filterResultCount"
-  style="margin-bottom:12px;color:white;font-weight:bold;"
->
-</div>
 
             <table>
+            
               <thead>
                 <tr>
                   <th>Comprador</th>
