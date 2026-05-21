@@ -6908,7 +6908,7 @@ if (isLottery) {
   max="${Math.min(20, Number(campaign.available_tickets || 0))}"
   value="${minimumQty}"
   required
-  onchange="syncSelectedCount()"
+  onchange="syncSelectedCount(this)"
 >
 
                 <div class="info-box">
@@ -6941,11 +6941,15 @@ ${
             availableLotteryNumbers.map(number => `
               <label class="lottery-number">
                 <input
-                  type="checkbox"
-                  name="selected_numbers"
-                  value="${number}"
-                  onchange="syncSelectedCount()"
-                >
+  type="number"
+  id="qty"
+  name="qty"
+  min="${minimumQty}"
+  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
+  value="${minimumQty}"
+  required
+  onchange="resetSelectedNumbers()"
+>
                 <span>${number}</span>
               </label>
             `).join("")
@@ -6980,11 +6984,19 @@ ${
         </div>
 
 <script>
-  function syncSelectedCount() {
+  function syncSelectedCount(changedCheckbox = null) {
     const qtyInput = document.getElementById("qty");
     const requiredCount = document.getElementById("requiredCount");
     const selectedCount = document.getElementById("selectedCount");
-    const selectedNumbers = document.querySelectorAll('input[name="selected_numbers"]:checked');
+
+    const qty = Number(qtyInput?.value || 0);
+    let selectedNumbers = document.querySelectorAll('input[name="selected_numbers"]:checked');
+
+    if (selectedNumbers.length > qty && changedCheckbox) {
+      changedCheckbox.checked = false;
+      alert("Solo puedes seleccionar la misma cantidad de números que vas a comprar.");
+      selectedNumbers = document.querySelectorAll('input[name="selected_numbers"]:checked');
+    }
 
     if (requiredCount && qtyInput) {
       requiredCount.textContent = qtyInput.value || "0";
@@ -6995,7 +7007,27 @@ ${
     }
   }
 
-  document.addEventListener("DOMContentLoaded", syncSelectedCount);
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('input[name="selected_numbers"]').forEach(input => {
+      input.addEventListener("change", function () {
+        syncSelectedCount(this);
+      });
+    });
+
+    const qtyInput = document.getElementById("qty");
+
+    if (qtyInput) {
+      qtyInput.addEventListener("change", () => {
+        document.querySelectorAll('input[name="selected_numbers"]').forEach(input => {
+          input.checked = false;
+        });
+
+        syncSelectedCount();
+      });
+    }
+
+    syncSelectedCount();
+  });
 </script>
         
       </body>
