@@ -1373,17 +1373,18 @@ async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(`
-      id,
-      qty,
-      buyer_id,
-      rifa_id,
-      rifas (
-        id,
-        draw_provider,
-        draw_mode,
-        max_tickets
-      )
-    `)
+  id,
+  qty,
+  buyer_id,
+  rifa_id,
+  selected_numbers,
+  rifas (
+    id,
+    draw_provider,
+    draw_mode,
+    max_tickets
+  )
+`)
     .eq("id", orderId)
     .single();
 
@@ -1412,19 +1413,27 @@ async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const assignedTickets = [];
   let current = 1;
 
-  const isManualLottery = manualCombinations.length > 0;
+  const savedSelectedNumbers = Array.isArray(orderData.selected_numbers)
+  ? orderData.selected_numbers
+  : [];
+
+const isManualLottery = isLotteryCampaign(orderData.rifas) && savedSelectedNumbers.length > 0;
+
+const finalManualCombinations = isManualLottery
+  ? savedSelectedNumbers
+  : manualCombinations;
 
   if (isManualLottery) {
-    if (manualCombinations.length !== qty) {
-      throw new Error("La cantidad de números seleccionados no coincide con la cantidad comprada.");
-    }
+  if (finalManualCombinations.length !== qty) {
+    throw new Error("La cantidad de números seleccionados no coincide con la cantidad comprada.");
+  }
 
-    for (const combination of manualCombinations) {
-      if (usedCombinations.has(combination)) {
-        throw new Error(`El número ${combination} ya no está disponible.`);
-      }
+  for (const combination of finalManualCombinations) {
+    if (usedCombinations.has(combination)) {
+      throw new Error(`El número ${combination} ya no está disponible.`);
     }
   }
+}
 
   while (assignedTickets.length < qty && current <= maxTickets) {
     const ticketCode = String(current).padStart(4, "0");
@@ -1437,8 +1446,8 @@ async function assignTicketsToOrder(orderId, manualCombinations = []) {
     let combination = "";
 
     if (isManualLottery) {
-      combination = manualCombinations[assignedTickets.length];
-    } else {
+  combination = finalManualCombinations[assignedTickets.length];
+} else {
       let attempts = 0;
 
       do {
@@ -7015,12 +7024,6 @@ if (!Array.isArray(selectedNumbers)) {
   selectedNumbers = selectedNumbers ? [selectedNumbers] : [];
 }
 
-    let selectedNumbers = req.body.selected_numbers || [];
-
-if (!Array.isArray(selectedNumbers)) {
-  selectedNumbers = selectedNumbers ? [selectedNumbers] : [];
-}
-
     if (!buyerName || !cleanBuyerPhone) {
   return res.status(400).send("Faltan nombre o teléfono");
 }
@@ -7212,15 +7215,8 @@ if (qty > availableTickets) {
   `);
 }
 
-let manualLotteryCombinations = [];
-
-if (isLotteryCampaign(campaign)) {
-  try {
-    manualLotteryCombinations = validateManualLotterySelection(
-      campaign.draw_mode,
-      selectedNumbers,
-      qty
-    );
+const manualLotteryCombinations = finalSelectedNumbers;
+    
   } catch (selectionError) {
     return res.status(400).send(`
       <!DOCTYPE html>
