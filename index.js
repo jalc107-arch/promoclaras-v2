@@ -1234,6 +1234,82 @@ function campaignStatusClass(status) {
   return "pending";
 }
 
+// =====================================================
+// TABLERO DE SELECCIÓN MANUAL SOLO PARA LOTERÍAS
+// =====================================================
+
+function isLotteryCampaign(campaign) {
+  return String(campaign?.draw_provider || "").startsWith("loteria_");
+}
+
+function isBalotoCampaign(campaign) {
+  return String(campaign?.draw_provider || "") === "baloto";
+}
+
+function getLotteryDigitsByDrawMode(drawMode) {
+  if (drawMode === "loteria_2_primeras") return 2;
+  if (drawMode === "loteria_2_ultimas") return 2;
+  if (drawMode === "loteria_3_primeras") return 3;
+  if (drawMode === "loteria_3_ultimas") return 3;
+  if (drawMode === "loteria_4_pleno") return 4;
+
+  return 0;
+}
+
+function normalizeManualLotteryNumber(drawMode, value) {
+  const digitsOnly = String(value || "").replace(/\D/g, "");
+  const digits = getLotteryDigitsByDrawMode(drawMode);
+
+  if (!digits) {
+    throw new Error("Modalidad de lotería inválida.");
+  }
+
+  if (digitsOnly.length === 0) {
+    throw new Error("Debes seleccionar o escribir un número.");
+  }
+
+  if (digitsOnly.length > digits) {
+    throw new Error(`El número no puede tener más de ${digits} cifras.`);
+  }
+
+  return digitsOnly.padStart(digits, "0");
+}
+
+function getAllLotteryNumbersByDrawMode(drawMode) {
+  const digits = getLotteryDigitsByDrawMode(drawMode);
+
+  if (!digits) {
+    return [];
+  }
+
+  const max = Math.pow(10, digits);
+
+  const numbers = [];
+
+  for (let i = 0; i < max; i++) {
+    numbers.push(String(i).padStart(digits, "0"));
+  }
+
+  return numbers;
+}
+
+function validateManualLotterySelection(drawMode, selectedNumbers, qty) {
+  const cleanNumbers = Array.isArray(selectedNumbers)
+    ? selectedNumbers.map(n => normalizeManualLotteryNumber(drawMode, n))
+    : [];
+
+  const uniqueNumbers = [...new Set(cleanNumbers)];
+
+  if (uniqueNumbers.length !== cleanNumbers.length) {
+    throw new Error("No puedes seleccionar números repetidos.");
+  }
+
+  if (uniqueNumbers.length !== Number(qty)) {
+    throw new Error("La cantidad de números seleccionados debe coincidir con la cantidad de códigos comprados.");
+  }
+
+  return uniqueNumbers;
+}
 
 function generateTicketCode(drawMode) {
   if (drawMode.startsWith("baloto_")) {
