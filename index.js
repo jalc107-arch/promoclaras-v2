@@ -2900,6 +2900,23 @@ Los códigos promocionales se asignan automáticamente después del pago aprobad
   Referidos
 </a>
 
+<a
+  href="/organizers/${organizer.id}/campanas/${c.id}/detalle"
+  style="
+    display:block;
+    padding:8px 12px;
+    background:#0f172a;
+    color:white;
+    text-decoration:none;
+    border-radius:10px;
+    font-weight:bold;
+    font-size:13px;
+    margin-top:7px;
+  "
+>
+  Ver órdenes y códigos
+</a>
+
 </td>
       </tr>
 `;
@@ -3767,6 +3784,426 @@ ${
 </body>
 </html>
 `);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para ver esta campaña.");
+    }
+
+    const { data: orders, error: ordersError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        buyers(*)
+      `)
+      .eq("rifa_id", rifaId)
+      .order("created_at", { ascending: false });
+
+    if (ordersError) throw ordersError;
+
+    const orderIds = (orders || []).map(order => order.id);
+
+    let tickets = [];
+
+    if (orderIds.length > 0) {
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from("tickets")
+        .select("*")
+        .eq("rifa_id", rifaId)
+        .in("order_id", orderIds)
+        .order("ticket_code", { ascending: true });
+
+      if (ticketsError) throw ticketsError;
+
+      tickets = ticketsData || [];
+    }
+
+    const paidOrders = (orders || []).filter(order => order.payment_status === "paid");
+    const pendingOrders = (orders || []).filter(order => order.payment_status !== "paid");
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Detalle campaña - ${campaign.title}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            background:
+              radial-gradient(circle at 15% 12%, rgba(37,99,235,.45), transparent 34%),
+              radial-gradient(circle at 85% 18%, rgba(124,58,237,.35), transparent 34%),
+              linear-gradient(135deg, #020617, #0f172a 48%, #111827);
+            padding: 24px;
+          }
+
+          .container {
+            max-width: 1200px;
+            margin: 0 auto;
+          }
+
+          .card {
+            background: rgba(15,23,42,.72);
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 26px;
+            padding: 24px;
+            box-shadow: 0 24px 70px rgba(0,0,0,.30);
+            margin-bottom: 24px;
+            overflow-x: auto;
+          }
+
+          h1 {
+            margin: 0;
+            font-size: 34px;
+          }
+
+          h2 {
+            margin-top: 0;
+          }
+
+          .subtitle {
+            color: rgba(255,255,255,.72);
+            line-height: 1.5;
+          }
+
+          .top-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+          }
+
+          .btn {
+            display: inline-block;
+            padding: 11px 15px;
+            border-radius: 12px;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+          }
+
+          .btn-blue {
+            background: #2563eb;
+          }
+
+          .btn-dark {
+            background: #111827;
+            border: 1px solid rgba(255,255,255,.20);
+          }
+
+          .btn-green {
+            background: #16a34a;
+          }
+
+          .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            margin-top: 20px;
+          }
+
+          .metric {
+            background: rgba(255,255,255,.10);
+            border: 1px solid rgba(255,255,255,.16);
+            border-radius: 18px;
+            padding: 16px;
+          }
+
+          .metric strong {
+            display: block;
+            font-size: 26px;
+            margin-top: 8px;
+            color: #93c5fd;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+            min-width: 900px;
+          }
+
+          th {
+            text-align: left;
+            padding: 12px;
+            background: rgba(30,41,59,.95);
+            color: #cbd5e1;
+            font-size: 12px;
+            text-transform: uppercase;
+          }
+
+          td {
+            padding: 12px;
+            background: rgba(255,255,255,.07);
+            color: #e5e7eb;
+            vertical-align: top;
+          }
+
+          .badge {
+            display: inline-block;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+          }
+
+          .approved {
+            background: rgba(34,197,94,.20);
+            color: #bbf7d0;
+            border: 1px solid rgba(134,239,172,.30);
+          }
+
+          .pending {
+            background: rgba(245,158,11,.20);
+            color: #fde68a;
+            border: 1px solid rgba(253,230,138,.30);
+          }
+
+          .code-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+          }
+
+          .code {
+            background: #2563eb;
+            color: white;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 12px;
+          }
+
+          @media (max-width: 700px) {
+            body {
+              padding: 14px;
+            }
+
+            h1 {
+              font-size: 27px;
+            }
+
+            .card {
+              padding: 18px;
+              border-radius: 22px;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="container">
+
+          <div class="card">
+            <h1>Detalle de campaña</h1>
+
+            <p class="subtitle">
+              <b>${campaign.title}</b><br/>
+              Premio: ${campaign.prize || "-"}<br/>
+              Sorteo: ${getDrawProviderLabel(campaign.draw_provider)} — ${getDrawModeLabel(campaign.draw_mode)}
+            </p>
+
+            <div class="top-actions">
+              <a class="btn btn-dark" href="/organizers/${organizer.id}/panel">
+                Volver al panel
+              </a>
+
+              <a class="btn btn-blue" href="/campanas/${campaign.slug}" target="_blank">
+                Ver campaña pública
+              </a>
+
+              <a class="btn btn-green" href="/resultado/${campaign.id}" target="_blank">
+                Ver resultado
+              </a>
+            </div>
+
+            <div class="metrics">
+              <div class="metric">
+                Órdenes totales
+                <strong>${orders.length}</strong>
+              </div>
+
+              <div class="metric">
+                Órdenes pagadas
+                <strong>${paidOrders.length}</strong>
+              </div>
+
+              <div class="metric">
+                Órdenes pendientes
+                <strong>${pendingOrders.length}</strong>
+              </div>
+
+              <div class="metric">
+                Códigos asignados
+                <strong>${tickets.length}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Órdenes y códigos de esta campaña</h2>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Comprador</th>
+                  <th>Teléfono</th>
+                  <th>Cantidad</th>
+                  <th>Total</th>
+                  <th>Pago</th>
+                  <th>WhatsApp</th>
+                  <th>Fecha</th>
+                  <th>Códigos asignados</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  orders.length > 0
+                    ? orders.map(order => {
+                        const orderTickets = tickets.filter(ticket =>
+                          String(ticket.order_id) === String(order.id)
+                        );
+
+                        return `
+                          <tr>
+                            <td>${order.buyers?.full_name || "-"}</td>
+                            <td>${order.buyers?.phone || "-"}</td>
+                            <td>${order.qty || 0}</td>
+                            <td>$${Number(order.total_paid || 0).toLocaleString("es-CO")}</td>
+
+                            <td>
+                              <span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
+                                ${order.payment_status === "paid" ? "approved" : order.payment_status}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span class="badge ${order.whatsapp_sent ? "approved" : "pending"}">
+                                ${order.whatsapp_sent ? "enviado" : "pendiente"}
+                              </span>
+                            </td>
+
+                            <td>
+                              ${new Date(order.created_at).toLocaleString("es-CO")}
+                            </td>
+
+                            <td>
+                              ${
+                                orderTickets.length > 0
+                                  ? `
+                                    <div class="code-list">
+                                      ${orderTickets.map(ticket => `
+                                        <span class="code">
+                                          ${ticket.combination || ticket.ticket_code || "-"}
+                                        </span>
+                                      `).join("")}
+                                    </div>
+                                  `
+                                  : `
+                                    <span style="color:#cbd5e1;font-size:12px;">
+                                      Sin códigos asignados
+                                    </span>
+                                  `
+                              }
+                            </td>
+
+                            <td>
+                              ${
+                                order.payment_status === "paid"
+                                  ? `
+                                    <form method="POST" action="/organizers/${organizer.id}/ordenes/${order.id}/reenviar-whatsapp">
+                                      <button
+                                        type="submit"
+                                        onclick="return confirm('¿Reenviar los códigos por WhatsApp a este comprador?');"
+                                        style="
+                                          padding:9px 12px;
+                                          background:#16a34a;
+                                          color:white;
+                                          border:none;
+                                          border-radius:10px;
+                                          font-weight:bold;
+                                          cursor:pointer;
+                                          font-size:13px;
+                                          white-space:nowrap;
+                                        ">
+                                        Reenviar códigos
+                                      </button>
+                                    </form>
+                                  `
+                                  : `
+                                    <span style="color:#9ca3af;font-size:12px;">
+                                      No disponible
+                                    </span>
+                                  `
+                              }
+                            </td>
+                          </tr>
+                        `;
+                      }).join("")
+                    : `
+                      <tr>
+                        <td colspan="9" style="padding:18px;text-align:center;color:#cbd5e1;">
+                          Esta campaña aún no tiene órdenes registradas.
+                        </td>
+                      </tr>
+                    `
+                }
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </body>
+      </html>
+    `);
   } catch (error) {
     return res.status(500).send(error.message);
   }
