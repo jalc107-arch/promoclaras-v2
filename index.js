@@ -2917,6 +2917,41 @@ Los códigos promocionales se asignan automáticamente después del pago aprobad
   Ver órdenes y códigos
 </a>
 
+${
+  c.status === "active"
+    ? `
+      <form method="POST" action="/organizers/${organizer.id}/campanas/${c.id}/visibilidad" style="margin-top:7px;">
+        <input type="hidden" name="is_public" value="${c.is_public ? "false" : "true"}">
+
+        <button
+          type="submit"
+          onclick="return confirm('${c.is_public ? "¿Deseas ocultar esta campaña de la página principal?" : "¿Deseas publicar esta campaña en la página principal de campañas activas?"}');"
+          style="
+            display:block;
+            width:100%;
+            padding:8px 12px;
+            background:${c.is_public ? "#dc2626" : "#16a34a"};
+            color:white;
+            border:none;
+            text-decoration:none;
+            border-radius:10px;
+            font-weight:bold;
+            font-size:13px;
+            margin-top:7px;
+            cursor:pointer;
+          "
+        >
+          ${c.is_public ? "Ocultar campaña" : "Publicar campaña"}
+        </button>
+      </form>
+
+      <div style="margin-top:6px;font-size:12px;color:${c.is_public ? "#86efac" : "#fde68a"};line-height:1.3;">
+        ${c.is_public ? "Visible en campañas activas." : "Oculta de la página principal."}
+      </div>
+    `
+    : ""
+}
+
 </td>
       </tr>
 `;
@@ -4320,6 +4355,63 @@ app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-whatsapp", async (r
     }
 
     return res.redirect(`/organizers/${organizerId}/campanas/${order.rifa_id}/detalle`);
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/organizers/:organizerId/campanas/:rifaId/visibilidad", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    if (!req.session.organizerId) {
+      return res.redirect("/organizers/login");
+    }
+
+    if (String(req.session.organizerId) !== String(organizerId)) {
+      return res.redirect("/organizers/login");
+    }
+
+    const requestedPublicValue = String(req.body.is_public || "") === "true";
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError) throw campaignError;
+
+    if (!campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para modificar esta campaña.");
+    }
+
+    if (campaign.status !== "active") {
+      return res.status(400).send("Solo puedes cambiar la visibilidad de campañas activas.");
+    }
+
+    const { error: updateError } = await supabase
+      .from("rifas")
+      .update({
+        is_public: requestedPublicValue
+      })
+      .eq("id", rifaId);
+
+    if (updateError) throw updateError;
+
+    return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
     return res.status(500).send(error.message);
   }
@@ -6150,10 +6242,11 @@ app.get("/r/:slug", async (req, res) => {
 app.get("/campanas", async (req, res) => {
   try {
     const { data: campaigns, error } = await supabase
-      .from("rifas")
-      .select("*")
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
+  .from("rifas")
+  .select("*")
+  .eq("status", "active")
+  .eq("is_public", true)
+  .order("created_at", { ascending: false });
 
     if (error) throw error;
 
@@ -10064,12 +10157,13 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
     }
 
     const { error } = await supabase
-      .from("rifas")
-      .update({
-        status: "active"
-      })
-      .eq("id", rifaId)
-      .eq("status", "pending");
+  .from("rifas")
+  .update({
+    status: "active",
+    is_public: false
+  })
+  .eq("id", rifaId)
+  .eq("status", "pending");
 
     if (error) throw error;
 
@@ -10090,7 +10184,7 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
     `Campaña: ${campaign.title || "-"}`,
     `Premio: ${campaign.prize || "-"}`,
     ``,
-    `Ya puedes compartirla y recibir participantes.`,
+    `Tu campaña ya fue aprobada. Ahora ingresa a tu panel y presiona el botón "Publicar campaña" cuando quieras que aparezca en la página principal de campañas activas.`,
     ``,
     `Link de la campaña:`,
     `${APP_BASE_URL}/campanas/${campaign.slug}`
