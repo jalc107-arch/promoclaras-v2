@@ -767,6 +767,169 @@ async function sendWhatsAppTemplateConfirmacionCodigos(phone, buyerName, orderDe
   }
 }
 
+async function sendWhatsAppTemplateOrganizadorAprobado(phone, organizerName, panelUrl) {
+  try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.log("WhatsApp Cloud API no configurado");
+      return { ok: false, reason: "WhatsApp Cloud API no configurado" };
+    }
+
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    if (!cleanPhone) {
+      return { ok: false, reason: "Teléfono vacío" };
+    }
+
+    const whatsappPhone = cleanPhone.startsWith("57")
+      ? cleanPhone
+      : `57${cleanPhone}`;
+
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: whatsappPhone,
+          type: "template",
+          template: {
+            name: "organizador_aprobado",
+            language: {
+              code: "es_CO"
+            },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: String(organizerName || "Organizador")
+                  },
+                  {
+                    type: "text",
+                    text: String(panelUrl || `${APP_BASE_URL}/organizers/login`)
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp plantilla organizador_aprobado status:", response.status);
+    console.log("WhatsApp plantilla organizador_aprobado response:", JSON.stringify(result, null, 2));
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: result
+    };
+  } catch (error) {
+    console.error("Error enviando plantilla organizador_aprobado:", error);
+
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
+async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignName, prize, winningCode, resultUrl) {
+  try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.log("WhatsApp Cloud API no configurado");
+      return { ok: false, reason: "WhatsApp Cloud API no configurado" };
+    }
+
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    if (!cleanPhone) {
+      return { ok: false, reason: "Teléfono vacío" };
+    }
+
+    const whatsappPhone = cleanPhone.startsWith("57")
+      ? cleanPhone
+      : `57${cleanPhone}`;
+
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: whatsappPhone,
+          type: "template",
+          template: {
+            name: "ganador_campana",
+            language: {
+              code: "es_CO"
+            },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: String(winnerName || "Cliente")
+                  },
+                  {
+                    type: "text",
+                    text: String(campaignName || "Campaña CampaClick")
+                  },
+                  {
+                    type: "text",
+                    text: String(prize || "Premio")
+                  },
+                  {
+                    type: "text",
+                    text: String(winningCode || "-")
+                  },
+                  {
+                    type: "text",
+                    text: String(resultUrl || "")
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp plantilla ganador_campana status:", response.status);
+    console.log("WhatsApp plantilla ganador_campana response:", JSON.stringify(result, null, 2));
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: result
+    };
+  } catch (error) {
+    console.error("Error enviando plantilla ganador_campana:", error);
+
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
+
 async function sendOrderCouponsWhatsApp(orderId, forceResend = false) {
   try {
     const { data: order, error: orderError } = await supabase
@@ -9250,18 +9413,10 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
 
     if (error) throw error;
 
-   const whatsappResult = await sendWhatsAppMessage(
+   const whatsappResult = await sendWhatsAppTemplateOrganizadorAprobado(
   organizer.phone,
-  [
-    `Hola ${organizer.full_name || ""}.`,
-    ``,
-    `Tu cuenta de organizador en CampaClick fue aprobada correctamente.`,
-    ``,
-    `Ya puedes ingresar al panel y crear campañas para revisión del administrador.`,
-    ``,
-    `Ingreso organizador:`,
-    `${APP_BASE_URL}/organizers/login`
-  ].join("\n")
+  organizer.full_name || "Organizador",
+  `${APP_BASE_URL}/organizers/login`
 );
 
 console.log("Resultado WhatsApp aprobación organizador:", JSON.stringify(whatsappResult, null, 2));
@@ -10301,20 +10456,14 @@ async function sendWinnerWhatsApp(rifaId, winnerTicketId) {
 
     const baseUrl = APP_BASE_URL;
 
-const message = [
-  `🎉 ¡Felicitaciones ${ticket.buyers?.full_name || ""}!`,
-  ``,
-  `Tu código promocional resultó ganador en CampaClick.`,
-  ``,
-  `Campaña: ${ticket.rifas?.title || "-"}`,
-  `Premio: ${ticket.rifas?.prize || "-"}`,
-  `Código ganador: ${ticket.combination || ticket.ticket_code || "-"}`,
-  ``,
-  `Consulta el resultado aquí:`,
-  `${baseUrl}/resultado/${rifaId}`,
-  ``,
-  `Pronto el organizador o el equipo de validación se comunicará contigo para continuar el proceso de entrega del premio.`
-].join("\n");
+return await sendWhatsAppTemplateGanadorCampana(
+  ticket.buyers?.phone,
+  ticket.buyers?.full_name || "Cliente",
+  ticket.rifas?.title || "Campaña CampaClick",
+  ticket.rifas?.prize || "Premio",
+  ticket.combination || ticket.ticket_code || "-",
+  `${baseUrl}/resultado/${rifaId}`
+);
 
     return await sendWhatsAppMessage(ticket.buyers?.phone, message);
   } catch (error) {
