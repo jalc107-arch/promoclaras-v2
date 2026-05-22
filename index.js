@@ -10465,7 +10465,6 @@ return await sendWhatsAppTemplateGanadorCampana(
   `${baseUrl}/resultado/${rifaId}`
 );
 
-    return await sendWhatsAppMessage(ticket.buyers?.phone, message);
   } catch (error) {
     console.error("Error enviando WhatsApp al ganador:", error);
     return {
