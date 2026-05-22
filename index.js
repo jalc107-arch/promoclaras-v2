@@ -8,6 +8,8 @@ import rateLimit from "express-rate-limit";
 import bcrypt from "bcrypt";
 import path from "path";
 import { fileURLToPath } from "url";
+import pg from "pg";
+import connectPgSimple from "connect-pg-simple";
 
 const app = express();
 
@@ -36,8 +38,23 @@ app.get("/google927c009d9a2214fc.html", (req, res) => {
   res.send("google-site-verification: google927c009d9a2214fc.html");
 });
 
+const PgSession = connectPgSimple(session);
+const { Pool } = pg;
+
+const sessionPool = new Pool({
+  connectionString: process.env.SESSION_DATABASE_URL || process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 app.use(
   session({
+    store: new PgSession({
+      pool: sessionPool,
+      tableName: "user_sessions",
+      createTableIfMissing: true
+    }),
     secret: process.env.SESSION_SECRET || "promoclaras_v2_secret",
     resave: false,
     saveUninitialized: false,
