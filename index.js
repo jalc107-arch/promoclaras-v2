@@ -8487,16 +8487,25 @@ app.post("/webhooks/wompi", async (req, res) => {
     }
 
     const { data: payment, error: paymentLookupError } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("external_reference", reference)
-      .maybeSingle();
+  .from("payments")
+  .select(`
+    *,
+    orders(*)
+  `)
+  .eq("external_reference", reference)
+  .maybeSingle();
 
     if (paymentLookupError) throw paymentLookupError;
 
     if (!payment) {
       return res.status(200).send("Pago no encontrado");
     }
+
+    // Si el pago ya quedó aprobado antes, nunca lo bajamos a failed
+if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
+  console.log("Pago ya aprobado. No se modifica:", reference);
+  return res.status(200).send("Pago ya aprobado");
+}
 
     let localPaymentStatus = "pending";
     let localOrderStatus = "created";
@@ -8541,10 +8550,26 @@ app.post("/webhooks/wompi", async (req, res) => {
 }
 
   
-    if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
-      localPaymentStatus = "failed";
-      localOrderStatus = "failed";
-    }
+if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
+  // Antes de marcar failed, verificamos que no tenga códigos ya asignados
+  const { data: existingTicketsForFailed } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("order_id", payment.order_id)
+    .limit(1);
+
+  if (existingTicketsForFailed && existingTicketsForFailed.length > 0) {
+    console.log("Intento de marcar failed una orden con códigos asignados. Se conserva como paid:", payment.order_id);
+
+    localPaymentStatus = "approved";
+    localOrderStatus = "paid";
+  } else {
+    localPaymentStatus = "failed";
+    localOrderStatus = "failed";
+  }
+}
+
+    
 
    const { error: updatePaymentError } = await supabase
   .from("payments")
