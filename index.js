@@ -138,6 +138,15 @@ async function uploadOrganizerSupport(base64Image, organizerId, type) {
   return data.publicUrl;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function slugify(text) {
   return String(text || "")
     .toLowerCase()
