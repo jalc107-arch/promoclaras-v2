@@ -4181,7 +4181,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
                 Volver al panel
               </a>
 
-              <a class="btn btn-blue" href="/campanas/${campaign.slug}" target="_blank">
+              <a class="btn btn-blue" href="/campanas/${encodeURIComponent(campaign.slug || "")}" target="_blank">
                 Ver campaña pública
               </a>
 
@@ -6297,12 +6297,12 @@ body {
       <h2 class="section-title">Información de la campaña</h2>
 
       <p class="description">
-        ${campaign.description || "Campaña promocional disponible para participar de forma rápida y segura."}
+        ${escapeHtml(campaign.description || "Campaña promocional disponible para participar de forma rápida y segura.")}
       </p>
 
       <div style="margin-top:20px;color:#374151;line-height:1.7;">
-  <div><b>Premio:</b> ${campaign.prize || "-"}</div>
-  <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+  <div><b>Premio:</b> ${escapeHtml(campaign.prize || "-")}</div>
+  <div><b>Fecha del sorteo:</b> ${escapeHtml(campaign.draw_date || "-")}</div>
   <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
   <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
 
@@ -6735,15 +6735,15 @@ body::before {
             ${campaigns.map(campaign => `
               <div class="campaign">
                 <div>
-                  <h2>${campaign.title || "Campaña"}</h2>
+                  <h2>${escapeHtml(campaign.title || "Campaña")}</h2>
 
                   <div class="description">
-                    ${campaign.description || "Campaña promocional disponible para participar."}
+                    ${escapeHtml(campaign.description || "Campaña promocional disponible para participar.")}
                   </div>
 
                   <div class="info">
-                    <div><b>Premio:</b> ${campaign.prize || "-"}</div>
-                    <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+                    <div><b>Premio:</b> ${escapeHtml(campaign.prize || "-")}</div>
+                    <div><b>Fecha del sorteo:</b> ${escapeHtml(campaign.draw_date || "-")}</div>
                     <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
                     <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
                   </div>
@@ -6754,11 +6754,11 @@ body::before {
                 </div>
 
                 <div>
-                  <a class="btn btn-primary" href="/campanas/${campaign.slug}">
+                  <a class="btn btn-primary" href="/campanas/${encodeURIComponent(campaign.slug || "")}">
                     Ver campaña
                   </a>
 
-                  <a class="btn btn-secondary" href="/campanas/${campaign.slug}/comprar">
+                  <a class="btn btn-secondary" href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar">
                     Participar ahora
                   </a>
                 </div>
@@ -7310,7 +7310,7 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
             <p>Esta campaña aún no está habilitada para compras.</p>
 
             <a
-              href="/campanas/${campaign.slug}"
+              href="/campanas/${encodeURIComponent(campaign.slug || "")}"
               style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:14px;font-weight:bold;">
               Volver a la campaña
             </a>
@@ -7768,7 +7768,7 @@ ${
             Tus códigos promocionales se asignan automáticamente después del pago aprobado.
           </div>
 
-          <a class="back" href="/campanas/${campaign.slug}">
+          <a class="back" href="/campanas/${encodeURIComponent(campaign.slug || "")}">
             Volver a la campaña
           </a>
         </div>
@@ -7889,7 +7889,7 @@ if (campaign.status !== "active") {
             `
             : `
               <a
-                href="/campanas/${campaign.slug}"
+                href="/campanas/${encodeURIComponent(campaign.slug || "")}"
                 style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
                 Volver a la campaña
               </a>
@@ -7922,7 +7922,7 @@ if (qty < minimumQty) {
         </p>
 
         <a
-          href="/campanas/${campaign.slug}/comprar"
+          href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
           style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Volver a comprar
         </a>
@@ -7959,7 +7959,7 @@ if (isLotteryCampaign(campaign)) {
           </p>
 
           <a
-            href="/campanas/${campaign.slug}/comprar"
+            href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
             style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
             Volver a escoger números
           </a>
@@ -7996,7 +7996,7 @@ if (isLotteryCampaign(campaign)) {
           </p>
 
           <a
-            href="/campanas/${campaign.slug}/comprar"
+            href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
             style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
             Volver a escoger números
           </a>
@@ -8028,7 +8028,7 @@ if (qty > availableTickets) {
         </p>
 
         <a
-          href="/campanas/${campaign.slug}/comprar"
+          href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
           style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Volver a comprar
         </a>
