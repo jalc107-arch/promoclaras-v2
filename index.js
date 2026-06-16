@@ -8185,6 +8185,39 @@ if (wompiTransactionId && payment.status !== "approved") {
   const transaction = wompiJson?.data;
   const transactionStatus = transaction?.status;
 
+const transactionReference = String(transaction?.reference || "");
+const transactionAmountInCents = Number(transaction?.amount_in_cents || 0);
+const transactionCurrency = String(transaction?.currency || "");
+
+const expectedReference = String(payment.external_reference || "");
+const expectedAmountInCents = Math.round(Number(order.total_paid || 0) * 100);
+
+if (transactionReference !== expectedReference) {
+  console.log("Referencia Wompi no coincide", {
+    transactionReference,
+    expectedReference
+  });
+
+  return res.status(400).send("La referencia del pago no corresponde a esta orden.");
+}
+
+if (transactionAmountInCents !== expectedAmountInCents) {
+  console.log("Valor Wompi no coincide", {
+    transactionAmountInCents,
+    expectedAmountInCents
+  });
+
+  return res.status(400).send("El valor pagado no corresponde a esta orden.");
+}
+
+if (transactionCurrency !== "COP") {
+  console.log("Moneda Wompi no válida", {
+    transactionCurrency
+  });
+
+  return res.status(400).send("La moneda del pago no corresponde.");
+}
+  
   if (transactionStatus === "APPROVED") {
     await supabase
       .from("payments")
@@ -8488,8 +8521,10 @@ app.post("/webhooks/wompi", async (req, res) => {
     }
 
     const reference = transaction.reference || "";
-    const transactionStatus = transaction.status || "";
-    const transactionId = transaction.id || "";
+const transactionStatus = transaction.status || "";
+const transactionId = transaction.id || "";
+const transactionAmountInCents = Number(transaction.amount_in_cents || 0);
+const transactionCurrency = String(transaction.currency || "");
 
     if (!reference) {
       return res.status(200).send("Sin referencia");
@@ -8510,6 +8545,27 @@ app.post("/webhooks/wompi", async (req, res) => {
       return res.status(200).send("Pago no encontrado");
     }
 
+const expectedAmountInCents = Math.round(Number(payment.orders?.total_paid || 0) * 100);
+
+if (transactionAmountInCents !== expectedAmountInCents) {
+  console.log("Webhook Wompi con valor diferente", {
+    reference,
+    transactionAmountInCents,
+    expectedAmountInCents
+  });
+
+  return res.status(400).send("Valor de transacción no coincide");
+}
+
+if (transactionCurrency !== "COP") {
+  console.log("Webhook Wompi con moneda diferente", {
+    reference,
+    transactionCurrency
+  });
+
+  return res.status(400).send("Moneda no válida");
+}
+    
     // Si el pago ya quedó aprobado antes, nunca lo bajamos a failed
 if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
   console.log("Pago ya aprobado. No se modifica:", reference);
@@ -8584,7 +8640,8 @@ if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
   .from("payments")
   .update({
     status: localPaymentStatus,
-    provider: "wompi"
+    provider: "wompi",
+    provider_transaction_id: transactionId
   })
   .eq("id", payment.id);
 
