@@ -5850,7 +5850,7 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-<title>${campaign.title}</title>
+<title>${escapeHtml(campaign.title)}</title>
 
 
 <meta property="og:title" content="${campaign.title} | CampaClick" />
@@ -6260,7 +6260,7 @@ body {
 <body>
 
 <div class="header">
-  <h1>${campaign.title}</h1>
+  <h1>${escapeHtml(campaign.title)}</h1>
   <p>Participa fácilmente desde cualquier lugar</p>
 </div>
 
@@ -7654,14 +7654,14 @@ if (isLottery) {
         <div class="glass-card">
           <div class="top-badge">🎯</div>
 
-          <h1>${campaign.title}</h1>
+          <h1>${escapeHtml(campaign.title)}</h1>
 
           <div class="price">
             $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
           </div>
 
-          <form method="POST" action="/campanas/${campaign.slug}/comprar">
-          <input type="hidden" name="referral_code" value="${referralCode}">
+          <form method="POST" action="/campanas/${escapeHtml(campaign.slug)}/comprar">
+          <input type="hidden" name="referral_code" value="${escapeHtml(referralCode)}">
             <div class="form-grid">
 
               <div>
