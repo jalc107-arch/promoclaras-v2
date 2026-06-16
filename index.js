@@ -8132,6 +8132,77 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
   }
 });
 
+async function finalizePaidOrder(orderId) {
+  const { data: orderData, error: orderError } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      rifas(*)
+    `)
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw orderError;
+  if (!orderData) throw new Error("Orden no encontrada para finalizar pago.");
+
+  const expectedTicketsCount = Number(orderData.qty || 0);
+
+  const { data: existingTickets, error: ticketsError } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("order_id", orderId)
+    .eq("status", "active");
+
+  if (ticketsError) throw ticketsError;
+
+  const activeTicketsCount = existingTickets ? existingTickets.length : 0;
+
+  if (activeTicketsCount === 0) {
+    await assignTicketsToOrder(orderId);
+  } else if (activeTicketsCount !== expectedTicketsCount) {
+    console.log("Orden pagada con códigos incompletos", {
+      orderId,
+      activeTicketsCount,
+      expectedTicketsCount
+    });
+
+    throw new Error("La orden presenta códigos incompletos. Contacta soporte para validación.");
+  }
+
+  await supabase
+    .from("orders")
+    .update({
+      payment_status: "paid"
+    })
+    .eq("id", orderId);
+
+  const { count: campaignActiveTicketsCount, error: campaignCountError } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("rifa_id", orderData.rifa_id)
+    .eq("status", "active");
+
+  if (campaignCountError) throw campaignCountError;
+
+  const realSoldTickets = Number(campaignActiveTicketsCount || 0);
+  const maxTickets = Number(orderData.rifas?.max_tickets || 0);
+
+  await supabase
+    .from("rifas")
+    .update({
+      sold_tickets: realSoldTickets,
+      available_tickets: Math.max(0, maxTickets - realSoldTickets)
+    })
+    .eq("id", orderData.rifa_id);
+
+  return {
+    ok: true,
+    orderId,
+    expectedTicketsCount,
+    realSoldTickets
+  };
+}
+
 app.get("/orden/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -8219,70 +8290,16 @@ if (transactionCurrency !== "COP") {
 }
   
   if (transactionStatus === "APPROVED") {
-    await supabase
-      .from("payments")
-      .update({
-        status: "approved",
-        provider: "wompi",
-        provider_transaction_id: wompiTransactionId
-      })
-      .eq("id", payment.id);
+   await supabase
+  .from("payments")
+  .update({
+    status: "approved",
+    provider: "wompi",
+    provider_transaction_id: wompiTransactionId
+  })
+  .eq("id", payment.id);
 
-    await supabase
-      .from("orders")
-      .update({
-        payment_status: "paid"
-      })
-      .eq("id", orderId);
-
-    const { data: existingTickets } = await supabase
-  .from("tickets")
-  .select("id")
-  .eq("order_id", orderId)
-  .eq("status", "active");
-
-const activeTicketsCount = existingTickets ? existingTickets.length : 0;
-const expectedTicketsCount = Number(order.qty || 0);
-
-if (activeTicketsCount === 0) {
-  await assignTicketsToOrder(orderId);
-} else if (activeTicketsCount !== expectedTicketsCount) {
-  console.log("Orden pagada con códigos incompletos", {
-    orderId,
-    activeTicketsCount,
-    expectedTicketsCount
-  });
-
-  return res.status(500).send("La orden presenta códigos incompletos. Contacta soporte para validación.");
-}
-
-     
-
-  const { data: updatedOrderData } = await supabase
-    .from("orders")
-    .select(`
-      *,
-      rifas(*)
-    `)
-    .eq("id", orderId)
-    .single();
-
-  if (updatedOrderData?.rifas) {
-    const soldTickets =
-      Number(updatedOrderData.rifas.sold_tickets || 0) + Number(updatedOrderData.qty || 0);
-
-    const availableTickets =
-      Number(updatedOrderData.rifas.max_tickets || 0) - soldTickets;
-
-    await supabase
-      .from("rifas")
-      .update({
-        sold_tickets: soldTickets,
-        available_tickets: availableTickets
-      })
-      .eq("id", updatedOrderData.rifas.id);
-  }
-}
+await finalizePaidOrder(orderId);
 
 await sendOrderCouponsWhatsApp(orderId);
 await processReferralReward(orderId);
@@ -8533,24 +8550,24 @@ app.post("/webhooks/wompi", async (req, res) => {
       return res.status(401).send("Firma inválida");
     }
 
-    const reference = transaction.reference || "";
-const transactionStatus = transaction.status || "";
-const transactionId = transaction.id || "";
-const transactionAmountInCents = Number(transaction.amount_in_cents || 0);
-const transactionCurrency = String(transaction.currency || "");
+    const reference = String(transaction.reference || "");
+    const transactionStatus = String(transaction.status || "");
+    const transactionId = String(transaction.id || "");
+    const transactionAmountInCents = Number(transaction.amount_in_cents || 0);
+    const transactionCurrency = String(transaction.currency || "");
 
     if (!reference) {
       return res.status(200).send("Sin referencia");
     }
 
     const { data: payment, error: paymentLookupError } = await supabase
-  .from("payments")
-  .select(`
-    *,
-    orders(*)
-  `)
-  .eq("external_reference", reference)
-  .maybeSingle();
+      .from("payments")
+      .select(`
+        *,
+        orders(*)
+      `)
+      .eq("external_reference", reference)
+      .maybeSingle();
 
     if (paymentLookupError) throw paymentLookupError;
 
@@ -8558,135 +8575,112 @@ const transactionCurrency = String(transaction.currency || "");
       return res.status(200).send("Pago no encontrado");
     }
 
-const expectedAmountInCents = Math.round(Number(payment.orders?.total_paid || 0) * 100);
+    const expectedAmountInCents = Math.round(Number(payment.orders?.total_paid || 0) * 100);
 
-if (transactionAmountInCents !== expectedAmountInCents) {
-  console.log("Webhook Wompi con valor diferente", {
-    reference,
-    transactionAmountInCents,
-    expectedAmountInCents
-  });
+    if (transactionAmountInCents !== expectedAmountInCents) {
+      console.log("Webhook Wompi con valor diferente", {
+        reference,
+        transactionAmountInCents,
+        expectedAmountInCents
+      });
 
-  return res.status(400).send("Valor de transacción no coincide");
-}
+      return res.status(400).send("Valor de transacción no coincide");
+    }
 
-if (transactionCurrency !== "COP") {
-  console.log("Webhook Wompi con moneda diferente", {
-    reference,
-    transactionCurrency
-  });
+    if (transactionCurrency !== "COP") {
+      console.log("Webhook Wompi con moneda diferente", {
+        reference,
+        transactionCurrency
+      });
 
-  return res.status(400).send("Moneda no válida");
-}
-    
-    // Si el pago ya quedó aprobado antes, nunca lo bajamos a failed
-if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
-  console.log("Pago ya aprobado. No se modifica:", reference);
-  return res.status(200).send("Pago ya aprobado");
-}
+      return res.status(400).send("Moneda no válida");
+    }
 
-    let localPaymentStatus = "pending";
-    let localOrderStatus = "created";
+    if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
+      console.log("Pago ya aprobado. Se valida consistencia sin degradar:", reference);
 
-   if (transactionStatus === "APPROVED") {
-  localPaymentStatus = "approved";
-  localOrderStatus = "paid";
+      await finalizePaidOrder(payment.order_id);
+      await sendOrderCouponsWhatsApp(payment.order_id);
+      await processReferralReward(payment.order_id);
 
-  const { data: existingTickets } = await supabase
-  .from("tickets")
-  .select("id")
-  .eq("order_id", payment.order_id)
-  .eq("status", "active");
+      return res.status(200).send("Pago ya aprobado");
+    }
 
-const activeTicketsCount = existingTickets ? existingTickets.length : 0;
-const expectedTicketsCount = Number(payment.orders?.qty || 0);
+    if (transactionStatus === "APPROVED") {
+      const { error: updatePaymentError } = await supabase
+        .from("payments")
+        .update({
+          status: "approved",
+          provider: "wompi",
+          provider_transaction_id: transactionId
+        })
+        .eq("id", payment.id);
 
-if (activeTicketsCount === 0) {
-  await assignTicketsToOrder(payment.order_id);
+      if (updatePaymentError) throw updatePaymentError;
 
-  const { data: orderData } = await supabase
-    .from("orders")
-    .select(`
-      *,
-      rifas(*)
-    `)
-    .eq("id", payment.order_id)
-    .single();
+      await finalizePaidOrder(payment.order_id);
+      await sendOrderCouponsWhatsApp(payment.order_id);
+      await processReferralReward(payment.order_id);
 
-  if (orderData?.rifas) {
-    const soldTickets =
-      Number(orderData.rifas.sold_tickets || 0) + Number(orderData.qty || 0);
+      return res.status(200).send("ok");
+    }
 
-    const availableTickets =
-      Number(orderData.rifas.max_tickets || 0) - soldTickets;
+    if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
+      const { data: existingTicketsForFailed, error: failedTicketsError } = await supabase
+        .from("tickets")
+        .select("id")
+        .eq("order_id", payment.order_id)
+        .eq("status", "active")
+        .limit(1);
+
+      if (failedTicketsError) throw failedTicketsError;
+
+      if (existingTicketsForFailed && existingTicketsForFailed.length > 0) {
+        console.log("Intento de marcar failed una orden con códigos activos. Se conserva como paid:", payment.order_id);
+
+        await supabase
+          .from("payments")
+          .update({
+            status: "approved",
+            provider: "wompi",
+            provider_transaction_id: transactionId
+          })
+          .eq("id", payment.id);
+
+        await finalizePaidOrder(payment.order_id);
+
+        return res.status(200).send("Orden conservada como aprobada por tener códigos activos");
+      }
+
+      await supabase
+        .from("payments")
+        .update({
+          status: "failed",
+          provider: "wompi",
+          provider_transaction_id: transactionId
+        })
+        .eq("id", payment.id);
+
+      await supabase
+        .from("orders")
+        .update({
+          payment_status: "failed"
+        })
+        .eq("id", payment.order_id);
+
+      return res.status(200).send("Pago fallido registrado");
+    }
 
     await supabase
-      .from("rifas")
+      .from("payments")
       .update({
-        sold_tickets: soldTickets,
-        available_tickets: availableTickets
+        status: "pending",
+        provider: "wompi",
+        provider_transaction_id: transactionId
       })
-      .eq("id", orderData.rifas.id);
-  }
-} else if (activeTicketsCount !== expectedTicketsCount) {
-  console.log("Orden pagada con códigos incompletos desde webhook", {
-    orderId: payment.order_id,
-    activeTicketsCount,
-    expectedTicketsCount
-  });
+      .eq("id", payment.id);
 
-  return res.status(500).send("La orden presenta códigos incompletos. Contacta soporte para validación.");
-}
-
-  
-if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
-  // Antes de marcar failed, verificamos que no tenga códigos ya asignados
-  const { data: existingTicketsForFailed } = await supabase
-    .from("tickets")
-    .select("id")
-    .eq("order_id", payment.order_id)
-    .limit(1);
-
-  if (existingTicketsForFailed && existingTicketsForFailed.length > 0) {
-    console.log("Intento de marcar failed una orden con códigos asignados. Se conserva como paid:", payment.order_id);
-
-    localPaymentStatus = "approved";
-    localOrderStatus = "paid";
-  } else {
-    localPaymentStatus = "failed";
-    localOrderStatus = "failed";
-  }
-}
-
-    
-
-   const { error: updatePaymentError } = await supabase
-  .from("payments")
-  .update({
-    status: localPaymentStatus,
-    provider: "wompi",
-    provider_transaction_id: transactionId
-  })
-  .eq("id", payment.id);
-
-if (updatePaymentError) throw updatePaymentError;
-
-    const { error: updateOrderError } = await supabase
-  .from("orders")
-  .update({
-    payment_status: localOrderStatus
-  })
-  .eq("id", payment.order_id);
-
-if (updateOrderError) throw updateOrderError;
-
-if (localOrderStatus === "paid") {
-  await sendOrderCouponsWhatsApp(payment.order_id);
-  await processReferralReward(payment.order_id);
-}
-
-return res.status(200).send("ok");
-    
+    return res.status(200).send("Pago pendiente registrado");
   } catch (error) {
     console.error("Webhook Wompi error:", error);
     return res.status(500).send(error.message);
