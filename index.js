@@ -189,6 +189,15 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function maskPhone(phone) {
   const cleanPhone = String(phone || "").replace(/\D/g, "");
 
@@ -196,14 +205,9 @@ function maskPhone(phone) {
     return "-";
   }
 
-  if (cleanPhone.length <= 4) {
-    return `${cleanPhone.charAt(0)}***`;
-  }
+  const lastThree = cleanPhone.slice(-3);
 
-  const first = cleanPhone.slice(0, 1);
-  const last = cleanPhone.slice(-3);
-
-  return `${first}******${last}`;
+  return `*******${lastThree}`;
 }
 
 function randomInt(min, max) {
