@@ -5838,6 +5838,12 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
+    const safeCampaignTitle = escapeHtml(campaign.title);
+const safeCampaignPrize = escapeHtml(campaign.prize);
+const safeCampaignDescription = escapeHtml(campaign.description);
+const safeCampaignDrawDate = escapeHtml(campaign.draw_date);
+const safeCampaignSlug = encodeURIComponent(campaign.slug);
+
     res.send(`
 <!DOCTYPE html>
 <html lang="es">
@@ -5845,10 +5851,10 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-<title>${campaign.title}</title>
+<title>${safeCampaignTitle}</title>
 
 
-<meta property="og:title" content="${campaign.title} | CampaClick" />
+<meta property="og:title" content="${safeCampaignTitle} | CampaClick" />
 <meta property="og:description" content="Premio: ${campaign.prize || "-"} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")} · Fecha del sorteo: ${campaign.draw_date || "-"}" />
 <meta property="og:url" content="${campaignPublicUrl}" />
 <meta property="og:type" content="website" />
@@ -6255,7 +6261,7 @@ body {
 <body>
 
 <div class="header">
-  <h1>${campaign.title}</h1>
+  <h1>${safeCampaignTitle}</h1>
   <p>Participa fácilmente desde cualquier lugar</p>
 </div>
 
@@ -6292,12 +6298,12 @@ body {
       <h2 class="section-title">Información de la campaña</h2>
 
       <p class="description">
-        ${campaign.description || "Campaña promocional disponible para participar de forma rápida y segura."}
+        ${safeCampaignDescription || "Campaña promocional disponible para participar de forma rápida y segura."}
       </p>
 
       <div style="margin-top:20px;color:#374151;line-height:1.7;">
-  <div><b>Premio:</b> ${campaign.prize || "-"}</div>
-  <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+  <div><b>Premio:</b> ${safeCampaignPrize || "-"}</div>
+  <div><b>Fecha del sorteo:</b> ${safeCampaignDrawDate || "-"}</div>
   <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
   <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
 
@@ -6737,8 +6743,8 @@ body::before {
                   </div>
 
                   <div class="info">
-                    <div><b>Premio:</b> ${campaign.prize || "-"}</div>
-                    <div><b>Fecha del sorteo:</b> ${campaign.draw_date || "-"}</div>
+                    <div><b>Premio:</b> ${safeCampaignPrize || "-"}</div>
+                    <div><b>Fecha del sorteo:</b> ${safeCampaignDrawDate || "-"}</div>
                     <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
                     <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
                   </div>
@@ -7649,7 +7655,7 @@ if (isLottery) {
         <div class="glass-card">
           <div class="top-badge">🎯</div>
 
-          <h1>${campaign.title}</h1>
+          <h1>${safeCampaignTitle}</h1>
 
           <div class="price">
             $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
