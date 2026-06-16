@@ -8236,12 +8236,25 @@ if (transactionCurrency !== "COP") {
       .eq("id", orderId);
 
     const { data: existingTickets } = await supabase
-      .from("tickets")
-      .select("id")
-      .eq("order_id", orderId);
+  .from("tickets")
+  .select("id")
+  .eq("order_id", orderId)
+  .eq("status", "active");
 
-   if (!existingTickets || existingTickets.length === 0) {
+const activeTicketsCount = existingTickets ? existingTickets.length : 0;
+const expectedTicketsCount = Number(order.qty || 0);
+
+if (activeTicketsCount === 0) {
   await assignTicketsToOrder(orderId);
+} else if (activeTicketsCount !== expectedTicketsCount) {
+  console.log("Orden pagada con códigos incompletos", {
+    orderId,
+    activeTicketsCount,
+    expectedTicketsCount
+  });
+
+  return res.status(500).send("La orden presenta códigos incompletos. Contacta soporte para validación.");
+}
 
      
 
@@ -8580,38 +8593,49 @@ if (payment.status === "approved" || payment.orders?.payment_status === "paid") 
   localOrderStatus = "paid";
 
   const { data: existingTickets } = await supabase
-    .from("tickets")
-    .select("id")
-    .eq("order_id", payment.order_id);
+  .from("tickets")
+  .select("id")
+  .eq("order_id", payment.order_id)
+  .eq("status", "active");
 
-  if (!existingTickets || existingTickets.length === 0) {
-    await assignTicketsToOrder(payment.order_id);
+const activeTicketsCount = existingTickets ? existingTickets.length : 0;
+const expectedTicketsCount = Number(payment.orders?.qty || 0);
 
-    const { data: orderData } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        rifas(*)
-      `)
-      .eq("id", payment.order_id)
-      .single();
+if (activeTicketsCount === 0) {
+  await assignTicketsToOrder(payment.order_id);
 
-    if (orderData?.rifas) {
-      const soldTickets =
-        Number(orderData.rifas.sold_tickets || 0) + Number(orderData.qty || 0);
+  const { data: orderData } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      rifas(*)
+    `)
+    .eq("id", payment.order_id)
+    .single();
 
-      const availableTickets =
-        Number(orderData.rifas.max_tickets || 0) - soldTickets;
+  if (orderData?.rifas) {
+    const soldTickets =
+      Number(orderData.rifas.sold_tickets || 0) + Number(orderData.qty || 0);
 
-      await supabase
-        .from("rifas")
-        .update({
-          sold_tickets: soldTickets,
-          available_tickets: availableTickets,
-          })
-        .eq("id", orderData.rifas.id);
-    }
+    const availableTickets =
+      Number(orderData.rifas.max_tickets || 0) - soldTickets;
+
+    await supabase
+      .from("rifas")
+      .update({
+        sold_tickets: soldTickets,
+        available_tickets: availableTickets
+      })
+      .eq("id", orderData.rifas.id);
   }
+} else if (activeTicketsCount !== expectedTicketsCount) {
+  console.log("Orden pagada con códigos incompletos desde webhook", {
+    orderId: payment.order_id,
+    activeTicketsCount,
+    expectedTicketsCount
+  });
+
+  return res.status(500).send("La orden presenta códigos incompletos. Contacta soporte para validación.");
 }
 
   
