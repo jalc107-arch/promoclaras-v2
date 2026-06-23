@@ -4334,7 +4334,15 @@ const assignedQty = orderTickets.length;
     data-whatsapp="${order.whatsapp_sent ? "enviado" : "pendiente"}"
     data-codes="${orderTickets.length > 0 ? "con" : "sin"}"
   >
-                            <td>${order.buyers?.full_name || "-"}</td>
+                            <td>
+  <div style="font-weight:bold;">
+    ${order.buyers?.full_name || "-"}
+  </div>
+
+  <div style="margin-top:5px;font-size:11px;color:#cbd5e1;">
+    Orden: ${String(order.id || "").slice(0, 8)}
+  </div>
+</td>
                             <td>${order.buyers?.phone || "-"}</td>
                             <td>${order.qty || 0}</td>
                             <td>$${Number(order.total_paid || 0).toLocaleString("es-CO")}</td>
