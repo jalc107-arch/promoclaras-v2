@@ -4060,20 +4060,35 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
             border: 1px solid rgba(253,230,138,.30);
           }
 
-          .code-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 7px;
-          }
+          .codes-cell {
+  min-width: 360px;
+  max-width: 460px;
+  white-space: normal;
+  overflow: visible;
+}
 
-          .code {
-            background: #2563eb;
-            color: white;
-            padding: 7px 10px;
-            border-radius: 999px;
-            font-weight: bold;
-            font-size: 12px;
-          }
+.code-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  overflow: visible;
+}
+
+.code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #2563eb;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: bold;
+  font-size: 12px;
+  white-space: nowrap;
+  min-width: 82px;
+  text-align: center;
+}
 
           @media (max-width: 700px) {
             body {
@@ -4296,9 +4311,19 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
                 ${
                   orders.length > 0
                     ? orders.map(order => {
-                        const orderTickets = tickets.filter(ticket =>
-                          String(ticket.order_id) === String(order.id)
-                        );
+                        const orderTickets = tickets
+  .filter(ticket =>
+    String(ticket.order_id) === String(order.id) &&
+    String(ticket.status || "active") === "active"
+  )
+  .sort((a, b) => {
+    const codeA = String(a.ticket_code || "");
+    const codeB = String(b.ticket_code || "");
+    return codeA.localeCompare(codeB, "es", { numeric: true });
+  });
+
+const expectedQty = Number(order.qty || 0);
+const assignedQty = orderTickets.length;
 
                         return `
   <tr
@@ -4330,25 +4355,39 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
                               ${new Date(order.created_at).toLocaleString("es-CO")}
                             </td>
 
-                            <td>
-                              ${
-                                orderTickets.length > 0
-                                  ? `
-                                    <div class="code-list">
-                                      ${orderTickets.map(ticket => `
-                                        <span class="code">
-                                          ${ticket.combination || ticket.ticket_code || "-"}
-                                        </span>
-                                      `).join("")}
-                                    </div>
-                                  `
-                                  : `
-                                    <span style="color:#cbd5e1;font-size:12px;">
-                                      Sin códigos asignados
-                                    </span>
-                                  `
-                              }
-                            </td>
+                           <td class="codes-cell">
+  <div style="margin-bottom:8px;font-size:12px;font-weight:bold;color:#cbd5e1;">
+    ${assignedQty} / ${expectedQty} códigos
+  </div>
+
+  ${
+    orderTickets.length > 0
+      ? `
+        <div class="code-list">
+          ${orderTickets.map(ticket => `
+            <span class="code">
+              ${ticket.combination || ticket.ticket_code || "-"}
+            </span>
+          `).join("")}
+        </div>
+
+        ${
+          assignedQty !== expectedQty
+            ? `
+              <div style="margin-top:8px;color:#fecaca;font-size:12px;font-weight:bold;line-height:1.4;">
+                Atención: esta orden no muestra la cantidad completa de códigos.
+              </div>
+            `
+            : ""
+        }
+      `
+      : `
+        <span style="color:#cbd5e1;font-size:12px;">
+          Sin códigos asignados
+        </span>
+      `
+  }
+</td>
 
                             <td>
                               ${
