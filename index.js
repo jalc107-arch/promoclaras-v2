@@ -989,22 +989,60 @@ async function sendOrderCouponsWhatsApp(orderId, forceResend = false) {
       };
     }
 
-    const { data: tickets, error: ticketsError } = await supabase
-      .from("tickets")
-      .select("*")
-      .eq("order_id", orderId)
-      .order("ticket_code", { ascending: true });
+    let { data: tickets, error: ticketsError } = await supabase
+  .from("tickets")
+  .select("*")
+  .eq("order_id", orderId)
+  .eq("status", "active")
+  .order("ticket_code", { ascending: true });
 
-    if (ticketsError) throw ticketsError;
+if (ticketsError) throw ticketsError;
 
-    if (!tickets || tickets.length === 0) {
-      console.log("Orden pagada sin Códigos asignados:", orderId);
-      return {
-        ok: false,
-        skipped: true,
-        reason: "Sin Códigos asignados"
-      };
-    }
+const expectedTicketsCount = Number(order.qty || 0);
+const activeTicketsCount = tickets ? tickets.length : 0;
+
+if (activeTicketsCount === 0 && expectedTicketsCount > 0) {
+  console.log("Orden pagada sin códigos. Se intentará asignar automáticamente:", orderId);
+
+  await assignTicketsToOrder(orderId);
+
+  await reconcileCampaignCounters(order.rifa_id);
+
+  const { data: freshTickets, error: freshTicketsError } = await supabase
+    .from("tickets")
+    .select("*")
+    .eq("order_id", orderId)
+    .eq("status", "active")
+    .order("ticket_code", { ascending: true });
+
+  if (freshTicketsError) throw freshTicketsError;
+
+  tickets = freshTickets || [];
+}
+
+if (!tickets || tickets.length === 0) {
+  console.log("Orden pagada sin Códigos asignados:", orderId);
+
+  return {
+    ok: false,
+    skipped: true,
+    reason: "Sin Códigos asignados"
+  };
+}
+
+if (tickets.length !== expectedTicketsCount) {
+  console.log("Orden pagada con cantidad incompleta de códigos:", {
+    orderId,
+    activeTicketsCount: tickets.length,
+    expectedTicketsCount
+  });
+
+  return {
+    ok: false,
+    skipped: true,
+    reason: "Cantidad incompleta de códigos"
+  };
+}
 
     const baseUrl = APP_BASE_URL;
     const orderUrl = `${baseUrl}/orden/${order.id}`;
@@ -1675,6 +1713,42 @@ const finalManualCombinations = isManualLottery
   if (insertError) throw insertError;
 
   return assignedTickets;
+}
+
+async function reconcileCampaignCounters(rifaId) {
+  const { count, error: countError } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("rifa_id", rifaId)
+    .eq("status", "active");
+
+  if (countError) throw countError;
+
+  const { data: campaign, error: campaignError } = await supabase
+    .from("rifas")
+    .select("id, max_tickets")
+    .eq("id", rifaId)
+    .single();
+
+  if (campaignError) throw campaignError;
+
+  const soldTickets = Number(count || 0);
+  const availableTickets = Number(campaign.max_tickets || 0) - soldTickets;
+
+  const { error: updateError } = await supabase
+    .from("rifas")
+    .update({
+      sold_tickets: soldTickets,
+      available_tickets: availableTickets
+    })
+    .eq("id", rifaId);
+
+  if (updateError) throw updateError;
+
+  return {
+    soldTickets,
+    availableTickets
+  };
 }
 
 app.get("/", (req, res) => {
