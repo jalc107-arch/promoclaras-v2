@@ -3896,16 +3896,31 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
     let tickets = [];
 
     if (orderIds.length > 0) {
-      const { data: ticketsData, error: ticketsError } = await supabase
-        .from("tickets")
-        .select("*")
-        .eq("rifa_id", rifaId)
-        .in("order_id", orderIds)
-        .order("ticket_code", { ascending: true });
+      let allTickets = [];
+let from = 0;
+const pageSize = 1000;
 
-      if (ticketsError) throw ticketsError;
+while (true) {
+  const { data: ticketsPage, error: ticketsError } = await supabase
+    .from("tickets")
+    .select("*")
+    .eq("rifa_id", rifaId)
+    .in("order_id", orderIds)
+    .order("ticket_code", { ascending: true })
+    .range(from, from + pageSize - 1);
 
-      tickets = ticketsData || [];
+  if (ticketsError) throw ticketsError;
+
+  allTickets = allTickets.concat(ticketsPage || []);
+
+  if (!ticketsPage || ticketsPage.length < pageSize) {
+    break;
+  }
+
+  from += pageSize;
+}
+
+tickets = allTickets;
     }
 
     const paidOrders = (orders || []).filter(order => order.payment_status === "paid");
