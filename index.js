@@ -1716,6 +1716,126 @@ const finalManualCombinations = isManualLottery
   return assignedTickets;
 }
 
+async function releaseExpiredLotteryReservations() {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "expired"
+    })
+    .eq("status", "reserved")
+    .lt("expires_at", new Date().toISOString());
+
+  if (error) {
+    console.error("Error liberando reservas vencidas:", error);
+  }
+}
+
+async function getReservedLotteryNumbers(rifaId) {
+  await releaseExpiredLotteryReservations();
+
+  const { data, error } = await supabase
+    .from("lottery_number_reservations")
+    .select("selected_number")
+    .eq("rifa_id", rifaId)
+    .eq("status", "reserved")
+    .gt("expires_at", new Date().toISOString());
+
+  if (error) throw error;
+
+  return (data || [])
+    .map(item => String(item.selected_number || ""))
+    .filter(Boolean);
+}
+
+async function reserveLotteryNumbersForOrder({
+  rifaId,
+  orderId,
+  phone,
+  selectedNumbers
+}) {
+  await releaseExpiredLotteryReservations();
+
+  const numbers = Array.isArray(selectedNumbers)
+    ? selectedNumbers.map(n => String(n))
+    : [];
+
+  if (!numbers.length) {
+    return {
+      ok: true,
+      reserved: 0
+    };
+  }
+
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 15).toISOString();
+
+  const { data: existingReservations, error: reservationError } = await supabase
+    .from("lottery_number_reservations")
+    .select("selected_number")
+    .eq("rifa_id", rifaId)
+    .eq("status", "reserved")
+    .gt("expires_at", new Date().toISOString())
+    .in("selected_number", numbers);
+
+  if (reservationError) throw reservationError;
+
+  if (existingReservations && existingReservations.length > 0) {
+    const unavailable = existingReservations
+      .map(item => item.selected_number)
+      .join(", ");
+
+    throw new Error(`Los siguientes números ya están reservados temporalmente: ${unavailable}`);
+  }
+
+  const rows = numbers.map(number => ({
+    rifa_id: rifaId,
+    order_id: orderId,
+    phone,
+    selected_number: number,
+    status: "reserved",
+    expires_at: expiresAt
+  }));
+
+  const { error: insertError } = await supabase
+    .from("lottery_number_reservations")
+    .insert(rows);
+
+  if (insertError) throw insertError;
+
+  return {
+    ok: true,
+    reserved: rows.length,
+    expiresAt
+  };
+}
+
+async function markLotteryReservationsAsCompleted(orderId) {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "completed"
+    })
+    .eq("order_id", orderId)
+    .eq("status", "reserved");
+
+  if (error) {
+    console.error("Error marcando reservas como completadas:", error);
+  }
+}
+
+async function releaseLotteryReservationsForOrder(orderId) {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "released"
+    })
+    .eq("order_id", orderId)
+    .eq("status", "reserved");
+
+  if (error) {
+    console.error("Error liberando reservas de orden:", error);
+  }
+}
+
 async function reconcileCampaignCounters(rifaId) {
   const { count, error: countError } = await supabase
     .from("tickets")
@@ -7482,14 +7602,19 @@ if (isLottery) {
 
   if (existingTicketsError) throw existingTicketsError;
 
-  usedLotteryNumbers = (existingTickets || [])
-    .map(t => String(t.combination || ""))
-    .filter(Boolean);
+ usedLotteryNumbers = (existingTickets || [])
+  .map(t => String(t.combination || ""))
+  .filter(Boolean);
 
-  const usedSet = new Set(usedLotteryNumbers);
+const reservedLotteryNumbers = await getReservedLotteryNumbers(campaign.id);
 
-  availableLotteryNumbers = getAllLotteryNumbersByDrawMode(campaign.draw_mode)
-    .filter(number => !usedSet.has(number));
+const unavailableSet = new Set([
+  ...usedLotteryNumbers,
+  ...reservedLotteryNumbers
+]);
+
+availableLotteryNumbers = getAllLotteryNumbersByDrawMode(campaign.draw_mode)
+  .filter(number => !unavailableSet.has(number));
 }
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -7893,9 +8018,24 @@ ${
         </div>
 
         <div class="small-note">
-          Esta selección manual solo aplica para campañas de lotería.
-          En Baloto los códigos siguen siendo asignados automáticamente.
-        </div>
+  Esta selección manual solo aplica para campañas de lotería.
+  En Baloto los códigos siguen siendo asignados automáticamente.
+</div>
+
+<div style="
+  margin-top:12px;
+  padding:13px;
+  border-radius:16px;
+  background:rgba(245,158,11,.18);
+  border:1px solid rgba(253,230,138,.35);
+  color:#fef3c7;
+  font-size:13px;
+  line-height:1.5;
+">
+  <b>Importante:</b><br/>
+  Los números escogidos quedan reservados temporalmente durante el proceso de pago.
+  La asignación definitiva se confirma únicamente cuando el pago sea aprobado.
+</div>
       </div>
     `
     : ""
@@ -8261,7 +8401,55 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
   .select()
   .single();
 
-    if (orderError) throw orderError;
+if (orderError) throw orderError;
+
+if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
+  try {
+    await reserveLotteryNumbersForOrder({
+      rifaId: campaign.id,
+      orderId: order.id,
+      phone: cleanBuyerPhone,
+      selectedNumbers: manualLotteryCombinations
+    });
+  } catch (reservationError) {
+    await supabase
+      .from("orders")
+      .update({
+        payment_status: "failed"
+      })
+      .eq("id", order.id);
+
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Número no disponible</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:600px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Número no disponible</h1>
+
+          <p style="line-height:1.6;color:#374151;">
+            ${reservationError.message}
+          </p>
+
+          <p style="line-height:1.6;color:#374151;">
+            Por favor vuelve a escoger números disponibles.
+          </p>
+
+          <a
+            href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a escoger números
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+}
 
     const externalReference = `ord_${Date.now()}_${order.id.slice(0, 8)}`;
 
@@ -8345,6 +8533,8 @@ async function finalizePaidOrder(orderId) {
       available_tickets: Math.max(0, maxTickets - realSoldTickets)
     })
     .eq("id", orderData.rifa_id);
+
+  await markLotteryReservationsAsCompleted(orderId);
 
   return {
     ok: true,
@@ -8500,7 +8690,18 @@ return res.redirect(`/orden/${orderId}`);
           <div style="margin-bottom:10px;"><b>Comprador:</b> ${order.buyers?.full_name || "-"}</div>
           <div style="margin-bottom:10px;"><b>Teléfono:</b> ${order.buyers?.phone || "-"}</div>
           <div style="margin-bottom:10px;"><b>Cantidad:</b> ${order.qty}</div>
-          <div style="margin-bottom:10px;"><b>Subtotal:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}</div>
+
+          ${
+  Array.isArray(order.selected_numbers) && order.selected_numbers.length > 0
+    ? `
+      <div style="margin-bottom:10px;">
+        <b>Números escogidos:</b>
+        ${order.selected_numbers.join(", ")}
+      </div>
+    `
+    : ""
+}
+         <div style="margin-bottom:10px;"><b>Subtotal:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
           <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment.status || "-"}</div>
@@ -8509,7 +8710,7 @@ return res.redirect(`/orden/${orderId}`);
   tickets && tickets.length
     ? `
     <div style="margin-bottom:18px;">
-      <b>Códigos asignadas:</b>
+      <b>Códigos asignados:</b>
 
       <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
         ${tickets.map(t => `
@@ -8550,9 +8751,19 @@ return res.redirect(`/orden/${orderId}`);
 }
 
           
-         ${payment.status !== "approved" ? `
-<div style="margin-top:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;">
+        ${payment.status !== "approved" ? `
+<div style="margin-top:18px;padding:14px;background:#eff6ff;border-radius:12px;color:#1e3a8a;line-height:1.5;">
 Ya puedes continuar al pago de forma segura.
+
+${
+  Array.isArray(order.selected_numbers) && order.selected_numbers.length > 0
+    ? `
+      <br/><br/>
+      <b>Importante:</b> tus números seleccionados quedan reservados temporalmente.
+      La asignación definitiva se confirma únicamente cuando el pago sea aprobado.
+    `
+    : ""
+}
 </div>
 
 <form action="https://checkout.wompi.co/p/" method="GET">
@@ -8815,13 +9026,15 @@ app.post("/webhooks/wompi", async (req, res) => {
         .eq("id", payment.id);
 
       await supabase
-        .from("orders")
-        .update({
-          payment_status: "failed"
-        })
-        .eq("id", payment.order_id);
+  .from("orders")
+  .update({
+    payment_status: "failed"
+  })
+  .eq("id", payment.order_id);
 
-      return res.status(200).send("Pago fallido registrado");
+await releaseLotteryReservationsForOrder(payment.order_id);
+
+return res.status(200).send("Pago fallido registrado");
     }
 
     await supabase
@@ -11341,27 +11554,61 @@ Allow: /
 Sitemap: https://www.promoclaras.com/sitemap.xml`);
 });
 
-app.get("/sitemap.xml", (req, res) => {
-  res.type("application/xml");
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const { data: campaigns, error } = await supabase
+      .from("rifas")
+      .select("slug, updated_at, created_at")
+      .eq("status", "active")
+      .eq("is_public", true);
+
+    if (error) throw error;
+
+    const staticUrls = [
+      {
+        loc: `${APP_BASE_URL}/`,
+        priority: "1.0"
+      },
+      {
+        loc: `${APP_BASE_URL}/campanas`,
+        priority: "0.9"
+      },
+      {
+        loc: `${APP_BASE_URL}/consultar`,
+        priority: "0.8"
+      },
+      {
+        loc: `${APP_BASE_URL}/organizers/login`,
+        priority: "0.6"
+      }
+    ];
+
+    const campaignUrls = (campaigns || [])
+      .filter(campaign => campaign.slug)
+      .map(campaign => ({
+        loc: `${APP_BASE_URL}/campanas/${campaign.slug}`,
+        priority: "0.8",
+        lastmod: formatDateOnly(campaign.updated_at || campaign.created_at)
+      }));
+
+    const allUrls = [...staticUrls, ...campaignUrls];
+
+    const xmlUrls = allUrls.map(item => `
+  <url>
+    <loc>${escapeHtml(item.loc)}</loc>
+    ${item.lastmod ? `<lastmod>${escapeHtml(item.lastmod)}</lastmod>` : ""}
+    <priority>${item.priority}</priority>
+  </url>`).join("");
+
+    res.type("application/xml");
+
+    return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://www.promoclaras.com/</loc>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://www.promoclaras.com/campanas</loc>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://www.promoclaras.com/consultar</loc>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.promoclaras.com/organizers/login</loc>
-    <priority>0.6</priority>
-  </url>
+${xmlUrls}
 </urlset>`);
+  } catch (error) {
+    return res.status(500).type("text/plain").send(error.message);
+  }
 });
 
 app.listen(PORT, "0.0.0.0", () => {
