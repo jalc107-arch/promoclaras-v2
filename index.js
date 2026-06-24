@@ -1623,9 +1623,10 @@ async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const drawMode = orderData.rifas?.draw_mode;
 
   const { data: existingTickets, error: existingError } = await supabase
-    .from("tickets")
-    .select("ticket_code, combination")
-    .eq("rifa_id", orderData.rifa_id);
+  .from("tickets")
+  .select("ticket_code, combination")
+  .eq("rifa_id", orderData.rifa_id)
+  .eq("status", "active");
 
   if (existingError) throw existingError;
 
@@ -7307,9 +7308,17 @@ app.get("/consultar", async (req, res) => {
 
                   <div class="orders-grid">
                     ${orders.map(order => {
-                      const coupons = (order.tickets || [])
-                        .map(t => t.combination || t.ticket_code || "-")
-                        .join(", ");
+                     const activeTickets = (order.tickets || [])
+  .filter(t => String(t.status || "active") === "active")
+  .sort((a, b) => {
+    const codeA = String(a.ticket_code || "");
+    const codeB = String(b.ticket_code || "");
+    return codeA.localeCompare(codeB, "es", { numeric: true });
+  });
+
+const coupons = activeTickets
+  .map(t => t.combination || t.ticket_code || "-")
+  .join(", ");
 
                       const paid = order.payment_status === "paid";
 
@@ -7356,10 +7365,10 @@ app.get("/consultar", async (req, res) => {
                                   <b>Códigos asignados:</b>
 
                                   <div class="coupon-list">
-                                    ${(order.tickets || []).map(t => `
-                                      <span class="coupon">
-                                        ${t.combination || t.ticket_code || "-"}
-                                      </span>
+                                    ${activeTickets.map(t => `
+                                    <span class="coupon">
+                                    ${t.combination || t.ticket_code || "-"}
+                                    </span>
                                     `).join("")}
                                   </div>
                                 </div>
@@ -7466,9 +7475,10 @@ let availableLotteryNumbers = [];
 
 if (isLottery) {
   const { data: existingTickets, error: existingTicketsError } = await supabase
-    .from("tickets")
-    .select("combination")
-    .eq("rifa_id", campaign.id);
+  .from("tickets")
+  .select("combination")
+  .eq("rifa_id", campaign.id)
+  .eq("status", "active");
 
   if (existingTicketsError) throw existingTicketsError;
 
@@ -7901,7 +7911,11 @@ ${
           </form>
 
           <div class="small-note">
-            Tus códigos promocionales se asignan automáticamente después del pago aprobado.
+            ${
+  isLottery
+    ? "Tus números escogidos se confirmarán después del pago aprobado."
+    : "Tus códigos promocionales se asignan automáticamente después del pago aprobado."
+}
           </div>
 
           <a class="back" href="/campanas/${encodeURIComponent(campaign.slug || "")}">
@@ -8106,10 +8120,11 @@ if (isLotteryCampaign(campaign)) {
   }
 
   const { data: existingTickets, error: existingTicketsError } = await supabase
-    .from("tickets")
-    .select("combination")
-    .eq("rifa_id", campaign.id)
-    .in("combination", finalSelectedNumbers);
+  .from("tickets")
+  .select("combination")
+  .eq("rifa_id", campaign.id)
+  .eq("status", "active")
+  .in("combination", finalSelectedNumbers);
 
   if (existingTicketsError) throw existingTicketsError;
 
@@ -8447,7 +8462,9 @@ return res.redirect(`/orden/${orderId}`);
     const { data: tickets } = await supabase
   .from("tickets")
   .select("*")
-  .eq("order_id", orderId);
+  .eq("order_id", orderId)
+  .eq("status", "active")
+  .order("ticket_code", { ascending: true });
 
     if (!WOMPI_PUBLIC_KEY || !WOMPI_INTEGRITY_SECRET) {
       return res.status(500).send("Faltan variables de Wompi");
