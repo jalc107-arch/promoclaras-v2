@@ -1596,6 +1596,79 @@ function generateBalotoCombination(drawMode) {
   throw new Error("No fue posible generar una combinación válida para esta modalidad de Baloto.");
 }
 
+async function releaseExpiredLotteryReservations() {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "expired"
+    })
+    .eq("status", "reserved")
+    .lt("expires_at", new Date().toISOString());
+
+  if (error) {
+    console.error("Error liberando reservas vencidas:", error);
+  }
+}
+
+async function reserveLotteryNumbersForOrder(rifaId, orderId, selectedNumbers) {
+  await releaseExpiredLotteryReservations();
+
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 15).toISOString();
+
+  const rows = selectedNumbers.map(number => ({
+    rifa_id: rifaId,
+    order_id: orderId,
+    selected_number: String(number),
+    status: "reserved",
+    expires_at: expiresAt
+  }));
+
+  const { error: insertError } = await supabase
+    .from("lottery_number_reservations")
+    .insert(rows);
+
+  if (insertError) {
+    if (String(insertError.code) === "23505") {
+      throw new Error("Uno o varios números ya fueron reservados por otra persona hace unos segundos. Por favor vuelve a escoger números disponibles.");
+    }
+
+    throw insertError;
+  }
+
+  return {
+    ok: true,
+    expiresAt
+  };
+}
+
+async function markLotteryReservationsAsSold(orderId) {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "sold"
+    })
+    .eq("order_id", orderId)
+    .eq("status", "reserved");
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function cancelLotteryReservations(orderId) {
+  const { error } = await supabase
+    .from("lottery_number_reservations")
+    .update({
+      status: "cancelled"
+    })
+    .eq("order_id", orderId)
+    .eq("status", "reserved");
+
+  if (error) {
+    console.error("Error cancelando reservas de lotería:", error);
+  }
+}
+
 async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
@@ -1708,10 +1781,16 @@ const finalManualCombinations = isManualLottery
   }
 
   const { error: insertError } = await supabase
-    .from("tickets")
-    .insert(assignedTickets);
+  .from("tickets")
+  .insert(assignedTickets);
 
-  if (insertError) throw insertError;
+if (insertError) {
+  if (String(insertError.code) === "23505") {
+    throw new Error("Uno o varios códigos ya fueron asignados por otra operación simultánea. Intenta nuevamente o contacta soporte.");
+  }
+
+  throw insertError;
+}
 
   return assignedTickets;
 }
@@ -7594,27 +7673,39 @@ let usedLotteryNumbers = [];
 let availableLotteryNumbers = [];
 
 if (isLottery) {
+  await releaseExpiredLotteryReservations();
+
   const { data: existingTickets, error: existingTicketsError } = await supabase
-  .from("tickets")
-  .select("combination")
-  .eq("rifa_id", campaign.id)
-  .eq("status", "active");
+    .from("tickets")
+    .select("combination")
+    .eq("rifa_id", campaign.id)
+    .eq("status", "active");
 
   if (existingTicketsError) throw existingTicketsError;
 
- usedLotteryNumbers = (existingTickets || [])
-  .map(t => String(t.combination || ""))
-  .filter(Boolean);
+  const { data: activeReservations, error: reservationsError } = await supabase
+    .from("lottery_number_reservations")
+    .select("selected_number")
+    .eq("rifa_id", campaign.id)
+    .eq("status", "reserved")
+    .gt("expires_at", new Date().toISOString());
 
-const reservedLotteryNumbers = await getReservedLotteryNumbers(campaign.id);
+  if (reservationsError) throw reservationsError;
 
-const unavailableSet = new Set([
-  ...usedLotteryNumbers,
-  ...reservedLotteryNumbers
-]);
+  const soldNumbers = (existingTickets || [])
+    .map(t => String(t.combination || ""))
+    .filter(Boolean);
 
-availableLotteryNumbers = getAllLotteryNumbersByDrawMode(campaign.draw_mode)
-  .filter(number => !unavailableSet.has(number));
+  const reservedNumbers = (activeReservations || [])
+    .map(r => String(r.selected_number || ""))
+    .filter(Boolean);
+
+  usedLotteryNumbers = [...soldNumbers, ...reservedNumbers];
+
+  const usedSet = new Set(usedLotteryNumbers);
+
+  availableLotteryNumbers = getAllLotteryNumbersByDrawMode(campaign.draw_mode)
+    .filter(number => !usedSet.has(number));
 }
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -8053,7 +8144,7 @@ ${
           <div class="small-note">
             ${
   isLottery
-    ? "Tus números escogidos se confirmarán después del pago aprobado."
+    ? "Tus números escogidos quedarán reservados temporalmente mientras completas el pago. La asignación final se confirma después del pago aprobado."
     : "Tus códigos promocionales se asignan automáticamente después del pago aprobado."
 }
           </div>
@@ -8403,6 +8494,49 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
 
 if (orderError) throw orderError;
 
+    if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
+  try {
+    await reserveLotteryNumbersForOrder(
+      campaign.id,
+      order.id,
+      manualLotteryCombinations
+    );
+  } catch (reservationError) {
+    await supabase
+      .from("orders")
+      .update({
+        payment_status: "failed"
+      })
+      .eq("id", order.id);
+
+    return res.status(400).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Número no disponible</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>Número no disponible</h1>
+
+          <p style="line-height:1.6;color:#374151;">
+            ${reservationError.message}
+          </p>
+
+          <a
+            href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar"
+            style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a escoger números
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+}
+
 if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
   try {
     await reserveLotteryNumbersForOrder({
@@ -8496,9 +8630,14 @@ async function finalizePaidOrder(orderId) {
 
   const activeTicketsCount = existingTickets ? existingTickets.length : 0;
 
-  if (activeTicketsCount === 0) {
+if (activeTicketsCount === 0) {
     await assignTicketsToOrder(orderId);
+
+    if (isLotteryCampaign(orderData.rifas)) {
+      await markLotteryReservationsAsSold(orderId);
+    }
   } else if (activeTicketsCount !== expectedTicketsCount) {
+  
     console.log("Orden pagada con códigos incompletos", {
       orderId,
       activeTicketsCount,
@@ -9033,6 +9172,8 @@ app.post("/webhooks/wompi", async (req, res) => {
   .eq("id", payment.order_id);
 
 await releaseLotteryReservationsForOrder(payment.order_id);
+
+      await cancelLotteryReservations(payment.order_id);
 
 return res.status(200).send("Pago fallido registrado");
     }
