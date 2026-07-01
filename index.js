@@ -1878,6 +1878,27 @@ async function reconcileCampaignCounters(rifaId) {
   };
 }
 
+async function fetchAllSupabaseRows(buildQuery, pageSize = 1000) {
+  let rows = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+
+    if (error) throw error;
+
+    rows = rows.concat(data || []);
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return rows;
+}
+
 app.get("/", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -3001,10 +3022,15 @@ orders = ordersData || [];
     if (paymentsError) throw paymentsError;
     payments = paymentsData || [];
 
-    const { data: ticketsData, error: ticketsError } = await supabase
-      .from("tickets")
-      .select("*")
-      .in("order_id", orderIds);
+    const ticketsData = await fetchAllSupabaseRows((from, to) =>
+  supabase
+    .from("tickets")
+    .select("*")
+    .in("order_id", orderIds)
+    .range(from, to)
+);
+
+tickets = ticketsData || [];
 
     if (ticketsError) throw ticketsError;
     tickets = ticketsData || [];
@@ -7602,11 +7628,14 @@ let availableLotteryNumbers = [];
 if (isLottery) {
   await releaseExpiredLotteryReservations();
 
-  const { data: existingTickets, error: existingTicketsError } = await supabase
+  const existingTickets = await fetchAllSupabaseRows((from, to) =>
+  supabase
     .from("tickets")
     .select("combination")
     .eq("rifa_id", campaign.id)
-    .eq("status", "active");
+    .eq("status", "active")
+    .range(from, to)
+);
 
   if (existingTicketsError) throw existingTicketsError;
 
