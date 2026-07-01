@@ -1265,19 +1265,9 @@ async function processReferralReward(orderId) {
         amount: 0,
         status: "approved"
       });
+await assignTicketsToOrder(rewardOrder.id);
 
-    await assignTicketsToOrder(rewardOrder.id);
-
-    const newSoldTickets = Number(freshCampaign.sold_tickets || 0) + 1;
-    const newAvailableTickets = Number(freshCampaign.max_tickets || 0) - newSoldTickets;
-
-    await supabase
-      .from("rifas")
-      .update({
-        sold_tickets: newSoldTickets,
-        available_tickets: newAvailableTickets
-      })
-      .eq("id", order.rifa_id);
+await reconcileCampaignCounters(order.rifa_id);
 
     await supabase
       .from("referral_rewards")
@@ -1622,13 +1612,28 @@ async function assignTicketsToOrder(orderId, manualCombinations = []) {
   const maxTickets = Number(orderData.rifas?.max_tickets || 0);
   const drawMode = orderData.rifas?.draw_mode;
 
-  const { data: existingTickets, error: existingError } = await supabase
-  .from("tickets")
-  .select("ticket_code, combination")
-  .eq("rifa_id", orderData.rifa_id)
-  .eq("status", "active");
+ let existingTickets = [];
+let from = 0;
+const pageSize = 1000;
+
+while (true) {
+  const { data: ticketsPage, error: existingError } = await supabase
+    .from("tickets")
+    .select("ticket_code, combination")
+    .eq("rifa_id", orderData.rifa_id)
+    .eq("status", "active")
+    .range(from, from + pageSize - 1);
 
   if (existingError) throw existingError;
+
+  existingTickets = existingTickets.concat(ticketsPage || []);
+
+  if (!ticketsPage || ticketsPage.length < pageSize) {
+    break;
+  }
+
+  from += pageSize;
+}
 
   const usedTicketCodes = new Set(
     (existingTickets || []).map(t => String(t.ticket_code))
