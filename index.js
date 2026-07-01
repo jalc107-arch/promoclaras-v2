@@ -3032,8 +3032,6 @@ orders = ordersData || [];
 
 tickets = ticketsData || [];
 
-    if (ticketsError) throw ticketsError;
-    tickets = ticketsData || [];
   }
 }
 
@@ -7637,8 +7635,7 @@ if (isLottery) {
     .range(from, to)
 );
 
-  if (existingTicketsError) throw existingTicketsError;
-
+ 
   const { data: activeReservations, error: reservationsError } = await supabase
     .from("lottery_number_reservations")
     .select("selected_number")
