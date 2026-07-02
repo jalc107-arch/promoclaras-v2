@@ -1189,6 +1189,29 @@ async function processReferralReward(orderId) {
       };
     }
 
+    const nextRewardNumber = Number(existingRewards || 0) + 1;
+
+const minimumApprovedNeededForThisReward = nextRewardNumber * requiredApprovedOrders;
+
+if (Number(approvedCount || 0) < minimumApprovedNeededForThisReward) {
+  console.log("No cumple meta real para nueva cortesía:", {
+    referrerId: referrer.id,
+    approvedCount,
+    existingRewards,
+    nextRewardNumber,
+    requiredApprovedOrders,
+    minimumApprovedNeededForThisReward
+  });
+
+  return {
+    ok: true,
+    skipped: true,
+    approvedCount,
+    existingRewards,
+    reason: "No cumple la meta real para una nueva cortesía"
+  };
+}
+
     const { data: freshCampaign, error: freshCampaignError } = await supabase
       .from("rifas")
       .select("*")
@@ -1270,7 +1293,7 @@ await reconcileCampaignCounters(order.rifa_id);
         rifa_id: order.rifa_id,
         referrer_id: referrer.id,
         order_id: rewardOrder.id,
-        reward_number: Number(existingRewards || 0) + 1,
+        reward_number: nextRewardNumber,
         required_approved_orders: requiredApprovedOrders,
         status: "created"
       });
