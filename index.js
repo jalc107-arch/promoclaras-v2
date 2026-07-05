@@ -2246,8 +2246,20 @@ app.get("/", (req, res) => {
             </div>
 
             <div class="footer">
-              © CampaClick — Plataforma de campañas promocionales<br/>
-              Los códigos se asignan automáticamente después del pago aprobado.
+             © CampaClick — Plataforma de campañas promocionales<br/>
+             Los códigos se asignan automáticamente después del pago aprobado.<br/><br/>
+
+<a href="/terminos-y-condiciones" style="color:rgba(255,255,255,.82);font-weight:bold;text-decoration:none;">
+  Términos y condiciones
+</a>
+&nbsp;|&nbsp;
+<a href="/politica-privacidad" style="color:rgba(255,255,255,.82);font-weight:bold;text-decoration:none;">
+  Política de privacidad
+</a>
+&nbsp;|&nbsp;
+<a href="/politica-campanas" style="color:rgba(255,255,255,.82);font-weight:bold;text-decoration:none;">
+  Política de campañas
+</a>
             </div>
           </section>
         </section>
@@ -8111,7 +8123,42 @@ ${
               </div>
 
             </div>
+<div style="
+  margin-top:18px;
+  padding:15px;
+  border-radius:18px;
+  background:rgba(255,255,255,.11);
+  border:1px solid rgba(255,255,255,.24);
+  color:rgba(255,255,255,.88);
+  line-height:1.5;
+  font-size:14px;
+">
+  <label style="display:flex;gap:10px;align-items:flex-start;margin:0;">
+    <input
+      type="checkbox"
+      name="terms_accepted"
+      value="true"
+      required
+      style="width:auto;margin-top:4px;"
+    >
 
+    <span>
+      Declaro que he leído y acepto los
+      <a href="/terminos-y-condiciones" target="_blank" style="color:#93c5fd;font-weight:bold;">
+        términos y condiciones
+      </a>,
+      la
+      <a href="/politica-privacidad" target="_blank" style="color:#93c5fd;font-weight:bold;">
+        política de privacidad
+      </a>
+      y la
+      <a href="/politica-campanas" target="_blank" style="color:#93c5fd;font-weight:bold;">
+        política de campañas promocionales
+      </a>.
+      Autorizo el tratamiento de mis datos personales y el envío de mensajes relacionados con mi orden.
+    </span>
+  </label>
+</div>
             <button class="pay-button" type="submit">
               Continuar al pago
             </button>
@@ -8196,6 +8243,12 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
     const buyerEmail = String(req.body.buyer_email || "").trim();
     const qty = Number(req.body.qty || 0);
     const referralCode = normalizeReferralCode(req.body.referral_code);
+
+    const termsAccepted = req.body.terms_accepted === "true";
+
+if (!termsAccepted) {
+  return res.status(400).send("Debes aceptar los términos, condiciones y política de privacidad para continuar.");
+}
 
     let selectedNumbers = req.body.selected_numbers || [];
 
@@ -11682,6 +11735,254 @@ ${xmlUrls}
   } catch (error) {
     return res.status(500).type("text/plain").send(error.message);
   }
+});
+
+app.get("/terminos-y-condiciones", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Términos y condiciones - CampaClick</title>
+</head>
+
+<body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
+  <div style="max-width:950px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+    <h1>Términos y condiciones de uso</h1>
+
+    <p>
+      CampaClick es una plataforma tecnológica que permite crear, administrar y participar en campañas promocionales digitales mediante códigos promocionales asignados después del pago aprobado.
+    </p>
+
+    <h2>1. Naturaleza de la plataforma</h2>
+    <p>
+      CampaClick no es una casa de apuestas, casino, operador de juegos de suerte y azar ni entidad financiera. La plataforma funciona como medio tecnológico para la gestión de campañas promocionales privadas, con reglas previamente informadas al participante.
+    </p>
+
+    <h2>2. Participación</h2>
+    <p>
+      Para participar, el usuario debe registrar sus datos básicos, realizar el pago correspondiente y recibir sus códigos promocionales. Los códigos solo se asignan cuando el pago haya sido aprobado por la pasarela de pagos.
+    </p>
+
+    <h2>3. Asignación de códigos</h2>
+    <p>
+      En campañas basadas en Baloto, los códigos promocionales se asignan automáticamente por el sistema. En campañas basadas en loterías, el participante puede escoger números disponibles cuando la campaña así lo permita.
+    </p>
+
+    <h2>4. Resultados</h2>
+    <p>
+      El resultado de cada campaña se valida con base en la fuente pública o mecanismo informado en la descripción de la campaña. Una vez cargado el resultado, la campaña se cierra y no se permiten nuevas compras.
+    </p>
+
+    <h2>5. Pagos</h2>
+    <p>
+      Los pagos son procesados por una pasarela externa. CampaClick no almacena datos financieros sensibles como números de tarjeta, claves bancarias o información de autenticación financiera.
+    </p>
+
+    <h2>6. Reembolsos</h2>
+    <p>
+      Una vez aprobado el pago y asignados los códigos promocionales, no habrá devolución del dinero salvo error técnico comprobado, duplicidad no corregida, cancelación de la campaña o decisión administrativa de CampaClick.
+    </p>
+
+    <h2>7. Responsabilidad del organizador</h2>
+    <p>
+      El organizador es responsable de la veracidad de la campaña, la existencia del premio, la entrega del premio y el cumplimiento de las condiciones ofrecidas al público.
+    </p>
+
+    <h2>8. Responsabilidad del participante</h2>
+    <p>
+      El participante debe suministrar información real, verificar sus códigos, conservar el soporte de pago y consultar oportunamente el resultado de la campaña.
+    </p>
+
+    <h2>9. Campañas con referidos</h2>
+    <p>
+      Cuando una campaña tenga programa de referidos, los códigos de cortesía se entregarán únicamente cuando se cumpla la cantidad mínima de compras aprobadas definida para esa campaña. Las compras propias no cuentan como referido válido.
+    </p>
+
+    <h2>10. Uso indebido</h2>
+    <p>
+      CampaClick podrá bloquear, cancelar o revisar órdenes cuando detecte fraude, manipulación, pagos irregulares, abuso del sistema de referidos, duplicidad sospechosa o cualquier conducta que afecte la transparencia de la campaña.
+    </p>
+
+    <h2>11. Modificaciones</h2>
+    <p>
+      CampaClick podrá actualizar estos términos cuando sea necesario. La versión publicada en esta página será la vigente.
+    </p>
+
+    <h2>12. Contacto</h2>
+    <p>
+      Para solicitudes, inquietudes o reclamaciones, el usuario podrá comunicarse con CampaClick a través de los canales publicados en la plataforma.
+    </p>
+
+    <div style="margin-top:26px;">
+      <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+        Volver al inicio
+      </a>
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
+app.get("/politica-privacidad", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Política de privacidad - CampaClick</title>
+</head>
+
+<body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
+  <div style="max-width:950px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+    <h1>Política de privacidad y tratamiento de datos personales</h1>
+
+    <p>
+      CampaClick protege la información personal de usuarios, participantes y organizadores. Esta política explica qué datos se recolectan, para qué se usan y cómo pueden ejercer sus derechos.
+    </p>
+
+    <h2>1. Datos que recolectamos</h2>
+    <p>
+      Podemos recolectar nombre completo, número de teléfono, correo electrónico, datos de orden, códigos promocionales asignados, soportes de verificación del organizador, información de campaña y estado de pago.
+    </p>
+
+    <h2>2. Finalidad del tratamiento</h2>
+    <p>
+      Los datos se usan para registrar participantes, procesar órdenes, asignar códigos promocionales, enviar confirmaciones por WhatsApp, consultar resultados, validar identidad de organizadores, prevenir fraude y administrar campañas.
+    </p>
+
+    <h2>3. Datos financieros</h2>
+    <p>
+      CampaClick no almacena datos sensibles de tarjetas, claves bancarias ni credenciales financieras. Los pagos son gestionados por proveedores externos de pago.
+    </p>
+
+    <h2>4. WhatsApp y comunicaciones</h2>
+    <p>
+      Al participar o registrarse, el usuario autoriza recibir mensajes relacionados con su orden, códigos promocionales, estado de campaña, resultados, verificación o soporte operativo.
+    </p>
+
+    <h2>5. Conservación de la información</h2>
+    <p>
+      La información podrá conservarse durante el tiempo necesario para cumplir finalidades operativas, legales, contables, de seguridad, auditoría y atención de reclamaciones.
+    </p>
+
+    <h2>6. Seguridad</h2>
+    <p>
+      CampaClick aplica medidas técnicas y administrativas para proteger la información. Sin embargo, ningún sistema digital es absolutamente infalible, por lo que también se recomienda al usuario cuidar sus credenciales y dispositivos.
+    </p>
+
+    <h2>7. Derechos del titular</h2>
+    <p>
+      El titular de los datos podrá solicitar consulta, actualización, corrección, eliminación o revocatoria de autorización cuando legalmente proceda.
+    </p>
+
+    <h2>8. Encargados y terceros</h2>
+    <p>
+      Para operar la plataforma pueden intervenir proveedores tecnológicos, pasarelas de pago, servicios de almacenamiento, mensajería, hosting y herramientas de seguridad.
+    </p>
+
+    <h2>9. Autorización</h2>
+    <p>
+      Al usar CampaClick, crear una cuenta, registrar una orden o participar en una campaña, el usuario autoriza el tratamiento de sus datos personales conforme a esta política.
+    </p>
+
+    <h2>10. Contacto</h2>
+    <p>
+      Las solicitudes relacionadas con datos personales podrán presentarse a través de los canales oficiales publicados por CampaClick.
+    </p>
+
+    <div style="margin-top:26px;">
+      <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+        Volver al inicio
+      </a>
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
+app.get("/politica-campanas", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Política de campañas promocionales - CampaClick</title>
+</head>
+
+<body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
+  <div style="max-width:950px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+    <h1>Política de campañas promocionales</h1>
+
+    <p>
+      Esta política regula el funcionamiento general de las campañas publicadas en CampaClick.
+    </p>
+
+    <h2>1. Revisión previa</h2>
+    <p>
+      Toda campaña creada por un organizador podrá ser revisada por CampaClick antes de quedar activa o pública.
+    </p>
+
+    <h2>2. Transparencia</h2>
+    <p>
+      Cada campaña debe informar premio, valor por código promocional, fecha del resultado, modalidad, reglas de asignación y condiciones de participación.
+    </p>
+
+    <h2>3. Códigos promocionales</h2>
+    <p>
+      Los códigos promocionales son la unidad de participación dentro de la campaña. Su asignación queda registrada en la plataforma y puede ser consultada por el participante.
+    </p>
+
+    <h2>4. Campañas Baloto</h2>
+    <p>
+      En campañas con Baloto, se toman únicamente las balotas principales del resultado oficial, sin incluir la súper balota. El sistema organiza las balotas de menor a mayor y valida la modalidad definida.
+    </p>
+
+    <h2>5. Campañas de lotería</h2>
+    <p>
+      En campañas de lotería, el participante podrá escoger números disponibles cuando la campaña permita selección manual. Los números vendidos o reservados temporalmente no estarán disponibles para otros usuarios.
+    </p>
+
+    <h2>6. Referidos</h2>
+    <p>
+      El programa de referidos, cuando esté activo, entregará códigos de cortesía únicamente cuando se cumpla la meta de compras aprobadas. Las cortesías no son dinero, no son comisión y no son canjeables.
+    </p>
+
+    <h2>7. Cierre de campaña</h2>
+    <p>
+      Una campaña se cierra cuando se registra el resultado oficial o cuando CampaClick determine su cancelación por razones operativas, técnicas o de seguridad.
+    </p>
+
+    <h2>8. Entrega del premio</h2>
+    <p>
+      La entrega del premio corresponde al organizador. CampaClick podrá solicitar evidencias de entrega antes de liquidar valores al organizador.
+    </p>
+
+    <h2>9. Prevención de fraude</h2>
+    <p>
+      CampaClick podrá revisar órdenes, pagos, referidos, códigos y resultados cuando detecte conductas irregulares o intentos de manipulación.
+    </p>
+
+    <div style="margin-top:26px;">
+      <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+        Volver al inicio
+      </a>
+    </div>
+  </div>
+</body>
+</html>
+  `);
 });
 
 app.listen(PORT, "0.0.0.0", () => {
