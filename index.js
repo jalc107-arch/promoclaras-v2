@@ -3085,6 +3085,7 @@ orders = ordersData || [];
     tickets = tickets.concat(ticketsPage || []);
   }
 }
+  }
 
 const totalCampaignCoupons = (campaigns || []).reduce(
   (acc, c) => acc + Number(c.max_tickets || 0),
