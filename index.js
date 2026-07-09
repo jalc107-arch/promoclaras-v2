@@ -1922,6 +1922,16 @@ async function fetchAllSupabaseRows(buildQuery, pageSize = 1000) {
   return rows;
 }
 
+function chunkArray(items, size = 100) {
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+}
+
 app.get("/", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -3048,25 +3058,31 @@ orders = ordersData || [];
   
   const orderIds = orders.map(o => o.id);
 
-  if (orderIds.length > 0) {
-    const { data: paymentsData, error: paymentsError } = await supabase
+ if (orderIds.length > 0) {
+  payments = [];
+  tickets = [];
+
+  const orderIdChunks = chunkArray(orderIds, 100);
+
+  for (const chunk of orderIdChunks) {
+    const { data: paymentsPage, error: paymentsError } = await supabase
       .from("payments")
       .select("*")
-      .in("order_id", orderIds);
+      .in("order_id", chunk);
 
     if (paymentsError) throw paymentsError;
-    payments = paymentsData || [];
 
-    const ticketsData = await fetchAllSupabaseRows((from, to) =>
-  supabase
-    .from("tickets")
-    .select("*")
-    .in("order_id", orderIds)
-    .range(from, to)
-);
+    payments = payments.concat(paymentsPage || []);
 
-tickets = ticketsData || [];
+    const ticketsPage = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from("tickets")
+        .select("*")
+        .in("order_id", chunk)
+        .range(from, to)
+    );
 
+    tickets = tickets.concat(ticketsPage || []);
   }
 }
 
@@ -11684,7 +11700,7 @@ app.get("/sitemap.xml", async (req, res) => {
   try {
     const { data: campaigns, error } = await supabase
       .from("rifas")
-      .select("slug, updated_at, created_at")
+      .select("slug, created_at")
       .eq("status", "active")
       .eq("is_public", true);
 
@@ -11714,7 +11730,7 @@ app.get("/sitemap.xml", async (req, res) => {
       .map(campaign => ({
         loc: `${APP_BASE_URL}/campanas/${campaign.slug}`,
         priority: "0.8",
-        lastmod: formatDateOnly(campaign.updated_at || campaign.created_at)
+        lastmod: formatDateOnly(campaign.created_at)
       }));
 
     const allUrls = [...staticUrls, ...campaignUrls];
