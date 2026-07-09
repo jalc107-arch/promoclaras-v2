@@ -4168,37 +4168,31 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
 
     if (ordersError) throw ordersError;
 
-    const orderIds = (orders || []).map(order => order.id);
+  const orderIds = (orders || []).map(order => order.id);
 
-    let tickets = [];
+let tickets = [];
 
-    if (orderIds.length > 0) {
-      let allTickets = [];
-let from = 0;
-const pageSize = 1000;
+if (orderIds.length > 0) {
+  let allTickets = [];
 
-while (true) {
-  const { data: ticketsPage, error: ticketsError } = await supabase
-    .from("tickets")
-    .select("*")
-    .eq("rifa_id", rifaId)
-    .in("order_id", orderIds)
-    .order("ticket_code", { ascending: true })
-    .range(from, from + pageSize - 1);
+  const orderIdChunks = chunkArray(orderIds, 100);
 
-  if (ticketsError) throw ticketsError;
+  for (const chunk of orderIdChunks) {
+    const ticketsPage = await fetchAllSupabaseRows((from, to) =>
+      supabase
+        .from("tickets")
+        .select("*")
+        .eq("rifa_id", rifaId)
+        .in("order_id", chunk)
+        .order("ticket_code", { ascending: true })
+        .range(from, to)
+    );
 
-  allTickets = allTickets.concat(ticketsPage || []);
-
-  if (!ticketsPage || ticketsPage.length < pageSize) {
-    break;
+    allTickets = allTickets.concat(ticketsPage || []);
   }
 
-  from += pageSize;
+  tickets = allTickets;
 }
-
-tickets = allTickets;
-    }
 
     const paidOrders = (orders || []).filter(order => order.payment_status === "paid");
     const pendingOrders = (orders || []).filter(order => order.payment_status !== "paid");
