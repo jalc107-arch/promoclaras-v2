@@ -8045,15 +8045,7 @@ if (isLottery) {
                 >
               </div>
 
-              <div>
-                <label>Correo electrónico</label>
-                <input
-                  type="email"
-                  name="buyer_email"
-                  placeholder="Opcional"
-                >
-              </div>
-
+             
               <div>
                 <label>Cantidad de códigos</label>
 
