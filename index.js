@@ -48,17 +48,29 @@ const sessionPool = new Pool({
   }
 });
 
+const SESSION_SECRET = String(process.env.SESSION_SECRET || "").trim();
+
+if (!SESSION_SECRET) {
+  throw new Error(
+    "Falta SESSION_SECRET. La aplicación no puede iniciar sin un secreto de sesión seguro."
+  );
+}
+
 app.use(
   session({
+    name: "campaclick.sid",
+
     store: new PgSession({
       pool: sessionPool,
       tableName: "user_sessions",
       createTableIfMissing: true
     }),
-    secret: process.env.SESSION_SECRET || "promoclaras_v2_secret",
+
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     proxy: true,
+
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
