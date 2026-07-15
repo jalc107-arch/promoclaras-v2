@@ -80,12 +80,24 @@ app.use(
   })
 );
 
-const loginLimiter = rateLimit({
+const organizerLoginLimiter = rateLimit({
   windowMs: 1000 * 60 * 15,
-  max: 8,
+  limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: "Demasiados intentos de ingreso. Espera 15 minutos e intenta nuevamente."
+  skipSuccessfulRequests: true,
+  message:
+    "Demasiados intentos fallidos de ingreso. Espera 15 minutos e intenta nuevamente."
+});
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message:
+    "Demasiados intentos fallidos de acceso administrativo. Espera 15 minutos e intenta nuevamente."
 });
 
 const PORT = process.env.PORT || 3000;
@@ -2915,7 +2927,7 @@ app.get("/organizers/login", (req, res) => {
   `);
 });
 
-app.post("/organizers/login", loginLimiter, async (req, res) => {
+app.post("/organizers/login", organizerLoginLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "").trim();
@@ -9765,7 +9777,7 @@ app.get("/admin/login", (req, res) => {
   `);
 });
 
-app.post("/admin/login", loginLimiter, (req, res) => {
+app.post("/admin/login", adminLoginLimiter, (req, res) => {
   const password = String(req.body.password || "").trim();
 
   if (!ADMIN_PASSWORD) {
