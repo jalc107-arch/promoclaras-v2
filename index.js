@@ -8784,22 +8784,31 @@ if (transactionCurrency !== "COP") {
 }
   
   if (transactionStatus === "APPROVED") {
-   await supabase
-  .from("payments")
-  .update({
-    status: "approved",
-    provider: "wompi",
-    provider_transaction_id: wompiTransactionId
-  })
-  .eq("id", payment.id);
+  const { error: paymentUpdateError } = await supabase
+    .from("payments")
+    .update({
+      status: "approved",
+      provider: "wompi",
+      provider_transaction_id: wompiTransactionId
+    })
+    .eq("id", payment.id);
 
-await finalizePaidOrder(orderId);
+  if (paymentUpdateError) {
+    console.error(
+      "No fue posible actualizar el pago aprobado por Wompi:",
+      paymentUpdateError
+    );
 
-await sendOrderCouponsWhatsApp(orderId);
-await processReferralReward(orderId);
-
-return res.redirect(`/orden/${orderId}`);
+    throw paymentUpdateError;
   }
+
+  await finalizePaidOrder(orderId);
+
+  await sendOrderCouponsWhatsApp(orderId);
+  await processReferralReward(orderId);
+
+  return res.redirect(`/orden/${orderId}`);
+}
 }
 
     const { data: tickets } = await supabase
