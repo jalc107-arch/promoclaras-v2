@@ -10170,18 +10170,23 @@ if (campaignIds.length > 0) {
 
   const orderIds = adminOrders.map(o => o.id);
 
-  if (orderIds.length > 0) {
-    const { data: paymentsData, error: paymentsError } = await supabase
+if (orderIds.length > 0) {
+  adminPayments = [];
+
+  const orderIdChunks = chunkArray(orderIds, 100);
+
+  for (const chunk of orderIdChunks) {
+    const { data: paymentsPage, error: paymentsError } = await supabase
       .from("payments")
       .select("*")
-      .in("order_id", orderIds);
+      .in("order_id", chunk);
 
     if (paymentsError) throw paymentsError;
 
-    adminPayments = paymentsData || [];
+    adminPayments = adminPayments.concat(paymentsPage || []);
   }
 }
-
+  
 const adminFinancialSummary = calculateFinancialSummary(adminPayments);
 
     const { data: adminOrganizers, error: adminOrganizersError } = await supabase
