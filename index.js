@@ -10186,6 +10186,7 @@ if (orderIds.length > 0) {
     adminPayments = adminPayments.concat(paymentsPage || []);
   }
 }
+}
   
 const adminFinancialSummary = calculateFinancialSummary(adminPayments);
 
