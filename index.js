@@ -961,10 +961,12 @@ async function sendWhatsAppTemplateOrganizadorAprobado(phone, organizerName, pan
                 parameters: [
                   {
                     type: "text",
+                    parameter_name: "nombre",
                     text: String(organizerName || "Organizador")
                   },
                   {
                     type: "text",
+                    parameter_name: "link_panel",
                     text: String(panelUrl || `${APP_BASE_URL}/organizers/login`)
                   }
                 ]
@@ -995,7 +997,7 @@ async function sendWhatsAppTemplateOrganizadorAprobado(phone, organizerName, pan
   }
 }
 
-async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignName, prize, winningCode, resultUrl) {
+async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignName, winningCode, resultUrl) {
   try {
     if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
       console.log("WhatsApp Cloud API no configurado");
@@ -1036,22 +1038,22 @@ async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignNam
                 parameters: [
                   {
                     type: "text",
+                    parameter_name: "nombre",
                     text: String(winnerName || "Cliente")
                   },
                   {
                     type: "text",
+                    parameter_name: "campana",
                     text: String(campaignName || "Campaña CampaClick")
                   },
                   {
                     type: "text",
-                    text: String(prize || "Premio")
-                  },
-                  {
-                    type: "text",
+                    parameter_name: "codigo",
                     text: String(winningCode || "-")
                   },
                   {
                     type: "text",
+                    parameter_name: "link_resultado",
                     text: String(resultUrl || "")
                   }
                 ]
@@ -10086,6 +10088,20 @@ app.get("/admin/organizadores", async (req, res) => {
     }
 
     ${
+      o.verification_status === "verified"
+        ? `
+          <form method="POST" action="/admin/organizadores/${o.id}/reenviar-aprobacion">
+            <button
+              type="submit"
+              style="width:100%;padding:9px;background:#2563eb;color:white;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">
+              Reenviar aprobación
+            </button>
+          </form>
+        `
+        : ""
+    }
+
+    ${
       o.verification_status !== "rejected"
         ? `
           <form method="POST" action="/admin/organizadores/${o.id}/rechazar">
@@ -10202,6 +10218,75 @@ app.post("/admin/organizadores/:organizerId/aprobar", async (req, res) => {
 console.log("Resultado WhatsApp aprobación organizador:", JSON.stringify(whatsappResult, null, 2));
     
     return res.redirect("/admin/organizadores");
+  } catch (error) {
+    return res.status(500).send(error.message);
+  }
+});
+
+app.post("/admin/organizadores/:organizerId/reenviar-aprobacion", async (req, res) => {
+  try {
+    if (!req.session.isAdmin) {
+      return res.redirect("/admin/login");
+    }
+
+    const { organizerId } = req.params;
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("id, full_name, phone, verification_status")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError) throw organizerError;
+
+    if (!organizer) {
+      return res.status(404).send("Organizador no encontrado");
+    }
+
+    if (organizer.verification_status !== "verified") {
+      return res.status(400).send("Solo se puede reenviar la aprobación a un organizador aprobado.");
+    }
+
+    const whatsappResult = await sendWhatsAppTemplateOrganizadorAprobado(
+      organizer.phone,
+      organizer.full_name || "Organizador",
+      `${APP_BASE_URL}/organizers/login`
+    );
+
+    console.log(
+      "Resultado reenvío WhatsApp aprobación organizador:",
+      JSON.stringify(whatsappResult, null, 2)
+    );
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.status(whatsappResult.ok ? 200 : 502).send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Reenvío de aprobación</title>
+      </head>
+      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
+        <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center;">
+          <h1>${whatsappResult.ok ? "Mensaje enviado" : "No se pudo enviar"}</h1>
+
+          <div style="padding:14px;background:${whatsappResult.ok ? "#ecfdf5" : "#fee2e2"};border-radius:12px;color:${whatsappResult.ok ? "#166534" : "#991b1b"};line-height:1.5;">
+            ${whatsappResult.ok
+              ? `La aprobación fue enviada por WhatsApp a ${escapeHtml(organizer.phone || "-")}.`
+              : `Meta rechazó el mensaje. Revisa los registros de Railway para conocer el detalle.`}
+          </div>
+
+          <a
+            href="/admin/organizadores"
+            style="display:inline-block;margin-top:20px;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Volver a organizadores
+          </a>
+        </div>
+      </body>
+      </html>
+    `);
   } catch (error) {
     return res.status(500).send(error.message);
   }
@@ -11246,7 +11331,6 @@ return await sendWhatsAppTemplateGanadorCampana(
   ticket.buyers?.phone,
   ticket.buyers?.full_name || "Cliente",
   ticket.rifas?.title || "Campaña CampaClick",
-  ticket.rifas?.prize || "Premio",
   ticket.combination || ticket.ticket_code || "-",
   `${baseUrl}/resultado/${rifaId}`
 );
