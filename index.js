@@ -124,42 +124,150 @@ const supabase = createClient(
   SUPABASE_SERVICE_ROLE_KEY
 );
 
+const ORGANIZER_SUPPORT_BUCKET = "organizer-supports";
+const MAX_ORGANIZER_SUPPORT_BYTES = 5 * 1024 * 1024;
+const ORGANIZER_SUPPORT_SIGNED_URL_SECONDS = 5 * 60;
+
+function hasExpectedImageSignature(buffer, mimeType) {
+  if (mimeType === "image/jpeg") {
+    return (
+      buffer.length >= 4 &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8 &&
+      buffer[buffer.length - 2] === 0xff &&
+      buffer[buffer.length - 1] === 0xd9
+    );
+  }
+
+  if (mimeType === "image/png") {
+    const pngSignature = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
+    ]);
+
+    return (
+      buffer.length >= pngSignature.length &&
+      buffer.subarray(0, pngSignature.length).equals(pngSignature)
+    );
+  }
+
+  return false;
+}
+
+function getOrganizerSupportObjectPath(storedValue) {
+  const value = String(storedValue || "").trim();
+
+  if (!value) {
+    return null;
+  }
+
+  const storageMarkers = [
+    `/storage/v1/object/public/${ORGANIZER_SUPPORT_BUCKET}/`,
+    `/storage/v1/object/sign/${ORGANIZER_SUPPORT_BUCKET}/`,
+    `/storage/v1/object/authenticated/${ORGANIZER_SUPPORT_BUCKET}/`
+  ];
+
+  for (const marker of storageMarkers) {
+    const markerIndex = value.indexOf(marker);
+
+    if (markerIndex !== -1) {
+      const encodedPath = value
+        .slice(markerIndex + marker.length)
+        .split("?")[0];
+
+      try {
+        return decodeURIComponent(encodedPath);
+      } catch {
+        return encodedPath;
+      }
+    }
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return null;
+  }
+
+  return value.replace(/^\/+/, "").split("?")[0] || null;
+}
+
+async function createOrganizerSupportSignedUrl(storedValue) {
+  const objectPath = getOrganizerSupportObjectPath(storedValue);
+
+  if (!objectPath) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(ORGANIZER_SUPPORT_BUCKET)
+    .createSignedUrl(objectPath, ORGANIZER_SUPPORT_SIGNED_URL_SECONDS);
+
+  if (error) {
+    console.error("No fue posible firmar un soporte del organizador:", error);
+    return null;
+  }
+
+  return data?.signedUrl || null;
+}
+
 
 async function uploadOrganizerSupport(base64Image, organizerId, type) {
   if (!base64Image) {
     return null;
   }
 
-  const match = String(base64Image).match(/^data:(image\/\w+);base64,(.+)$/);
+  const match = String(base64Image).match(
+    /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/]+={0,2})$/
+  );
 
   if (!match) {
-    throw new Error("Formato de imagen inválido");
+    throw new Error("La foto debe estar en formato JPEG o PNG.");
   }
 
   const mimeType = match[1];
   const base64Data = match[2];
 
-  const extension = mimeType.includes("png") ? "png" : "jpg";
+  if (base64Data.length % 4 !== 0) {
+    throw new Error("El contenido de la fotografía no es válido.");
+  }
+
   const buffer = Buffer.from(base64Data, "base64");
 
-  const filePath = `${organizerId}/${type}-${Date.now()}.${extension}`;
+  if (!buffer.length) {
+    throw new Error("La fotografía está vacía.");
+  }
+
+  if (buffer.length > MAX_ORGANIZER_SUPPORT_BYTES) {
+    throw new Error("Cada fotografía debe pesar máximo 5 MB.");
+  }
+
+  if (!hasExpectedImageSignature(buffer, mimeType)) {
+    throw new Error("El archivo recibido no corresponde a una imagen válida.");
+  }
+
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const safeOrganizerId = String(organizerId || "")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+  const safeType = String(type || "support")
+    .replace(/[^a-zA-Z0-9_-]/g, "-");
+
+  if (!safeOrganizerId) {
+    throw new Error("Identificador de organizador inválido.");
+  }
+
+  const filePath = `${safeOrganizerId}/${safeType}-${crypto.randomUUID()}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
-    .from("organizer-supports")
+    .from(ORGANIZER_SUPPORT_BUCKET)
     .upload(filePath, buffer, {
       contentType: mimeType,
-      upsert: true
+      cacheControl: "3600",
+      upsert: false
     });
 
   if (uploadError) {
     throw uploadError;
   }
 
-  const { data } = supabase.storage
-    .from("organizer-supports")
-    .getPublicUrl(filePath);
-
-  return data.publicUrl;
+  return filePath;
 }
 
 function escapeHtml(value) {
@@ -9820,6 +9928,24 @@ app.get("/admin/organizadores", async (req, res) => {
 
     if (error) throw error;
 
+    const organizersWithSignedSupports = await Promise.all(
+      (organizers || []).map(async organizer => {
+        const [idFrontSignedUrl, idBackSignedUrl, selfieIdSignedUrl] =
+          await Promise.all([
+            createOrganizerSupportSignedUrl(organizer.id_front_url),
+            createOrganizerSupportSignedUrl(organizer.id_back_url),
+            createOrganizerSupportSignedUrl(organizer.selfie_id_url)
+          ]);
+
+        return {
+          ...organizer,
+          id_front_signed_url: idFrontSignedUrl,
+          id_back_signed_url: idBackSignedUrl,
+          selfie_id_signed_url: selfieIdSignedUrl
+        };
+      })
+    );
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.send(`
@@ -9872,7 +9998,7 @@ app.get("/admin/organizadores", async (req, res) => {
             </thead>
 
             <tbody>
-              ${(organizers || []).map(o => {
+              ${(organizersWithSignedSupports || []).map(o => {
                 let statusLabel = "Pendiente";
                 let statusStyle = "background:#fef3c7;color:#92400e;";
 
@@ -9911,20 +10037,20 @@ app.get("/admin/organizadores", async (req, res) => {
 <td style="padding:12px;border-bottom:1px solid #eee;">
   <div style="display:flex;flex-direction:column;gap:6px;min-width:140px;">
     ${
-      o.id_front_url
-        ? `<a href="${o.id_front_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Cédula frente</a>`
+      o.id_front_signed_url
+        ? `<a href="${escapeHtml(o.id_front_signed_url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-weight:bold;">Cédula frente</a>`
         : `<span style="color:#9ca3af;">Sin cédula frente</span>`
     }
 
     ${
-      o.id_back_url
-        ? `<a href="${o.id_back_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Cédula reverso</a>`
+      o.id_back_signed_url
+        ? `<a href="${escapeHtml(o.id_back_signed_url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-weight:bold;">Cédula reverso</a>`
         : `<span style="color:#9ca3af;">Sin cédula reverso</span>`
     }
 
     ${
-      o.selfie_id_url
-        ? `<a href="${o.selfie_id_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Selfie</a>`
+      o.selfie_id_signed_url
+        ? `<a href="${escapeHtml(o.selfie_id_signed_url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-weight:bold;">Selfie</a>`
         : `<span style="color:#9ca3af;">Sin selfie</span>`
     }
 
