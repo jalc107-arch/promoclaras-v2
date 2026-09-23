@@ -8915,6 +8915,52 @@ if (isLottery) {
   color: #fca5a5;
 }
 
+.random-selection-box {
+  margin: 0 0 14px;
+  padding: 13px;
+  border-radius: 17px;
+  background: rgba(245,158,11,.14);
+  border: 1px solid rgba(253,230,138,.34);
+}
+
+.random-selection-box[hidden] {
+  display: none;
+}
+
+.random-selection-toggle {
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 13px;
+  background: rgba(255,255,255,.14);
+  color: #fef3c7;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.random-selection-values {
+  margin-top: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.random-selection-values[hidden] {
+  display: none;
+}
+
+.random-selection-value {
+  min-width: 54px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  color: white;
+  text-align: center;
+  font-weight: 900;
+}
+
 .lottery-board {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
@@ -9131,6 +9177,24 @@ ${
           aria-live="polite"
         ></div>
 
+        <div id="randomSelectionBox" class="random-selection-box" hidden>
+          <button
+            type="button"
+            id="randomSelectionToggle"
+            class="random-selection-toggle"
+            aria-expanded="false"
+            aria-controls="randomSelectionValues"
+          >
+            Ver números elegidos por el sistema
+          </button>
+
+          <div
+            id="randomSelectionValues"
+            class="random-selection-values"
+            hidden
+          ></div>
+        </div>
+
         <div class="lottery-board" id="lotteryBoard">
           ${
             availableLotteryNumbers.map(number => `
@@ -9299,6 +9363,55 @@ ${
     status.className = "lottery-search-status" + (type ? " " + type : "");
   }
 
+  function resetRandomSelectionBox() {
+    const box = document.getElementById("randomSelectionBox");
+    const values = document.getElementById("randomSelectionValues");
+    const toggle = document.getElementById("randomSelectionToggle");
+
+    if (box) box.hidden = true;
+
+    if (values) {
+      values.hidden = true;
+      values.innerHTML = "";
+    }
+
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.textContent = "Ver números elegidos por el sistema";
+    }
+  }
+
+  function showRandomSelectionBox(numbers) {
+    const box = document.getElementById("randomSelectionBox");
+    const values = document.getElementById("randomSelectionValues");
+    const toggle = document.getElementById("randomSelectionToggle");
+
+    if (!box || !values || !toggle) return;
+
+    values.innerHTML = numbers.map(number => {
+      return '<span class="random-selection-value">' + number + '</span>';
+    }).join("");
+
+    box.hidden = false;
+    values.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.textContent = "Ver números elegidos por el sistema";
+  }
+
+  function toggleRandomSelectionBox() {
+    const values = document.getElementById("randomSelectionValues");
+    const toggle = document.getElementById("randomSelectionToggle");
+
+    if (!values || !toggle) return;
+
+    const shouldShow = values.hidden;
+    values.hidden = !shouldShow;
+    toggle.setAttribute("aria-expanded", String(shouldShow));
+    toggle.textContent = shouldShow
+      ? "Ocultar números elegidos por el sistema"
+      : "Ver números elegidos por el sistema";
+  }
+
   function searchAndSelectLotteryNumber() {
     const searchInput = document.getElementById("lotteryNumberSearch");
     const qtyInput = document.getElementById("qty");
@@ -9351,6 +9464,7 @@ ${
     }
 
     matchingInput.checked = true;
+    resetRandomSelectionBox();
     syncSelectedCount(matchingInput);
 
     const numberLabel = matchingInput.closest(".lottery-number");
@@ -9418,6 +9532,7 @@ ${
     });
 
     syncSelectedCount();
+    showRandomSelectionBox(randomSelection.map(input => input.value));
 
     const selectedLabels = randomSelection
       .map(input => input.closest(".lottery-number"))
@@ -9451,6 +9566,7 @@ ${
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('input[name="selected_numbers"]').forEach(input => {
       input.addEventListener("change", function () {
+        resetRandomSelectionBox();
         syncSelectedCount(this);
       });
     });
@@ -9463,6 +9579,7 @@ ${
           input.checked = false;
         });
 
+        resetRandomSelectionBox();
         setLotterySearchStatus("");
         syncSelectedCount();
         updateInstallmentPreview();
@@ -9478,6 +9595,7 @@ ${
     const lotterySearchInput = document.getElementById("lotteryNumberSearch");
     const lotterySearchButton = document.getElementById("lotteryNumberSearchButton");
     const randomLotteryNumberButton = document.getElementById("randomLotteryNumberButton");
+    const randomSelectionToggle = document.getElementById("randomSelectionToggle");
 
     if (lotterySearchInput) {
       lotterySearchInput.addEventListener("input", function () {
@@ -9499,6 +9617,10 @@ ${
 
     if (randomLotteryNumberButton) {
       randomLotteryNumberButton.addEventListener("click", selectRandomLotteryNumber);
+    }
+
+    if (randomSelectionToggle) {
+      randomSelectionToggle.addEventListener("click", toggleRandomSelectionBox);
     }
 
     syncSelectedCount();
