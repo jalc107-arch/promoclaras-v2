@@ -8875,7 +8875,7 @@ if (isLottery) {
 
 .lottery-search {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   margin: 14px 0 10px;
 }
@@ -8893,6 +8893,10 @@ if (isLottery) {
   font-size: 15px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.lottery-search button.random-number-button {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
 }
 
 .lottery-search-status {
@@ -9109,6 +9113,14 @@ ${
 
           <button type="button" id="lotteryNumberSearchButton">
             Buscar y seleccionar
+          </button>
+
+          <button
+            type="button"
+            id="randomLotteryNumberButton"
+            class="random-number-button"
+          >
+            Seleccionar al azar
           </button>
         </div>
 
@@ -9362,6 +9374,80 @@ ${
     );
   }
 
+  function getSecureRandomIndex(maxExclusive) {
+    const maximumUint32 = 0x100000000;
+    const unbiasedLimit = maximumUint32 - (maximumUint32 % maxExclusive);
+    const randomValues = new Uint32Array(1);
+
+    do {
+      window.crypto.getRandomValues(randomValues);
+    } while (randomValues[0] >= unbiasedLimit);
+
+    return randomValues[0] % maxExclusive;
+  }
+
+  function selectRandomLotteryNumber() {
+    const qtyInput = document.getElementById("qty");
+    const qty = Number(qtyInput?.value || 0);
+    const availableInputs = Array.from(
+      document.querySelectorAll('input[name="selected_numbers"]')
+    );
+
+    if (!Number.isInteger(qty) || qty <= 0 || availableInputs.length < qty) {
+      setLotterySearchStatus(
+        "No hay suficientes números disponibles para la cantidad que quieres comprar.",
+        "error"
+      );
+      return;
+    }
+
+    availableInputs.forEach(input => {
+      input.checked = false;
+    });
+
+    for (let index = availableInputs.length - 1; index > 0; index -= 1) {
+      const randomIndex = getSecureRandomIndex(index + 1);
+      [availableInputs[index], availableInputs[randomIndex]] =
+        [availableInputs[randomIndex], availableInputs[index]];
+    }
+
+    const randomSelection = availableInputs.slice(0, qty);
+
+    randomSelection.forEach(input => {
+      input.checked = true;
+    });
+
+    syncSelectedCount();
+
+    const selectedLabels = randomSelection
+      .map(input => input.closest(".lottery-number"))
+      .filter(Boolean);
+
+    document.querySelectorAll(".lottery-number.search-highlight").forEach(item => {
+      item.classList.remove("search-highlight");
+    });
+
+    selectedLabels.forEach(label => {
+      label.classList.add("search-highlight");
+    });
+
+    if (selectedLabels[0]) {
+      selectedLabels[0].scrollIntoView({ behavior: "smooth", block: "center" });
+
+      window.setTimeout(() => {
+        selectedLabels.forEach(label => {
+          label.classList.remove("search-highlight");
+        });
+      }, 2200);
+    }
+
+    setLotterySearchStatus(
+      "El sistema seleccionó al azar " + qty +
+        (qty === 1 ? " número disponible." : " números disponibles."),
+      "success"
+    );
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('input[name="selected_numbers"]').forEach(input => {
       input.addEventListener("change", function () {
@@ -9391,6 +9477,7 @@ ${
 
     const lotterySearchInput = document.getElementById("lotteryNumberSearch");
     const lotterySearchButton = document.getElementById("lotteryNumberSearchButton");
+    const randomLotteryNumberButton = document.getElementById("randomLotteryNumberButton");
 
     if (lotterySearchInput) {
       lotterySearchInput.addEventListener("input", function () {
@@ -9408,6 +9495,10 @@ ${
 
     if (lotterySearchButton) {
       lotterySearchButton.addEventListener("click", searchAndSelectLotteryNumber);
+    }
+
+    if (randomLotteryNumberButton) {
+      randomLotteryNumberButton.addEventListener("click", selectRandomLotteryNumber);
     }
 
     syncSelectedCount();
