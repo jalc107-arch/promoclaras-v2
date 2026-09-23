@@ -8073,6 +8073,44 @@ if (isLottery) {
   text-align: center;
 }
 
+.lottery-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+
+.lottery-search input {
+  min-width: 0;
+}
+
+.lottery-search button {
+  padding: 0 18px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #22c55e, #2563eb);
+  color: white;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lottery-search-status {
+  min-height: 22px;
+  margin: 0 0 10px;
+  color: rgba(255,255,255,.82);
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.lottery-search-status.success {
+  color: #86efac;
+}
+
+.lottery-search-status.error {
+  color: #fca5a5;
+}
+
 .lottery-board {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
@@ -8108,6 +8146,12 @@ if (isLottery) {
   transform: scale(1.04);
 }
 
+.lottery-number.search-highlight span {
+  outline: 4px solid rgba(250,204,21,.88);
+  outline-offset: 2px;
+  box-shadow: 0 0 24px rgba(250,204,21,.48);
+}
+
 .lottery-board::-webkit-scrollbar {
   width: 10px;
 }
@@ -8138,8 +8182,16 @@ if (isLottery) {
               font-size: 29px;
             }
 
-            .price {
+          .price {
               font-size: 28px;
+            }
+
+            .lottery-search {
+              grid-template-columns: 1fr;
+            }
+
+            .lottery-search button {
+              min-height: 50px;
             }
           }
         </style>
@@ -8218,7 +8270,30 @@ ${
           Seleccionados: <b id="selectedCount">0</b> / <b id="requiredCount">${minimumQty}</b>
         </div>
 
-        <div class="lottery-board">
+        <div class="lottery-search">
+          <input
+            type="text"
+            id="lotteryNumberSearch"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="${getLotteryDigitsByDrawMode(campaign.draw_mode)}"
+            placeholder="Busca un número que te guste"
+            aria-label="Buscar un número disponible"
+          >
+
+          <button type="button" id="lotteryNumberSearchButton">
+            Buscar y seleccionar
+          </button>
+        </div>
+
+        <div
+          id="lotteryNumberSearchStatus"
+          class="lottery-search-status"
+          role="status"
+          aria-live="polite"
+        ></div>
+
+        <div class="lottery-board" id="lotteryBoard">
           ${
             availableLotteryNumbers.map(number => `
   <label class="lottery-number">
@@ -8315,6 +8390,8 @@ ${
         </div>
 
 <script>
+  const lotteryDigits = ${isLottery ? getLotteryDigitsByDrawMode(campaign.draw_mode) : 0};
+
   function syncSelectedCount(changedCheckbox = null) {
     const qtyInput = document.getElementById("qty");
     const requiredCount = document.getElementById("requiredCount");
@@ -8338,6 +8415,90 @@ ${
     }
   }
 
+  function setLotterySearchStatus(message, type = "") {
+    const status = document.getElementById("lotteryNumberSearchStatus");
+
+    if (!status) return;
+
+    status.textContent = message;
+    status.className = "lottery-search-status" + (type ? " " + type : "");
+  }
+
+  function searchAndSelectLotteryNumber() {
+    const searchInput = document.getElementById("lotteryNumberSearch");
+    const qtyInput = document.getElementById("qty");
+
+    if (!searchInput || !lotteryDigits) return;
+
+    const digitsOnly = String(searchInput.value || "").replace(/\\D/g, "");
+
+    if (!digitsOnly) {
+      setLotterySearchStatus("Escribe el número que quieres buscar.", "error");
+      searchInput.focus();
+      return;
+    }
+
+    if (digitsOnly.length > lotteryDigits) {
+      setLotterySearchStatus(
+        "Para esta modalidad el número debe tener máximo " + lotteryDigits + " cifras.",
+        "error"
+      );
+      searchInput.focus();
+      return;
+    }
+
+    const normalizedNumber = digitsOnly.padStart(lotteryDigits, "0");
+    searchInput.value = normalizedNumber;
+
+    const matchingInput = Array.from(
+      document.querySelectorAll('input[name="selected_numbers"]')
+    ).find(input => input.value === normalizedNumber);
+
+    if (!matchingInput) {
+      setLotterySearchStatus(
+        "El número " + normalizedNumber + " ya fue vendido o está reservado temporalmente.",
+        "error"
+      );
+      return;
+    }
+
+    const selectedNumbers = document.querySelectorAll(
+      'input[name="selected_numbers"]:checked'
+    );
+    const qty = Number(qtyInput?.value || 0);
+
+    if (!matchingInput.checked && selectedNumbers.length >= qty) {
+      setLotterySearchStatus(
+        "Ya seleccionaste la cantidad de números que vas a comprar. Desmarca uno para cambiarlo.",
+        "error"
+      );
+      return;
+    }
+
+    matchingInput.checked = true;
+    syncSelectedCount(matchingInput);
+
+    const numberLabel = matchingInput.closest(".lottery-number");
+
+    if (numberLabel) {
+      document.querySelectorAll(".lottery-number.search-highlight").forEach(item => {
+        item.classList.remove("search-highlight");
+      });
+
+      numberLabel.classList.add("search-highlight");
+      numberLabel.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      window.setTimeout(() => {
+        numberLabel.classList.remove("search-highlight");
+      }, 2200);
+    }
+
+    setLotterySearchStatus(
+      "Número " + normalizedNumber + " disponible y seleccionado.",
+      "success"
+    );
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll('input[name="selected_numbers"]').forEach(input => {
       input.addEventListener("change", function () {
@@ -8353,8 +8514,30 @@ ${
           input.checked = false;
         });
 
+        setLotterySearchStatus("");
         syncSelectedCount();
       });
+    }
+
+    const lotterySearchInput = document.getElementById("lotteryNumberSearch");
+    const lotterySearchButton = document.getElementById("lotteryNumberSearchButton");
+
+    if (lotterySearchInput) {
+      lotterySearchInput.addEventListener("input", function () {
+        this.value = this.value.replace(/\\D/g, "").slice(0, lotteryDigits);
+        setLotterySearchStatus("");
+      });
+
+      lotterySearchInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          searchAndSelectLotteryNumber();
+        }
+      });
+    }
+
+    if (lotterySearchButton) {
+      lotterySearchButton.addEventListener("click", searchAndSelectLotteryNumber);
     }
 
     syncSelectedCount();
