@@ -9125,6 +9125,15 @@ if (isLottery) {
                           El código se reserva cuando Wompi aprueba la primera cuota.
                         </div>
 
+                        <a
+                          href="/politica-campanas#pagos-cuotas"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style="display:inline-block;margin-top:11px;color:#bfdbfe;font-size:13px;font-weight:900;"
+                        >
+                          Consulta cómo funciona el pago a cuotas y sus condiciones
+                        </a>
+
                         <div id="installmentPreview" class="installment-preview"></div>
                       </div>
                     `
@@ -13914,9 +13923,29 @@ app.get("/politica-campanas", (req, res) => {
       CampaClick podrá revisar órdenes, pagos, referidos, códigos y resultados cuando detecte conductas irregulares o intentos de manipulación.
     </p>
 
-    <h2>10. Pagos a cuotas</h2>
+    <h2 id="pagos-cuotas">10. Pagos a cuotas</h2>
     <p>
-      El organizador puede habilitar o deshabilitar esta opción para cada campaña. La cantidad máxima de cuotas dependerá del valor del código y del tiempo disponible hasta un mes antes del sorteo. El código se reserva con la primera cuota aprobada y podrá liberarse si transcurren cinco días calendario después del vencimiento sin que se complete el pago correspondiente.
+      El organizador puede habilitar o deshabilitar esta opción para cada campaña. Solo estará disponible cuando el código promocional tenga un valor mínimo de $20.000 y exista tiempo suficiente para completar el plan.
+    </p>
+
+    <p>
+      El comprador podrá escoger entre pago completo y la cantidad máxima de cuotas habilitada por el sistema. El límite dependerá del valor del código y del tiempo disponible, pero la última cuota siempre deberá vencer como máximo un mes antes del sorteo.
+    </p>
+
+    <p>
+      Para códigos de hasta $100.000, la primera cuota incluirá $10.000 más cualquier excedente del precio que no complete otro bloque de $10.000; las cuotas restantes serán valores cerrados en múltiplos de $10.000. Para códigos superiores a $100.000, la primera cuota será como mínimo el 20% del valor, ajustada cuando sea necesario para que las cuotas posteriores sean múltiplos de $10.000. Ninguna cuota posterior podrá ser inferior a $10.000.
+    </p>
+
+    <p>
+      En campañas de lotería, los números escogidos por el comprador o seleccionados al azar por el sistema quedan reservados cuando Wompi aprueba la primera cuota. En campañas de Baloto, las combinaciones continúan siendo asignadas automáticamente por el sistema.
+    </p>
+
+    <p>
+      CampaClick enviará recordatorios de las cuotas pendientes por WhatsApp al número registrado. Si una cuota vence, el comprador tendrá cinco días calendario de gracia. Cumplido ese plazo sin pago, el plan podrá declararse incumplido, el código se liberará para otro comprador y el dinero pagado quedará registrado como saldo a favor del comprador dentro de la plataforma.
+    </p>
+
+    <p>
+      CampaClick registra una comisión del 5% sobre el valor de cada transacción aprobada. Cuando el comprador solicite voluntariamente una devolución en dinero y esta sea aceptada, podrán descontarse esa comisión y los costos efectivamente cobrados por la pasarela de pago, salvo que una norma obligatoria exija una devolución completa.
     </p>
 
     <div style="margin-top:26px;">
