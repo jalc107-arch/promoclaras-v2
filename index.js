@@ -118,6 +118,16 @@ const APP_BASE_URL = String(
 const WHATSAPP_CLOUD_TOKEN = String(process.env.WHATSAPP_CLOUD_TOKEN || "").trim();
 const WHATSAPP_PHONE_NUMBER_ID = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
 const WHATSAPP_BUSINESS_ACCOUNT_ID = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
+const WHATSAPP_INSTALLMENT_TEMPLATE_NAME = String(
+  process.env.WHATSAPP_INSTALLMENT_TEMPLATE_NAME || "recordatorio_cuota"
+).trim();
+const INSTALLMENT_REMINDER_DAYS = Math.max(
+  1,
+  Math.min(10, Number(process.env.INSTALLMENT_REMINDER_DAYS || 3))
+);
+const INSTALLMENT_CRON_SECRET = String(
+  process.env.INSTALLMENT_CRON_SECRET || ""
+).trim();
 
 const supabase = createClient(
   SUPABASE_URL,
@@ -464,6 +474,199 @@ function formatDateOnly(dateValue) {
   }
 
   return date.toISOString().slice(0, 10);
+}
+
+function getTodayInBogota() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts
+      .filter(part => part.type !== "literal")
+      .map(part => [part.type, part.value])
+  );
+
+  return new Date(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day)
+  );
+}
+
+function addMonthsClamped(dateValue, months) {
+  const source = new Date(dateValue);
+  const target = new Date(source);
+  const originalDay = source.getDate();
+
+  target.setDate(1);
+  target.setMonth(target.getMonth() + months);
+
+  const lastDay = new Date(
+    target.getFullYear(),
+    target.getMonth() + 1,
+    0
+  ).getDate();
+
+  target.setDate(Math.min(originalDay, lastDay));
+  target.setHours(0, 0, 0, 0);
+
+  return target;
+}
+
+function getInstallmentCutoffDate(drawDate) {
+  const parsedDrawDate = parseLocalDate(drawDate);
+
+  if (!parsedDrawDate) return null;
+
+  return addMonthsClamped(parsedDrawDate, -1);
+}
+
+function getMinimumFirstInstallmentPerTicket(pricePerTicket) {
+  const price = Math.round(Number(pricePerTicket || 0));
+
+  if (price < 20000) return 0;
+
+  const remainder = price % 10000;
+
+  if (price <= 100000) {
+    return 10000 + remainder;
+  }
+
+  const minimumTwentyPercent = Math.ceil(price * 0.2);
+  const unitsNeeded = Math.max(
+    0,
+    Math.ceil((minimumTwentyPercent - remainder) / 10000)
+  );
+
+  const firstInstallment = remainder + unitsNeeded * 10000;
+
+  return Math.min(price, Math.max(firstInstallment, minimumTwentyPercent));
+}
+
+function getFinancialMaxInstallmentsPerTicket(pricePerTicket) {
+  const price = Math.round(Number(pricePerTicket || 0));
+  const firstInstallment = getMinimumFirstInstallmentPerTicket(price);
+
+  if (!firstInstallment || firstInstallment >= price) return 1;
+
+  return 1 + Math.floor((price - firstInstallment) / 10000);
+}
+
+function getAvailableInstallmentDates(drawDate, maximumCount = 120) {
+  const cutoff = getInstallmentCutoffDate(drawDate);
+  const today = getTodayInBogota();
+
+  if (!cutoff || cutoff < today) return [];
+
+  const futureDates = [];
+  let cursor = new Date(cutoff);
+
+  while (cursor > today && futureDates.length < maximumCount - 1) {
+    futureDates.push(new Date(cursor));
+    cursor = addMonthsClamped(cursor, -1);
+  }
+
+  futureDates.reverse();
+
+  return [today, ...futureDates];
+}
+
+function getCampaignInstallmentConfiguration(campaign) {
+  if (!campaign?.installments_enabled) {
+    return {
+      enabled: false,
+      maximumInstallments: 1,
+      availableDates: []
+    };
+  }
+
+  const pricePerTicket = Math.round(Number(campaign.price_per_ticket || 0));
+  const financialMaximum = getFinancialMaxInstallmentsPerTicket(pricePerTicket);
+  const availableDates = getAvailableInstallmentDates(
+    campaign.draw_date,
+    financialMaximum
+  );
+  const maximumInstallments = Math.min(financialMaximum, availableDates.length);
+
+  return {
+    enabled: pricePerTicket >= 20000 && maximumInstallments >= 2,
+    maximumInstallments: Math.max(1, maximumInstallments),
+    availableDates,
+    cutoffDate: getInstallmentCutoffDate(campaign.draw_date)
+  };
+}
+
+function distributeInstallmentAmounts(pricePerTicket, installmentCount, qty = 1) {
+  const price = Math.round(Number(pricePerTicket || 0));
+  const count = Number(installmentCount || 1);
+  const quantity = Number(qty || 1);
+
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error("Cantidad de cuotas inválida.");
+  }
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new Error("Cantidad de códigos inválida.");
+  }
+
+  if (count === 1) return [price * quantity];
+
+  const firstPerTicket = getMinimumFirstInstallmentPerTicket(price);
+  const remainingPerTicket = price - firstPerTicket;
+  const remainingUnits = remainingPerTicket / 10000;
+
+  if (
+    !firstPerTicket ||
+    remainingPerTicket < (count - 1) * 10000 ||
+    !Number.isInteger(remainingUnits)
+  ) {
+    throw new Error("El valor no permite la cantidad de cuotas seleccionada.");
+  }
+
+  const baseUnits = Math.floor(remainingUnits / (count - 1));
+  const extraUnits = remainingUnits % (count - 1);
+  const perTicketAmounts = [firstPerTicket];
+
+  for (let index = 0; index < count - 1; index++) {
+    const units = baseUnits + (index < extraUnits ? 1 : 0);
+    perTicketAmounts.push(units * 10000);
+  }
+
+  return perTicketAmounts.map(amount => amount * quantity);
+}
+
+function buildInstallmentSchedule(campaign, installmentCount, qty) {
+  const configuration = getCampaignInstallmentConfiguration(campaign);
+  const count = Number(installmentCount || 1);
+
+  if (!configuration.enabled || count < 2 || count > configuration.maximumInstallments) {
+    throw new Error("El plan de cuotas seleccionado no está disponible para esta campaña.");
+  }
+
+  const amounts = distributeInstallmentAmounts(
+    campaign.price_per_ticket,
+    count,
+    qty
+  );
+  const allDates = configuration.availableDates;
+  const selectedDates = [allDates[0], ...allDates.slice(-(count - 1))];
+
+  return amounts.map((amount, index) => {
+    const dueDate = selectedDates[index];
+    const graceDeadline = new Date(dueDate);
+    graceDeadline.setDate(graceDeadline.getDate() + 5);
+
+    return {
+      installmentNumber: index + 1,
+      amount,
+      dueDate: formatDateOnly(dueDate),
+      graceDeadline: formatDateOnly(graceDeadline)
+    };
+  });
 }
 
 function normalizeBulkResultForCampaign(drawMode, rawValue) {
@@ -1081,6 +1284,82 @@ async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignNam
       ok: false,
       reason: error.message
     };
+  }
+}
+
+async function sendWhatsAppInstallmentTemplate({
+  phone,
+  buyerName,
+  campaignName,
+  installmentLabel,
+  amount,
+  dueDate,
+  paymentUrl,
+  notice
+}) {
+  try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      return { ok: false, reason: "WhatsApp Cloud API no configurado" };
+    }
+
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    if (!cleanPhone) {
+      return { ok: false, reason: "Teléfono vacío" };
+    }
+
+    const whatsappPhone = cleanPhone.startsWith("57")
+      ? cleanPhone
+      : `57${cleanPhone}`;
+
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: whatsappPhone,
+          type: "template",
+          template: {
+            name: WHATSAPP_INSTALLMENT_TEMPLATE_NAME,
+            language: { code: "es_CO" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", parameter_name: "nombre", text: String(buyerName || "Cliente") },
+                  { type: "text", parameter_name: "campana", text: String(campaignName || "Campaña CampaClick") },
+                  { type: "text", parameter_name: "cuota", text: String(installmentLabel || "Cuota pendiente") },
+                  { type: "text", parameter_name: "valor", text: moneyCOP(amount) },
+                  { type: "text", parameter_name: "fecha", text: String(dueDate || "-") },
+                  { type: "text", parameter_name: "link_pago", text: String(paymentUrl || "") },
+                  { type: "text", parameter_name: "aviso", text: String(notice || "Realiza el pago dentro del plazo indicado.") }
+                ]
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp plantilla de cuotas status:", response.status);
+    console.log("WhatsApp plantilla de cuotas response:", JSON.stringify(result, null, 2));
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      response: result
+    };
+  } catch (error) {
+    console.error("Error enviando plantilla de cuotas:", error);
+    return { ok: false, reason: error.message };
   }
 }
 
@@ -1738,7 +2017,7 @@ function generateBalotoCombination(drawMode) {
   throw new Error("No fue posible generar una combinación válida para esta modalidad de Baloto.");
 }
 
-async function assignTicketsToOrder(orderId, manualCombinations = []) {
+async function assignTicketsToOrder(orderId, manualCombinations = [], ticketStatus = "active") {
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(`
@@ -1773,7 +2052,7 @@ while (true) {
     .from("tickets")
     .select("ticket_code, combination")
     .eq("rifa_id", orderData.rifa_id)
-    .eq("status", "active")
+    .in("status", ["active", "reserved_installment"])
     .range(from, from + pageSize - 1);
 
   if (existingError) throw existingError;
@@ -1851,7 +2130,7 @@ const finalManualCombinations = isManualLottery
       buyer_id: orderData.buyer_id,
       ticket_code: ticketCode,
       combination,
-      status: "active"
+      status: ticketStatus
     });
 
     usedTicketCodes.add(ticketCode);
@@ -1999,14 +2278,415 @@ async function releaseLotteryReservationsForOrder(orderId) {
   }
 }
 
+async function reserveCodesForInstallmentOrder(orderId) {
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      rifas(*)
+    `)
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw orderError;
+  if (!order) throw new Error("Orden de cuotas no encontrada.");
+
+  const { data: existingTickets, error: ticketsError } = await supabase
+    .from("tickets")
+    .select("id, status")
+    .eq("order_id", orderId)
+    .in("status", ["active", "reserved_installment"]);
+
+  if (ticketsError) throw ticketsError;
+
+  if (!existingTickets || existingTickets.length === 0) {
+    await assignTicketsToOrder(orderId, [], "reserved_installment");
+  } else if (existingTickets.length !== Number(order.qty || 0)) {
+    throw new Error("La reserva de códigos quedó incompleta. Contacta soporte.");
+  }
+
+  await markLotteryReservationsAsCompleted(orderId);
+  await reconcileCampaignCounters(order.rifa_id);
+
+  return { ok: true };
+}
+
+async function activateInstallmentOrder(orderId) {
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("*, rifas(*)")
+    .eq("id", orderId)
+    .single();
+
+  if (orderError) throw orderError;
+  if (!order) throw new Error("Orden de cuotas no encontrada.");
+
+  const { error: ticketUpdateError } = await supabase
+    .from("tickets")
+    .update({ status: "active" })
+    .eq("order_id", orderId)
+    .eq("status", "reserved_installment");
+
+  if (ticketUpdateError) throw ticketUpdateError;
+
+  const { count: activeCount, error: activeCountError } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", orderId)
+    .eq("status", "active");
+
+  if (activeCountError) throw activeCountError;
+
+  if (Number(activeCount || 0) !== Number(order.qty || 0)) {
+    throw new Error("No fue posible activar todos los códigos de la orden.");
+  }
+
+  await supabase
+    .from("orders")
+    .update({
+      payment_status: "paid",
+      total_paid: Number(order.subtotal || 0),
+      balance_due: 0
+    })
+    .eq("id", orderId);
+
+  await reconcileCampaignCounters(order.rifa_id);
+  await sendOrderCouponsWhatsApp(orderId, true);
+  await processReferralReward(orderId);
+
+  return { ok: true };
+}
+
+async function ensurePendingPaymentForInstallment(installment) {
+  const { data: existingPayment, error: existingPaymentError } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("installment_id", installment.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPaymentError) throw existingPaymentError;
+  if (existingPayment) return existingPayment;
+
+  const externalReference = `cua_${Date.now()}_${String(installment.id).slice(0, 8)}`;
+
+  const { data: payment, error: paymentError } = await supabase
+    .from("payments")
+    .insert({
+      order_id: installment.order_id,
+      installment_id: installment.id,
+      provider: "wompi",
+      external_reference: externalReference,
+      amount: Number(installment.amount || 0),
+      platform_fee: 0,
+      status: "pending"
+    })
+    .select()
+    .single();
+
+  if (paymentError) throw paymentError;
+
+  return payment;
+}
+
+async function processApprovedInstallmentPayment(payment) {
+  const { data: installment, error: installmentError } = await supabase
+    .from("installment_schedules")
+    .select("*")
+    .eq("id", payment.installment_id)
+    .single();
+
+  if (installmentError) throw installmentError;
+
+  const { data: plan, error: planError } = await supabase
+    .from("installment_plans")
+    .select("*")
+    .eq("id", installment.plan_id)
+    .single();
+
+  if (planError) throw planError;
+
+  if (plan.status === "paid") {
+    return { ok: true, completed: true, skipped: true };
+  }
+
+  const wasAlreadyApproved = installment.status === "approved";
+
+  const paidAt = new Date().toISOString();
+
+  if (!wasAlreadyApproved) {
+    const { data: claimedInstallment, error: installmentUpdateError } = await supabase
+      .from("installment_schedules")
+      .update({
+        status: "approved",
+        paid_at: installment.paid_at || paidAt,
+        updated_at: paidAt
+      })
+      .eq("id", installment.id)
+      .neq("status", "approved")
+      .select("id")
+      .maybeSingle();
+
+    if (installmentUpdateError) throw installmentUpdateError;
+
+    if (!claimedInstallment) {
+      return { ok: true, skipped: true, reason: "Cuota procesada por otra solicitud" };
+    }
+  }
+
+  const { data: schedules, error: schedulesError } = await supabase
+    .from("installment_schedules")
+    .select("*")
+    .eq("plan_id", plan.id)
+    .order("installment_number", { ascending: true });
+
+  if (schedulesError) throw schedulesError;
+
+  const approvedSchedules = (schedules || []).filter(item => item.status === "approved");
+  const amountPaid = approvedSchedules.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+  const balanceDue = Math.max(0, Number(plan.total_amount || 0) - amountPaid);
+  const isFullyPaid = balanceDue === 0 && approvedSchedules.length === Number(plan.installment_count || 0);
+  const planStatus = isFullyPaid ? "paid" : "active";
+
+  const { error: planUpdateError } = await supabase
+    .from("installment_plans")
+    .update({
+      status: planStatus,
+      paid_installments: approvedSchedules.length,
+      amount_paid: amountPaid,
+      balance_due: balanceDue,
+      updated_at: paidAt,
+      completed_at: isFullyPaid ? paidAt : null
+    })
+    .eq("id", plan.id);
+
+  if (planUpdateError) throw planUpdateError;
+
+  const { error: orderUpdateError } = await supabase
+    .from("orders")
+    .update({
+      payment_status: isFullyPaid ? "paid" : "partially_paid",
+      total_paid: amountPaid,
+      amount_paid: amountPaid,
+      balance_due: balanceDue,
+      commission: Math.round(amountPaid * 0.05)
+    })
+    .eq("id", plan.order_id);
+
+  if (orderUpdateError) throw orderUpdateError;
+
+  if (approvedSchedules.length === 1) {
+    await reserveCodesForInstallmentOrder(plan.order_id);
+  }
+
+  if (isFullyPaid) {
+    await activateInstallmentOrder(plan.order_id);
+    return { ok: true, completed: true };
+  }
+
+  const nextInstallment = (schedules || []).find(item => item.status !== "approved");
+
+  if (nextInstallment && !wasAlreadyApproved) {
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("*, buyers(*), rifas(*)")
+      .eq("id", plan.order_id)
+      .single();
+
+    if (orderError) throw orderError;
+
+    await sendWhatsAppInstallmentTemplate({
+      phone: order.buyers?.phone,
+      buyerName: order.buyers?.full_name,
+      campaignName: order.rifas?.title,
+      installmentLabel: `Cuota ${nextInstallment.installment_number} de ${plan.installment_count}`,
+      amount: nextInstallment.amount,
+      dueDate: nextInstallment.due_date,
+      paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
+      notice: approvedSchedules.length === 1
+        ? "Tu código quedó reservado. Conserva al día las próximas cuotas."
+        : "Tu pago fue aprobado. Esta es tu próxima cuota."
+    });
+  }
+
+  return { ok: true, completed: false };
+}
+
+async function releaseDefaultedInstallmentPlan(planId) {
+  const { data: plan, error: planError } = await supabase
+    .from("installment_plans")
+    .select("*")
+    .eq("id", planId)
+    .single();
+
+  if (planError) throw planError;
+  if (!plan || ["paid", "defaulted", "cancelled"].includes(plan.status)) {
+    return { ok: true, skipped: true };
+  }
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("*, buyers(*), rifas(*)")
+    .eq("id", plan.order_id)
+    .single();
+
+  if (orderError) throw orderError;
+
+  const nowIso = new Date().toISOString();
+
+  await supabase
+    .from("tickets")
+    .update({ status: "released" })
+    .eq("order_id", plan.order_id)
+    .eq("status", "reserved_installment");
+
+  await supabase
+    .from("lottery_number_reservations")
+    .update({ status: "released" })
+    .eq("order_id", plan.order_id)
+    .in("status", ["reserved", "completed"]);
+
+  await supabase
+    .from("installment_schedules")
+    .update({ status: "defaulted", updated_at: nowIso })
+    .eq("plan_id", plan.id)
+    .in("status", ["pending", "overdue"]);
+
+  await supabase
+    .from("installment_plans")
+    .update({ status: "defaulted", defaulted_at: nowIso, updated_at: nowIso })
+    .eq("id", plan.id);
+
+  await supabase
+    .from("orders")
+    .update({ payment_status: "defaulted" })
+    .eq("id", plan.order_id);
+
+  const creditAmount = Number(plan.amount_paid || 0);
+
+  if (creditAmount > 0) {
+    const { error: creditError } = await supabase
+      .from("customer_credits")
+      .upsert({
+        buyer_id: order.buyer_id,
+        source_order_id: order.id,
+        amount: creditAmount,
+        available_amount: creditAmount,
+        status: "available",
+        reason: "Saldo a favor por plan de cuotas incumplido",
+        updated_at: nowIso
+      }, { onConflict: "source_order_id" });
+
+    if (creditError) throw creditError;
+  }
+
+  await reconcileCampaignCounters(order.rifa_id);
+
+  return { ok: true, released: true };
+}
+
+async function processInstallmentReminders() {
+  const today = getTodayInBogota();
+
+  const reminderLimit = new Date(today);
+  reminderLimit.setDate(reminderLimit.getDate() + INSTALLMENT_REMINDER_DAYS);
+
+  const { data: schedules, error: schedulesError } = await supabase
+    .from("installment_schedules")
+    .select("*")
+    .in("status", ["pending", "overdue"])
+    .lte("due_date", formatDateOnly(reminderLimit))
+    .order("due_date", { ascending: true });
+
+  if (schedulesError) throw schedulesError;
+
+  const results = [];
+
+  for (const installment of schedules || []) {
+    const dueDate = parseLocalDate(installment.due_date);
+    const graceDeadline = parseLocalDate(installment.grace_deadline);
+
+    if (!dueDate || !graceDeadline) continue;
+
+    if (today > graceDeadline) {
+      results.push(await releaseDefaultedInstallmentPlan(installment.plan_id));
+      continue;
+    }
+
+    const { data: plan, error: planError } = await supabase
+      .from("installment_plans")
+      .select("*")
+      .eq("id", installment.plan_id)
+      .single();
+
+    if (planError) throw planError;
+    if (!plan || plan.status !== "active") continue;
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("*, buyers(*), rifas(*)")
+      .eq("id", plan.order_id)
+      .single();
+
+    if (orderError) throw orderError;
+
+    const isOverdue = today > dueDate;
+    const alreadySent = isOverdue
+      ? installment.grace_warning_sent_at
+      : installment.reminder_sent_at;
+
+    if (alreadySent) continue;
+
+    const sendResult = await sendWhatsAppInstallmentTemplate({
+      phone: order.buyers?.phone,
+      buyerName: order.buyers?.full_name,
+      campaignName: order.rifas?.title,
+      installmentLabel: `Cuota ${installment.installment_number} de ${plan.installment_count}`,
+      amount: installment.amount,
+      dueDate: installment.due_date,
+      paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
+      notice: isOverdue
+        ? `La cuota está vencida. Tienes plazo hasta ${installment.grace_deadline}; después se liberará el código.`
+        : "Recuerda realizar el pago dentro del plazo indicado."
+    });
+
+    if (sendResult.ok) {
+      await supabase
+        .from("installment_schedules")
+        .update(isOverdue
+          ? { status: "overdue", grace_warning_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+          : { reminder_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+        )
+        .eq("id", installment.id);
+    }
+
+    results.push({ installmentId: installment.id, sent: sendResult.ok, overdue: isOverdue });
+  }
+
+  return results;
+}
+
 async function reconcileCampaignCounters(rifaId) {
-  const { count, error: countError } = await supabase
+  const { count: soldCount, error: soldCountError } = await supabase
     .from("tickets")
     .select("id", { count: "exact", head: true })
     .eq("rifa_id", rifaId)
     .eq("status", "active");
 
-  if (countError) throw countError;
+  if (soldCountError) throw soldCountError;
+
+  const { count: reservedCount, error: reservedCountError } = await supabase
+    .from("tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("rifa_id", rifaId)
+    .eq("status", "reserved_installment");
+
+  if (reservedCountError) throw reservedCountError;
 
   const { data: campaign, error: campaignError } = await supabase
     .from("rifas")
@@ -2016,8 +2696,12 @@ async function reconcileCampaignCounters(rifaId) {
 
   if (campaignError) throw campaignError;
 
-  const soldTickets = Number(count || 0);
-  const availableTickets = Number(campaign.max_tickets || 0) - soldTickets;
+  const soldTickets = Number(soldCount || 0);
+  const reservedTickets = Number(reservedCount || 0);
+  const availableTickets = Math.max(
+    0,
+    Number(campaign.max_tickets || 0) - soldTickets - reservedTickets
+  );
 
   const { error: updateError } = await supabase
     .from("rifas")
@@ -2031,6 +2715,7 @@ async function reconcileCampaignCounters(rifaId) {
 
   return {
     soldTickets,
+    reservedTickets,
     availableTickets
   };
 }
@@ -5957,6 +6642,29 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
               <input type="date" name="draw_date" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
+            <div style="margin-bottom:18px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
+              <h3 style="margin-top:0;color:#1e3a8a;">Pagos a cuotas</h3>
+
+              <label style="display:flex;align-items:flex-start;gap:10px;line-height:1.5;">
+                <input
+                  type="checkbox"
+                  name="installments_enabled"
+                  value="true"
+                  style="width:auto;margin-top:4px;"
+                >
+                <span>
+                  Activar pagos a cuotas para esta campaña. El comprador podrá escoger
+                  hasta el máximo permitido por el valor del código y el tiempo disponible.
+                </span>
+              </label>
+
+              <small style="display:block;margin-top:10px;color:#1e3a8a;line-height:1.5;">
+                Solo aplica para códigos desde $20.000. La última cuota debe quedar pagada
+                un mes antes del sorteo. CampaClick cobra el 5% de cada transacción aprobada
+                y Wompi cobra su tarifa por cada cuota procesada.
+              </small>
+            </div>
+
             <div style="margin-bottom:18px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;">
   <h3 style="margin-top:0;color:#166534;">Programa de referidos</h3>
 
@@ -6058,6 +6766,7 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     const drawDate = String(req.body.draw_date || "").trim();
     const campaignTermsAccepted = req.body.campaign_terms_accepted === "true";
     const referralProgramEnabled = req.body.referral_program_enabled === "true";
+    const installmentsEnabled = req.body.installments_enabled === "true";
 
 let referralRequiredApprovedOrders = Number(req.body.referral_required_approved_orders || 15);
 
@@ -6139,6 +6848,22 @@ if (referralRequiredApprovedOrders > 50) {
       return res.status(400).send("Precio inválido");
     }
 
+    if (installmentsEnabled) {
+      const installmentConfiguration = getCampaignInstallmentConfiguration({
+        installments_enabled: true,
+        price_per_ticket: pricePerTicket,
+        draw_date: drawDate
+      });
+
+      if (pricePerTicket < 20000) {
+        return res.status(400).send("Los pagos a cuotas solo están disponibles para códigos desde $20.000.");
+      }
+
+      if (!installmentConfiguration.enabled) {
+        return res.status(400).send("No hay tiempo suficiente para ofrecer al menos dos cuotas antes del cierre de financiación.");
+      }
+    }
+
     if (!["physical", "money"].includes(prizeType)) {
   return res.status(400).send("Tipo de premio inválido");
 }
@@ -6200,6 +6925,7 @@ prize_cash_amount: prizeType === "money" ? prizeCashAmount : 0,
 prize_delivery_status: "pending",
 payout_status: "pending",
         platform_fee_percent: 5,
+        installments_enabled: installmentsEnabled,
 
 referral_program_enabled: referralProgramEnabled,
 referral_required_approved_orders: referralRequiredApprovedOrders,
@@ -6808,6 +7534,18 @@ body {
           $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
         </div>
 
+        ${
+          getCampaignInstallmentConfiguration(campaign).enabled
+            ? `
+              <div style="margin:12px 0;padding:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px;color:#166534;font-weight:bold;line-height:1.5;">
+                Esta campaña permite pagar hasta en
+                ${getCampaignInstallmentConfiguration(campaign).maximumInstallments} cuotas.
+                Tú escoges la cantidad antes de continuar al pago.
+              </div>
+            `
+            : ""
+        }
+
        ${
   campaign.status === "active"
     ? `
@@ -7278,7 +8016,8 @@ app.get("/consultar", async (req, res) => {
           .select(`
             *,
             rifas(*),
-            tickets(*)
+            tickets(*),
+            installment_plans(*)
           `)
           .eq("buyer_id", buyer.id)
           .order("created_at", { ascending: false });
@@ -7638,17 +8377,21 @@ app.get("/consultar", async (req, res) => {
 
                   <div class="orders-grid">
                     ${orders.map(order => {
-                     const activeTickets = (order.tickets || [])
-  .filter(t => String(t.status || "active") === "active")
+                     const visibleTickets = (order.tickets || [])
+  .filter(t => ["active", "reserved_installment"].includes(String(t.status || "active")))
   .sort((a, b) => {
     const codeA = String(a.ticket_code || "");
     const codeB = String(b.ticket_code || "");
     return codeA.localeCompare(codeB, "es", { numeric: true });
   });
 
-const coupons = activeTickets
+const coupons = visibleTickets
   .map(t => t.combination || t.ticket_code || "-")
   .join(", ");
+
+                      const installmentPlan = Array.isArray(order.installment_plans)
+                        ? order.installment_plans[0]
+                        : order.installment_plans;
 
                       const paid = order.payment_status === "paid";
 
@@ -7664,6 +8407,14 @@ const coupons = activeTickets
 
                       if (order.payment_status === "failed") {
                         paymentStatusLabel = "Pago fallido";
+                      }
+
+                      if (order.payment_status === "partially_paid") {
+                        paymentStatusLabel = "Plan de cuotas activo";
+                      }
+
+                      if (order.payment_status === "defaulted") {
+                        paymentStatusLabel = "Plan incumplido - código liberado";
                       }
 
                       const shareText = encodeURIComponent(
@@ -7685,17 +8436,22 @@ const coupons = activeTickets
                           </div>
 
                           <div class="info-line">
-                            <b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}
+                            <b>Valor de la compra:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}
                           </div>
+
+                          ${order.payment_mode === "installments" ? `
+                            <div class="info-line"><b>Pagado:</b> ${moneyCOP(order.amount_paid || 0)}</div>
+                            <div class="info-line"><b>Saldo:</b> ${moneyCOP(order.balance_due || 0)}</div>
+                          ` : ""}
 
                           ${
                             coupons
                               ? `
                                 <div class="coupon-wrap">
-                                  <b>Códigos asignados:</b>
+                                  <b>${paid ? "Códigos asignados:" : "Códigos reservados:"}</b>
 
                                   <div class="coupon-list">
-                                    ${activeTickets.map(t => `
+                                    ${visibleTickets.map(t => `
                                     <span class="coupon">
                                     ${t.combination || t.ticket_code || "-"}
                                     </span>
@@ -7712,8 +8468,8 @@ const coupons = activeTickets
                           }
 
                           <div class="actions">
-                            <a class="btn btn-green" href="/orden/${order.id}">
-                              ${paid ? "Ver orden" : "Continuar pago"}
+                            <a class="btn btn-green" href="${order.payment_mode === "installments" && installmentPlan?.public_token ? `/cuotas/${installmentPlan.public_token}` : `/orden/${order.id}`}">
+                              ${paid ? "Ver orden" : order.payment_mode === "installments" ? "Ver y pagar cuotas" : "Continuar pago"}
                             </a>
 
                             <a class="btn btn-dark" href="/campanas/${order.rifas?.slug || ""}">
@@ -7721,7 +8477,7 @@ const coupons = activeTickets
                             </a>
 
                             ${
-                              coupons
+                              coupons && paid
                                 ? `
                                   <a
                                     class="btn btn-blue"
@@ -7797,6 +8553,16 @@ app.get("/campanas/:slug/comprar", async (req, res) => {
 
     const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
     const minimumQtyText = getMinimumQtyText(campaign.price_per_ticket);
+    const installmentConfiguration = getCampaignInstallmentConfiguration(campaign);
+    const installmentPlanOptions = installmentConfiguration.enabled
+      ? Array.from(
+          { length: installmentConfiguration.maximumInstallments - 1 },
+          (_, index) => index + 2
+        ).map(count => ({
+          count,
+          schedule: buildInstallmentSchedule(campaign, count, 1)
+        }))
+      : [];
 
 const isLottery = isLotteryCampaign(campaign);
 
@@ -7811,7 +8577,7 @@ if (isLottery) {
     .from("tickets")
     .select("combination")
     .eq("rifa_id", campaign.id)
-    .eq("status", "active")
+    .in("status", ["active", "reserved_installment"])
     .range(from, to)
 );
 
@@ -7976,6 +8742,40 @@ if (isLottery) {
             box-shadow:
               0 0 0 4px rgba(37,99,235,.22),
               inset 0 1px 0 rgba(255,255,255,.18);
+          }
+
+          select {
+            width: 100%;
+            padding: 15px 16px;
+            border-radius: 17px;
+            border: 1px solid rgba(255,255,255,.26);
+            background: #172033;
+            color: white;
+            outline: none;
+            font-size: 16px;
+          }
+
+          .installment-box {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: 20px;
+            background: rgba(16,185,129,.14);
+            border: 1px solid rgba(110,231,183,.34);
+          }
+
+          .installment-preview {
+            margin-top: 12px;
+            display: grid;
+            gap: 7px;
+          }
+
+          .installment-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 9px 11px;
+            border-radius: 12px;
+            background: rgba(255,255,255,.10);
           }
 
           .info-box {
@@ -8255,6 +9055,32 @@ if (isLottery) {
                   ${minimumQtyText}
                 </div>
 
+                ${
+                  installmentConfiguration.enabled
+                    ? `
+                      <div class="installment-box">
+                        <label for="installmentCount">Forma de pago</label>
+
+                        <select id="installmentCount" name="installment_count">
+                          <option value="1">Pago completo</option>
+                          ${installmentPlanOptions.map(option => `
+                            <option value="${option.count}">
+                              ${option.count} cuotas
+                            </option>
+                          `).join("")}
+                        </select>
+
+                        <div style="margin-top:10px;color:#d1fae5;font-size:13px;line-height:1.5;">
+                          Esta campaña permite máximo <b>${installmentConfiguration.maximumInstallments} cuotas</b>.
+                          El código se reserva cuando Wompi aprueba la primera cuota.
+                        </div>
+
+                        <div id="installmentPreview" class="installment-preview"></div>
+                      </div>
+                    `
+                    : ""
+                }
+
 ${
   isLottery
     ? `
@@ -8391,6 +9217,43 @@ ${
 
 <script>
   const lotteryDigits = ${isLottery ? getLotteryDigitsByDrawMode(campaign.draw_mode) : 0};
+  const installmentPlanOptions = ${JSON.stringify(installmentPlanOptions)};
+  const pricePerTicket = ${Math.round(Number(campaign.price_per_ticket || 0))};
+
+  function formatMoney(value) {
+    return "$" + Math.round(Number(value || 0)).toLocaleString("es-CO");
+  }
+
+  function updateInstallmentPreview() {
+    const installmentSelect = document.getElementById("installmentCount");
+    const preview = document.getElementById("installmentPreview");
+    const qtyInput = document.getElementById("qty");
+
+    if (!installmentSelect || !preview || !qtyInput) return;
+
+    const count = Number(installmentSelect.value || 1);
+    const qty = Math.max(1, Number(qtyInput.value || 1));
+
+    if (count === 1) {
+      preview.innerHTML = '<div class="installment-row"><span>Pago único</span><b>' +
+        formatMoney(pricePerTicket * qty) + '</b></div>';
+      return;
+    }
+
+    const plan = installmentPlanOptions.find(item => item.count === count);
+
+    if (!plan) {
+      preview.innerHTML = "";
+      return;
+    }
+
+    preview.innerHTML = plan.schedule.map(item => {
+      return '<div class="installment-row">' +
+        '<span>Cuota ' + item.installmentNumber + ' · ' + item.dueDate + '</span>' +
+        '<b>' + formatMoney(item.amount * qty) + '</b>' +
+      '</div>';
+    }).join("");
+  }
 
   function syncSelectedCount(changedCheckbox = null) {
     const qtyInput = document.getElementById("qty");
@@ -8516,7 +9379,14 @@ ${
 
         setLotterySearchStatus("");
         syncSelectedCount();
+        updateInstallmentPreview();
       });
+    }
+
+    const installmentSelect = document.getElementById("installmentCount");
+
+    if (installmentSelect) {
+      installmentSelect.addEventListener("change", updateInstallmentPreview);
     }
 
     const lotterySearchInput = document.getElementById("lotteryNumberSearch");
@@ -8541,6 +9411,7 @@ ${
     }
 
     syncSelectedCount();
+    updateInstallmentPreview();
   });
 </script>
         
@@ -8562,6 +9433,7 @@ app.post("/campanas/:slug/comprar", async (req, res) => {
     const cleanBuyerPhone = buyerPhone.replace(/\D/g, "");
     const buyerEmail = String(req.body.buyer_email || "").trim();
     const qty = Number(req.body.qty || 0);
+    const requestedInstallmentCount = Number(req.body.installment_count || 1);
     const referralCode = normalizeReferralCode(req.body.referral_code);
 
     const termsAccepted = req.body.terms_accepted === "true";
@@ -8629,6 +9501,22 @@ if (campaign.status !== "active") {
     </body>
     </html>
   `);
+}
+
+const installmentConfiguration = getCampaignInstallmentConfiguration(campaign);
+
+if (!Number.isInteger(requestedInstallmentCount) || requestedInstallmentCount < 1) {
+  return res.status(400).send("Cantidad de cuotas inválida.");
+}
+
+if (requestedInstallmentCount > 1) {
+  if (!installmentConfiguration.enabled) {
+    return res.status(400).send("Esta campaña no tiene habilitados los pagos a cuotas.");
+  }
+
+  if (requestedInstallmentCount > installmentConfiguration.maximumInstallments) {
+    return res.status(400).send("La cantidad de cuotas supera el máximo disponible para esta campaña.");
+  }
 }
 
     const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
@@ -8703,7 +9591,7 @@ if (isLotteryCampaign(campaign)) {
   .from("tickets")
   .select("combination")
   .eq("rifa_id", campaign.id)
-  .eq("status", "active")
+  .in("status", ["active", "reserved_installment"])
   .in("combination", finalSelectedNumbers);
 
   if (existingTicketsError) throw existingTicketsError;
@@ -8821,7 +9709,14 @@ if (campaign.referral_program_enabled && referralCode) {
     }
 
 const subtotal = qty * Number(campaign.price_per_ticket || 0);
-    const totalPaid = subtotal;
+    const isInstallmentOrder = requestedInstallmentCount > 1;
+    const installmentSchedule = isInstallmentOrder
+      ? buildInstallmentSchedule(campaign, requestedInstallmentCount, qty)
+      : [];
+    const firstPaymentAmount = isInstallmentOrder
+      ? Number(installmentSchedule[0]?.amount || 0)
+      : subtotal;
+    const totalPaid = isInstallmentOrder ? 0 : subtotal;
     const commission = 0;
 
     const { data: order, error: orderError } = await supabase
@@ -8832,8 +9727,12 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
     qty,
     subtotal,
     total_paid: totalPaid,
+    amount_paid: 0,
+    balance_due: subtotal,
     commission,
     payment_status: "created",
+    payment_mode: isInstallmentOrder ? "installments" : "full",
+    installment_count: isInstallmentOrder ? requestedInstallmentCount : 1,
     referral_code: referralCode || null,
     referrer_id: referrerId,
     selected_numbers: manualLotteryCombinations.length > 0 ? manualLotteryCombinations : null
@@ -8892,6 +9791,57 @@ if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
   }
 }
 
+    if (isInstallmentOrder) {
+      const finalInstallment = installmentSchedule[installmentSchedule.length - 1];
+
+      const { data: plan, error: planError } = await supabase
+        .from("installment_plans")
+        .insert({
+          order_id: order.id,
+          total_amount: subtotal,
+          installment_count: requestedInstallmentCount,
+          paid_installments: 0,
+          amount_paid: 0,
+          balance_due: subtotal,
+          status: "pending_first",
+          final_due_date: finalInstallment.dueDate,
+          grace_days: 5
+        })
+        .select()
+        .single();
+
+      if (planError) throw planError;
+
+      const scheduleRows = installmentSchedule.map(item => ({
+        plan_id: plan.id,
+        order_id: order.id,
+        installment_number: item.installmentNumber,
+        amount: item.amount,
+        due_date: item.dueDate,
+        grace_deadline: item.graceDeadline,
+        status: "pending"
+      }));
+
+      const { data: insertedSchedules, error: scheduleError } = await supabase
+        .from("installment_schedules")
+        .insert(scheduleRows)
+        .select();
+
+      if (scheduleError) throw scheduleError;
+
+      const firstInstallment = (insertedSchedules || []).find(
+        item => Number(item.installment_number) === 1
+      );
+
+      if (!firstInstallment) {
+        throw new Error("No fue posible crear la primera cuota.");
+      }
+
+      await ensurePendingPaymentForInstallment(firstInstallment);
+
+      return res.redirect(`/cuotas/${plan.public_token}`);
+    }
+
     const externalReference = `ord_${Date.now()}_${order.id.slice(0, 8)}`;
 
     const { error: paymentError } = await supabase
@@ -8900,7 +9850,8 @@ if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
         order_id: order.id,
         provider: "manual",
         external_reference: externalReference,
-        amount: totalPaid,
+        amount: firstPaymentAmount,
+        platform_fee: 0,
         status: "pending"
       });
 
@@ -8957,28 +9908,15 @@ if (activeTicketsCount === 0) {
   await supabase
     .from("orders")
     .update({
-      payment_status: "paid"
+      payment_status: "paid",
+      total_paid: Number(orderData.subtotal || orderData.total_paid || 0),
+      amount_paid: Number(orderData.subtotal || orderData.total_paid || 0),
+      balance_due: 0,
+      commission: Math.round(Number(orderData.subtotal || orderData.total_paid || 0) * 0.05)
     })
     .eq("id", orderId);
 
-  const { count: campaignActiveTicketsCount, error: campaignCountError } = await supabase
-    .from("tickets")
-    .select("id", { count: "exact", head: true })
-    .eq("rifa_id", orderData.rifa_id)
-    .eq("status", "active");
-
-  if (campaignCountError) throw campaignCountError;
-
-  const realSoldTickets = Number(campaignActiveTicketsCount || 0);
-  const maxTickets = Number(orderData.rifas?.max_tickets || 0);
-
-  await supabase
-    .from("rifas")
-    .update({
-      sold_tickets: realSoldTickets,
-      available_tickets: Math.max(0, maxTickets - realSoldTickets)
-    })
-    .eq("id", orderData.rifa_id);
+  const counters = await reconcileCampaignCounters(orderData.rifa_id);
 
   await markLotteryReservationsAsCompleted(orderId);
 
@@ -8986,9 +9924,246 @@ if (activeTicketsCount === 0) {
     ok: true,
     orderId,
     expectedTicketsCount,
-    realSoldTickets
+    realSoldTickets: counters.soldTickets
   };
 }
+
+app.get("/cuotas/:publicToken", async (req, res) => {
+  try {
+    const publicToken = String(req.params.publicToken || "").trim();
+
+    const { data: plan, error: planError } = await supabase
+      .from("installment_plans")
+      .select("*")
+      .eq("public_token", publicToken)
+      .single();
+
+    if (planError || !plan) {
+      return res.status(404).send("Plan de cuotas no encontrado.");
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("*, buyers(*), rifas(*)")
+      .eq("id", plan.order_id)
+      .single();
+
+    if (orderError || !order) {
+      return res.status(404).send("Orden no encontrada.");
+    }
+
+    let { data: schedules, error: schedulesError } = await supabase
+      .from("installment_schedules")
+      .select("*")
+      .eq("plan_id", plan.id)
+      .order("installment_number", { ascending: true });
+
+    if (schedulesError) throw schedulesError;
+
+    const wompiTransactionId = String(req.query.id || "").trim();
+
+    if (wompiTransactionId) {
+      if (!WOMPI_PRIVATE_KEY) {
+        return res.status(500).send("Falta WOMPI_PRIVATE_KEY");
+      }
+
+      const wompiBaseUrl = WOMPI_PUBLIC_KEY?.startsWith("pub_test_")
+        ? "https://sandbox.wompi.co/v1"
+        : "https://production.wompi.co/v1";
+
+      const wompiResponse = await fetch(
+        `${wompiBaseUrl}/transactions/${encodeURIComponent(wompiTransactionId)}`,
+        { headers: { Authorization: `Bearer ${WOMPI_PRIVATE_KEY}` } }
+      );
+      const wompiJson = await wompiResponse.json();
+      const transaction = wompiJson?.data;
+      const reference = String(transaction?.reference || "");
+
+      const { data: payment, error: paymentError } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("external_reference", reference)
+        .eq("order_id", order.id)
+        .maybeSingle();
+
+      if (paymentError) throw paymentError;
+
+      if (!payment || !payment.installment_id) {
+        return res.status(400).send("El pago no corresponde a este plan de cuotas.");
+      }
+
+      const belongsToPlan = (schedules || []).some(
+        item => String(item.id) === String(payment.installment_id)
+      );
+
+      if (!belongsToPlan) {
+        return res.status(400).send("La cuota no corresponde a este plan.");
+      }
+
+      const transactionAmountInCents = Number(transaction?.amount_in_cents || 0);
+      const expectedAmountInCents = Math.round(Number(payment.amount || 0) * 100);
+
+      if (
+        transactionAmountInCents !== expectedAmountInCents ||
+        String(transaction?.currency || "") !== "COP"
+      ) {
+        return res.status(400).send("El valor o la moneda del pago no corresponde a la cuota.");
+      }
+
+      const transactionStatus = String(transaction?.status || "");
+
+      if (transactionStatus === "APPROVED") {
+        await supabase
+          .from("payments")
+          .update({
+            status: "approved",
+            provider: "wompi",
+            provider_transaction_id: wompiTransactionId,
+            platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
+          })
+          .eq("id", payment.id);
+
+        await processApprovedInstallmentPayment({
+          ...payment,
+          status: "approved",
+          provider_transaction_id: wompiTransactionId
+        });
+
+        return res.redirect(`/cuotas/${encodeURIComponent(publicToken)}`);
+      }
+
+      if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
+        await supabase
+          .from("payments")
+          .update({
+            status: "failed",
+            provider: "wompi",
+            provider_transaction_id: wompiTransactionId
+          })
+          .eq("id", payment.id);
+
+        return res.redirect(`/cuotas/${encodeURIComponent(publicToken)}`);
+      }
+    }
+
+    const { data: freshPlan, error: freshPlanError } = await supabase
+      .from("installment_plans")
+      .select("*")
+      .eq("id", plan.id)
+      .single();
+
+    if (freshPlanError) throw freshPlanError;
+
+    const { data: freshSchedules, error: freshSchedulesError } = await supabase
+      .from("installment_schedules")
+      .select("*")
+      .eq("plan_id", plan.id)
+      .order("installment_number", { ascending: true });
+
+    if (freshSchedulesError) throw freshSchedulesError;
+    schedules = freshSchedules || [];
+
+    const nextInstallment = schedules.find(item =>
+      ["pending", "overdue"].includes(item.status)
+    );
+    let pendingPayment = null;
+
+    if (nextInstallment && ["pending_first", "active"].includes(freshPlan.status)) {
+      pendingPayment = await ensurePendingPaymentForInstallment(nextInstallment);
+    }
+
+    let wompiForm = "";
+
+    if (pendingPayment && WOMPI_PUBLIC_KEY && WOMPI_INTEGRITY_SECRET) {
+      const currency = "COP";
+      const amountInCents = Math.round(Number(pendingPayment.amount || 0) * 100).toString();
+      const signature = generateWompiIntegritySignature(
+        pendingPayment.external_reference,
+        amountInCents,
+        currency,
+        WOMPI_INTEGRITY_SECRET
+      );
+
+      wompiForm = `
+        <form action="https://checkout.wompi.co/p/" method="GET">
+          <input type="hidden" name="public-key" value="${escapeHtml(WOMPI_PUBLIC_KEY)}">
+          <input type="hidden" name="currency" value="COP">
+          <input type="hidden" name="amount-in-cents" value="${amountInCents}">
+          <input type="hidden" name="reference" value="${escapeHtml(pendingPayment.external_reference)}">
+          <input type="hidden" name="signature:integrity" value="${escapeHtml(signature)}">
+          <input type="hidden" name="redirect-url" value="${escapeHtml(`${APP_BASE_URL}/cuotas/${publicToken}`)}">
+
+          <button type="submit" style="width:100%;padding:17px;background:#2563eb;color:white;border:none;border-radius:14px;font-size:18px;font-weight:900;cursor:pointer;">
+            Pagar cuota ${nextInstallment.installment_number}: ${moneyCOP(nextInstallment.amount)}
+          </button>
+        </form>
+      `;
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <title>Plan de cuotas - CampaClick</title>
+      </head>
+      <body style="margin:0;font-family:Arial;background:#f3f6fb;padding:24px;color:#111827;">
+        <main style="max-width:760px;margin:auto;background:white;padding:26px;border-radius:20px;box-shadow:0 12px 34px rgba(0,0,0,.10);">
+          <h1 style="margin-top:0;">Plan de cuotas</h1>
+
+          <div style="padding:15px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;line-height:1.6;">
+            <div><b>Campaña:</b> ${escapeHtml(order.rifas?.title || "-")}</div>
+            <div><b>Comprador:</b> ${escapeHtml(order.buyers?.full_name || "-")}</div>
+            <div><b>Total:</b> ${moneyCOP(freshPlan.total_amount)}</div>
+            <div><b>Pagado:</b> ${moneyCOP(freshPlan.amount_paid)}</div>
+            <div><b>Saldo:</b> ${moneyCOP(freshPlan.balance_due)}</div>
+          </div>
+
+          <div style="margin-top:18px;display:grid;gap:9px;">
+            ${schedules.map(item => `
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:13px;border-radius:12px;background:${item.status === "approved" ? "#ecfdf5" : item.status === "overdue" ? "#fef2f2" : "#f9fafb"};border:1px solid #e5e7eb;">
+                <span>
+                  <b>Cuota ${item.installment_number}</b><br/>
+                  <small>Vence: ${escapeHtml(item.due_date || "-")}</small>
+                </span>
+                <span style="text-align:right;">
+                  <b>${moneyCOP(item.amount)}</b><br/>
+                  <small>${item.status === "approved" ? "Pagada" : item.status === "overdue" ? "En gracia" : "Pendiente"}</small>
+                </span>
+              </div>
+            `).join("")}
+          </div>
+
+          ${freshPlan.status === "paid" ? `
+            <div style="margin-top:20px;padding:16px;background:#dcfce7;color:#166534;border-radius:14px;font-weight:bold;text-align:center;">
+              Plan pagado completamente. Tus códigos están activos.
+            </div>
+          ` : freshPlan.status === "defaulted" ? `
+            <div style="margin-top:20px;padding:16px;background:#fee2e2;color:#991b1b;border-radius:14px;font-weight:bold;text-align:center;">
+              El plan incumplió el plazo de gracia y el código fue liberado. El valor pagado quedó registrado como saldo a favor.
+            </div>
+          ` : `
+            <div style="margin-top:20px;">${wompiForm}</div>
+            <div style="margin-top:12px;padding:13px;background:#fff7ed;color:#9a3412;border-radius:12px;font-size:13px;line-height:1.5;">
+              Después del vencimiento tienes cinco días calendario de gracia. Si no realizas el pago, el código será liberado.
+            </div>
+          `}
+
+          <a href="/consultar" style="display:block;margin-top:16px;padding:14px;background:#111827;color:white;text-align:center;text-decoration:none;border-radius:12px;font-weight:bold;">
+            Consultar mis órdenes
+          </a>
+        </main>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Error mostrando plan de cuotas:", error);
+    return res.status(500).send(error.message);
+  }
+});
 
 app.get("/orden/:orderId", async (req, res) => {
   try {
@@ -9006,6 +10181,20 @@ app.get("/orden/:orderId", async (req, res) => {
 
     if (orderError || !order) {
       return res.status(404).send("Orden no encontrada");
+    }
+
+    if (order.payment_mode === "installments") {
+      const { data: installmentPlan, error: installmentPlanError } = await supabase
+        .from("installment_plans")
+        .select("public_token")
+        .eq("order_id", order.id)
+        .maybeSingle();
+
+      if (installmentPlanError) throw installmentPlanError;
+
+      if (installmentPlan?.public_token) {
+        return res.redirect(`/cuotas/${installmentPlan.public_token}`);
+      }
     }
 
     const { data: payment, error: paymentError } = await supabase
@@ -9048,7 +10237,7 @@ const transactionAmountInCents = Number(transaction?.amount_in_cents || 0);
 const transactionCurrency = String(transaction?.currency || "");
 
 const expectedReference = String(payment.external_reference || "");
-const expectedAmountInCents = Math.round(Number(order.total_paid || 0) * 100);
+const expectedAmountInCents = Math.round(Number(payment.amount || 0) * 100);
 
 if (transactionReference !== expectedReference) {
   console.log("Referencia Wompi no coincide", {
@@ -9082,7 +10271,8 @@ if (transactionCurrency !== "COP") {
     .update({
       status: "approved",
       provider: "wompi",
-      provider_transaction_id: wompiTransactionId
+      provider_transaction_id: wompiTransactionId,
+      platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
     })
     .eq("id", payment.id);
 
@@ -9116,7 +10306,7 @@ if (transactionCurrency !== "COP") {
     }
 
     const currency = "COP";
-    const amountInCents = Math.round(Number(order.total_paid || 0) * 100).toString();
+    const amountInCents = Math.round(Number(payment.amount || 0) * 100).toString();
     const reference = payment.external_reference;
     const signature = generateWompiIntegritySignature(
       reference,
@@ -9394,7 +10584,7 @@ app.post("/webhooks/wompi", async (req, res) => {
       return res.status(200).send("Pago no encontrado");
     }
 
-    const expectedAmountInCents = Math.round(Number(payment.orders?.total_paid || 0) * 100);
+    const expectedAmountInCents = Math.round(Number(payment.amount || 0) * 100);
 
     if (transactionAmountInCents !== expectedAmountInCents) {
       console.log("Webhook Wompi con valor diferente", {
@@ -9415,6 +10605,59 @@ app.post("/webhooks/wompi", async (req, res) => {
       return res.status(400).send("Moneda no válida");
     }
 
+    if (payment.installment_id) {
+      if (payment.status === "approved") {
+        await processApprovedInstallmentPayment(payment);
+        return res.status(200).send("Cuota ya aprobada");
+      }
+
+      if (transactionStatus === "APPROVED") {
+        const { error: installmentPaymentUpdateError } = await supabase
+          .from("payments")
+          .update({
+            status: "approved",
+            provider: "wompi",
+            provider_transaction_id: transactionId,
+            platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
+          })
+          .eq("id", payment.id);
+
+        if (installmentPaymentUpdateError) throw installmentPaymentUpdateError;
+
+        await processApprovedInstallmentPayment({
+          ...payment,
+          status: "approved",
+          provider_transaction_id: transactionId
+        });
+
+        return res.status(200).send("Cuota aprobada");
+      }
+
+      if (["DECLINED", "ERROR", "VOIDED"].includes(transactionStatus)) {
+        await supabase
+          .from("payments")
+          .update({
+            status: "failed",
+            provider: "wompi",
+            provider_transaction_id: transactionId
+          })
+          .eq("id", payment.id);
+
+        return res.status(200).send("Intento de cuota fallido");
+      }
+
+      await supabase
+        .from("payments")
+        .update({
+          status: "pending",
+          provider: "wompi",
+          provider_transaction_id: transactionId
+        })
+        .eq("id", payment.id);
+
+      return res.status(200).send("Cuota pendiente");
+    }
+
     if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
       console.log("Pago ya aprobado. Se valida consistencia sin degradar:", reference);
 
@@ -9431,7 +10674,8 @@ app.post("/webhooks/wompi", async (req, res) => {
         .update({
           status: "approved",
           provider: "wompi",
-          provider_transaction_id: transactionId
+          provider_transaction_id: transactionId,
+          platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
         })
         .eq("id", payment.id);
 
@@ -9505,6 +10749,30 @@ return res.status(200).send("Pago fallido registrado");
   } catch (error) {
     console.error("Webhook Wompi error:", error);
     return res.status(500).send(error.message);
+  }
+});
+
+app.post("/internal/cuotas/procesar", async (req, res) => {
+  try {
+    if (!INSTALLMENT_CRON_SECRET) {
+      return res.status(503).json({ ok: false, error: "Falta INSTALLMENT_CRON_SECRET" });
+    }
+
+    const authorization = String(req.headers.authorization || "");
+    const providedSecret = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : String(req.headers["x-cron-secret"] || "").trim();
+
+    if (!safeCompare(providedSecret, INSTALLMENT_CRON_SECRET)) {
+      return res.status(401).json({ ok: false, error: "No autorizado" });
+    }
+
+    const results = await processInstallmentReminders();
+
+    return res.json({ ok: true, processed: results.length, results });
+  } catch (error) {
+    console.error("Error procesando recordatorios de cuotas:", error);
+    return res.status(500).json({ ok: false, error: error.message });
   }
 });
 
@@ -11231,6 +12499,7 @@ app.post("/admin/resultados/masivo", async (req, res) => {
         .select("*")
         .eq("rifa_id", campaign.id)
         .eq("combination", resultValue)
+        .eq("status", "active")
         .maybeSingle();
 
       if (ticketError) throw ticketError;
@@ -11675,6 +12944,7 @@ const { data: winnerTicket, error: ticketError } = await supabase
   .select("*")
   .eq("rifa_id", rifaId)
   .eq("combination", resultValue)
+  .eq("status", "active")
   .maybeSingle();
 
     if (ticketError) throw ticketError;
@@ -11778,6 +13048,15 @@ app.get("/terminos-organizadores", (req, res) => {
         <h2>7. Cambios en tarifas</h2>
         <p>
           CampaClick podrá actualizar sus tarifas, comisiones o condiciones de uso. Las nuevas condiciones serán informadas o publicadas dentro de la plataforma.
+        </p>
+
+        <h2>8. Campañas con pagos a cuotas</h2>
+        <p>
+          El organizador decide individualmente si habilita pagos a cuotas en cada campaña. Cuando los habilite, CampaClick cobrará su comisión del 5% sobre cada cuota aprobada y la pasarela podrá cobrar sus costos de procesamiento por cada transacción.
+        </p>
+
+        <p>
+          La última cuota deberá pagarse un mes antes del sorteo. Los códigos reservados por planes incumplidos podrán ser liberados después del periodo de gracia informado al comprador.
         </p>
 
         <div style="margin-top:28px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;color:#1e3a8a;">
@@ -12222,6 +13501,10 @@ app.get("/terminos-y-condiciones", (req, res) => {
       Una vez aprobado el pago y asignados los códigos promocionales, no habrá devolución del dinero salvo error técnico comprobado, duplicidad no corregida, cancelación de la campaña o decisión administrativa de CampaClick.
     </p>
 
+    <p>
+      Cuando el participante solicite voluntariamente una devolución que sea aceptada por CampaClick, podrán descontarse los costos efectivamente causados por cada transacción, incluida la comisión de CampaClick del 5% y los costos cobrados por la pasarela de pago. Este descuento no se aplicará cuando una norma obligatoria exija la devolución completa, ni en los casos de reversión, retracto, error atribuible a la plataforma o cancelación de la campaña que legalmente deban reintegrarse sin descuento.
+    </p>
+
     <h2>7. Responsabilidad del organizador</h2>
     <p>
       El organizador es responsable de la veracidad de la campaña, la existencia del premio, la entrega del premio y el cumplimiento de las condiciones ofrecidas al público.
@@ -12247,7 +13530,16 @@ app.get("/terminos-y-condiciones", (req, res) => {
       CampaClick podrá actualizar estos términos cuando sea necesario. La versión publicada en esta página será la vigente.
     </p>
 
-    <h2>12. Contacto</h2>
+    <h2>12. Pagos a cuotas</h2>
+    <p>
+      Algunas campañas podrán ofrecer pagos a cuotas cuando el organizador haya activado esta opción. Antes de pagar, el participante verá el número de cuotas, sus valores, fechas de vencimiento y la fecha límite del plan.
+    </p>
+
+    <p>
+      El número de lotería o combinación automática de Baloto se reservará después de aprobarse la primera cuota. Si una cuota vence, el participante tendrá cinco días calendario de gracia. Vencido ese término sin pago, el código podrá liberarse y el valor pagado quedará registrado como saldo a favor, sin perjuicio de las reglas legales aplicables a devoluciones, retractos, reversión de pagos o cancelación de la campaña.
+    </p>
+
+    <h2>13. Contacto</h2>
     <p>
       Para solicitudes, inquietudes o reclamaciones, el usuario podrá comunicarse con CampaClick a través de los canales publicados en la plataforma.
     </p>
@@ -12409,6 +13701,11 @@ app.get("/politica-campanas", (req, res) => {
       CampaClick podrá revisar órdenes, pagos, referidos, códigos y resultados cuando detecte conductas irregulares o intentos de manipulación.
     </p>
 
+    <h2>10. Pagos a cuotas</h2>
+    <p>
+      El organizador puede habilitar o deshabilitar esta opción para cada campaña. La cantidad máxima de cuotas dependerá del valor del código y del tiempo disponible hasta un mes antes del sorteo. El código se reserva con la primera cuota aprobada y podrá liberarse si transcurren cinco días calendario después del vencimiento sin que se complete el pago correspondiente.
+    </p>
+
     <div style="margin-top:26px;">
       <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
         Volver al inicio
@@ -12423,3 +13720,17 @@ app.get("/politica-campanas", (req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
+
+const installmentReminderInterval = setInterval(() => {
+  processInstallmentReminders().catch(error => {
+    console.error("Error en procesamiento automático de cuotas:", error.message);
+  });
+}, 1000 * 60 * 60);
+
+installmentReminderInterval.unref();
+
+setTimeout(() => {
+  processInstallmentReminders().catch(error => {
+    console.error("Error en verificación inicial de cuotas:", error.message);
+  });
+}, 1000 * 60).unref();
