@@ -1166,6 +1166,20 @@ function parseLocalDate(dateString) {
   return new Date(year, month - 1, day);
 }
 
+function formatDateForDisplay(dateString) {
+  const date = parseLocalDate(dateString);
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return String(dateString || "-");
+  }
+
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
 function validateDrawDate(drawProvider, drawDate) {
   const selectedDate = parseLocalDate(drawDate);
 
@@ -8174,179 +8188,76 @@ body {
     font-size: 38px;
   }
 }
+
+/* Vista pública compacta e intuitiva */
+body.public-campaign-page {
+  background:#f3f6fb;
+  color:#0f172a;
+}
+.public-hero{padding:38px 20px 46px;background:linear-gradient(135deg,#12326d,#2563eb);color:#fff;text-align:center;box-shadow:0 12px 34px rgba(37,99,235,.20)}
+.public-hero h1{margin:0;font-size:clamp(28px,5vw,44px);line-height:1.12}.public-hero p{margin:9px 0 0;color:#dbeafe;font-size:15px}
+.public-shell{width:min(1120px,calc(100% - 28px));margin:-22px auto 0;position:relative;z-index:2;padding-bottom:30px}
+.campaign-summary-card,.campaign-details{background:#fff;border:1px solid #dbe3ef;border-radius:22px;box-shadow:0 14px 36px rgba(15,23,42,.09)}
+.campaign-summary-card{padding:22px}.campaign-summary-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px}.campaign-summary-head h2{margin:0;font-size:20px}.campaign-status{display:inline-flex;padding:7px 12px;border-radius:999px;background:${publicStatusColor};color:#fff;font-size:12px;font-weight:900}
+.campaign-facts{display:grid;grid-template-columns:1.35fr repeat(4,minmax(0,1fr));gap:10px}.campaign-fact{min-width:0;padding:13px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}.campaign-fact span{display:block;margin-bottom:5px;color:#64748b;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.03em}.campaign-fact b{display:block;color:#0f172a;font-size:14px;line-height:1.35;overflow-wrap:anywhere}.campaign-fact.price-fact{background:#ecfdf5;border-color:#bbf7d0}.campaign-fact.price-fact b{color:#15803d;font-size:22px}
+.compact-progress{margin-top:15px;padding:13px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe}.compact-progress-line{display:flex;justify-content:space-between;gap:12px;color:#1e3a8a;font-size:12px;font-weight:900}.compact-progress-track{height:9px;margin-top:8px;border-radius:999px;background:#dbeafe;overflow:hidden}.compact-progress-track span{display:block;height:100%;width:${soldPercentage}%;background:linear-gradient(90deg,#16a34a,#22c55e);border-radius:999px}
+.campaign-actions{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-top:16px}.campaign-action{display:flex;align-items:center;justify-content:center;min-height:50px;padding:12px;border-radius:13px;color:#fff;text-decoration:none;text-align:center;font-weight:900;font-size:14px}.campaign-action.primary{background:linear-gradient(135deg,#16a34a,#2563eb)}.campaign-action.contact{background:#0f172a}.campaign-action.share{background:#16a34a}.campaign-payment-note{margin:12px 0 0;padding:11px 13px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:12px;line-height:1.45;text-align:center}
+.campaign-details{margin-top:13px;overflow:hidden}.campaign-details summary{list-style:none;cursor:pointer;padding:17px 20px;color:#1e3a8a;font-weight:900;display:flex;align-items:center;justify-content:space-between}.campaign-details summary::-webkit-details-marker{display:none}.campaign-details summary::after{content:'＋';font-size:20px}.campaign-details[open] summary::after{content:'−'}.campaign-details-body{padding:0 20px 20px;border-top:1px solid #e2e8f0}.campaign-details-body .description{padding-top:16px;color:#334155;line-height:1.65}.detail-note{margin-top:12px;padding:13px;border-radius:13px;background:#f8fafc;border:1px solid #e2e8f0;color:#334155;font-size:13px;line-height:1.55}.detail-note.green{background:#ecfdf5;border-color:#bbf7d0;color:#166534}.detail-note.blue{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a}.public-footer{text-align:center;padding:20px;color:#64748b;font-size:12px}
+@media(max-width:820px){.campaign-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-fact:first-child{grid-column:1/-1}.campaign-actions{grid-template-columns:1fr 1fr}.campaign-action.primary{grid-column:1/-1}.public-shell{width:min(100% - 20px,1120px)}.campaign-summary-card{padding:15px}}
+@media(max-width:480px){.public-hero{padding:28px 14px 38px}.campaign-facts{grid-template-columns:1fr 1fr}.campaign-fact{padding:11px}.campaign-fact b{font-size:12px}.campaign-fact.price-fact b{font-size:19px}.campaign-actions{grid-template-columns:1fr}.campaign-action.primary{grid-column:auto}.campaign-summary-head{align-items:flex-start}.campaign-summary-head h2{font-size:17px}}
 </style>
 </head>
 
-<body>
-
-<div class="header">
+<body class="public-campaign-page">
+<header class="public-hero">
   <h1>${escapeHtml(campaign.title)}</h1>
-  <p>Participa fácilmente desde cualquier lugar</p>
-</div>
+  <p>Información clara para participar con confianza</p>
+</header>
 
-<div class="container">
-
-  <div class="card">
-    <div class="progress-card">
-
-      <div class="progress-header">
-        <div>
-          <h2 class="progress-title">Avance de la campaña</h2>
-          <div class="progress-description">
-              Sigue el progreso de participación de la campaña en tiempo real.
-          </div>
-        </div>
-
-        <div class="progress-right">
-          <div class="progress-percent">${soldPercentage}%</div>
-          <div class="status-chip">${publicStatusLabel}</div>
-        </div>
-      </div>
-
-      <div class="progress-bar-wrap">
-        <div class="progress-bar"></div>
-      </div>
-
-      
-    </div>
-  </div>
-
-  <div class="info-grid">
-
-    <div class="card">
-      <h2 class="section-title">Información de la campaña</h2>
-
-      <p class="description">
-        ${escapeHtml(campaign.description || "Campaña promocional disponible para participar de forma rápida y segura.")}
-      </p>
-
-      <div style="margin-top:20px;color:#374151;line-height:1.7;">
-  <div><b>Premio:</b> ${escapeHtml(campaign.prize || "-")}</div>
-  <div><b>Fecha del sorteo:</b> ${escapeHtml(campaign.draw_date || "-")}</div>
-  <div><b>Sorteo:</b> ${getDrawProviderLabel(campaign.draw_provider)}</div>
-  <div><b>Modalidad:</b> ${getDrawModeLabel(campaign.draw_mode)}</div>
-
-  ${
-    campaign.draw_provider === "baloto"
-      ? `
-        <div style="margin-top:10px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;color:#1e3a8a;font-size:13px;line-height:1.5;">
-          <b>Regla Baloto:</b><br/>
-          Se toman únicamente las 5 balotas principales del resultado oficial, sin incluir la súper balota.
-          Las balotas se organizan de menor a mayor y, según la modalidad, se validan las primeras 2, 3, 4 o las 5 balotas completas.
-        </div>
-      `
-      : ""
-  }
-
-  ${
-  campaign.referral_program_enabled
-    ? `
-      <div style="margin-top:10px;padding:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px;color:#166534;font-size:13px;line-height:1.5;">
-        <b>Programa de referidos promocionales:</b><br/>
-        Por cada ${campaign.referral_required_approved_orders || 15} compras aprobadas realizadas mediante un enlace de referido válido,
-        la persona referidora podrá recibir 1 código promocional de cortesía para participar en esta misma campaña.
-        Este beneficio no es canjeable por dinero ni constituye comisión económica.
-      </div>
-    `
-    : ""
-}
-</div>
+<main class="public-shell">
+  <section class="campaign-summary-card">
+    <div class="campaign-summary-head">
+      <h2>Resumen de la campaña</h2>
+      <span class="campaign-status">${publicStatusLabel}</span>
     </div>
 
-    <div class="card">
-      <div class="price-card">
-        <div class="price-label">Valor por código promocional</div>
-
-        <div class="price">
-          $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
-        </div>
-
-        ${
-          getCampaignInstallmentConfiguration(campaign).enabled
-            ? `
-              <div style="margin:12px 0;padding:12px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px;color:#166534;font-weight:bold;line-height:1.5;">
-                Esta campaña permite pagar hasta en
-                ${getCampaignInstallmentConfiguration(campaign).maximumInstallments} cuotas.
-                Tú escoges la cantidad antes de continuar al pago.
-              </div>
-            `
-            : ""
-        }
-
-       ${
-  campaign.status === "active"
-    ? `
-      <a
-  class="button button-main"
-  href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">
-  Participar ahora
-</a>
-
-      
-      ${
-        organizerWhatsAppPhone
-          ? `
-            <a
-              class="button button-whatsapp"
-              target="_blank"
-              href="https://wa.me/${organizerWhatsAppPhone}?text=${contactOrganizerMessage}">
-              Contactar al organizador
-            </a>
-          `
-          : ""
-      }
-
-      <a
-        class="button button-whatsapp"
-        target="_blank"
-        href="https://wa.me/?text=${whatsappShareText}">
-        Compartir campaña por WhatsApp
-      </a>
-
-      <div class="small-note">
-        Tu código promocional se asigna automáticamente después del pago aprobado.
-      </div>
-    `
-    : campaign.status === "finished"
-      ? `
-        <div class="finished-box">
-          Esta campaña ya finalizó.<br/>
-          No se permiten más compras.
-        </div>
-
-        <a
-          class="button button-dark"
-          style="margin-top:16px;"
-          href="/resultado/${campaign.id}">
-          Ver resultado
-        </a>
-      `
-      : campaign.status === "cancelled"
-        ? `
-          <div class="finished-box">
-            Esta campaña no se encuentra disponible.
-          </div>
-
-          
-        `
-        : `
-          <div class="finished-box" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">
-            Esta campaña está pendiente de aprobación por el administrador.<br/>
-            Aún no se permiten compras.
-          </div>
-
-                  `
-}
-      </div>
+    <div class="campaign-facts">
+      <div class="campaign-fact"><span>Premio</span><b>${escapeHtml(campaign.prize || "-")}</b></div>
+      <div class="campaign-fact"><span>Lotería</span><b>${getDrawProviderLabel(campaign.draw_provider)}</b></div>
+      <div class="campaign-fact"><span>Modalidad</span><b>${getDrawModeLabel(campaign.draw_mode)}</b></div>
+      <div class="campaign-fact"><span>Fecha del sorteo</span><b>${escapeHtml(formatDateForDisplay(campaign.draw_date))}</b></div>
+      <div class="campaign-fact price-fact"><span>Valor por código</span><b>$${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}</b></div>
     </div>
 
-  </div>
+    <div class="compact-progress">
+      <div class="compact-progress-line"><span>Avance de participación</span><span>${soldPercentage}%</span></div>
+      <div class="compact-progress-track"><span></span></div>
+    </div>
 
-</div>
+    ${campaign.status === "active" ? `
+      <div class="campaign-actions">
+        <a class="campaign-action primary" href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">Participar ahora</a>
+        ${organizerWhatsAppPhone ? `<a class="campaign-action contact" target="_blank" rel="noopener noreferrer" href="https://wa.me/${organizerWhatsAppPhone}?text=${contactOrganizerMessage}">Contactar</a>` : ""}
+        <a class="campaign-action share" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${whatsappShareText}">Compartir</a>
+      </div>
+      ${getCampaignInstallmentConfiguration(campaign).enabled ? `<p class="campaign-payment-note">Puedes pagar hasta en <b>${getCampaignInstallmentConfiguration(campaign).maximumInstallments} cuotas</b>. Escoges la forma de pago antes de continuar.</p>` : `<p class="campaign-payment-note">Tu código se asigna cuando el pago sea aprobado.</p>`}
+    ` : campaign.status === "finished" ? `
+      <div class="campaign-actions"><a class="campaign-action contact" href="/resultado/${campaign.id}">Ver resultado</a></div>
+    ` : `<p class="campaign-payment-note">Esta campaña no está disponible para nuevas compras.</p>`}
+  </section>
 
-<div class="footer">
-  © CampaClick — Plataforma de campañas promocionales
-</div>
+  <details class="campaign-details">
+    <summary>Ver información completa</summary>
+    <div class="campaign-details-body">
+      <p class="description">${escapeHtml(campaign.description || "Campaña promocional disponible para participar de forma rápida y segura.")}</p>
+      ${campaign.draw_provider === "baloto" ? `<div class="detail-note blue"><b>Regla Baloto:</b><br/>Se toman únicamente las cinco balotas principales del resultado oficial, sin incluir la súper balota. Se organizan de menor a mayor y se validan de acuerdo con la modalidad seleccionada.</div>` : ""}
+      ${campaign.referral_program_enabled ? `<div class="detail-note green"><b>Programa de referidos:</b><br/>Por cada ${campaign.referral_required_approved_orders || 15} compras aprobadas mediante un enlace válido, la persona referidora podrá recibir un código promocional de cortesía para esta campaña. No es canjeable por dinero.</div>` : ""}
+      <div class="detail-note"><b>Asignación:</b> el código promocional queda confirmado únicamente después de la aprobación del pago.</div>
+    </div>
+  </details>
+</main>
+
+<footer class="public-footer">© CampaClick — Plataforma de campañas promocionales</footer>
 
 </body>
 </html>
@@ -9447,7 +9358,42 @@ if (isLottery) {
 
           .form-grid {
             display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
             gap: 16px;
+          }
+
+          .purchase-main-section { grid-column:1 / -1; }
+
+          .purchase-summary {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px;
+            margin:0 0 18px;
+          }
+
+          .purchase-summary div {
+            min-width:0;
+            padding:11px;
+            border-radius:13px;
+            background:rgba(255,255,255,.09);
+            border:1px solid rgba(255,255,255,.17);
+          }
+
+          .purchase-summary span {
+            display:block;
+            margin-bottom:4px;
+            color:#93c5fd;
+            font-size:10px;
+            font-weight:900;
+            text-transform:uppercase;
+          }
+
+          .purchase-summary b {
+            display:block;
+            color:#fff;
+            font-size:12px;
+            line-height:1.35;
+            overflow-wrap:anywhere;
           }
 
           label {
@@ -9754,6 +9700,49 @@ if (isLottery) {
   border-radius: 999px;
 }
 
+.number-browser {
+  margin-top:12px;
+  border:1px solid rgba(147,197,253,.30);
+  border-radius:16px;
+  background:rgba(37,99,235,.12);
+  overflow:hidden;
+}
+
+.number-browser summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  color:#dbeafe;
+  font-weight:900;
+  cursor:pointer;
+  list-style:none;
+}
+
+.number-browser summary::-webkit-details-marker { display:none; }
+.number-browser summary::after { content:'＋';font-size:20px; }
+.number-browser[open] summary::after { content:'−'; }
+.number-browser-content { padding:0 10px 10px; }
+
+body.purchase-page {
+  display:block;
+  min-height:100vh;
+  padding:24px;
+  background:#0b1220;
+}
+
+body.purchase-page::before { display:none; }
+
+body.purchase-page .glass-card {
+  margin:0 auto;
+  max-width:900px;
+  background:#111827;
+  border-color:#334155;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+
 
           @media (max-width: 700px) {
             body {
@@ -9762,7 +9751,7 @@ if (isLottery) {
             }
 
             .glass-card {
-              padding: 24px;
+              padding: 20px;
               border-radius: 30px;
             }
 
@@ -9781,11 +9770,18 @@ if (isLottery) {
             .lottery-search button {
               min-height: 50px;
             }
+
+            .form-grid,
+            .purchase-summary {
+              grid-template-columns:1fr;
+            }
+
+            .purchase-main-section { grid-column:auto; }
           }
         </style>
       </head>
 
-      <body>
+      <body class="purchase-page">
         <div class="glass-card">
           <div class="top-badge">🎯</div>
 
@@ -9793,6 +9789,13 @@ if (isLottery) {
 
           <div class="price">
             $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}
+          </div>
+
+          <div class="purchase-summary">
+            <div><span>Premio</span><b>${escapeHtml(campaign.prize || "-")}</b></div>
+            <div><span>Lotería</span><b>${getDrawProviderLabel(campaign.draw_provider)}</b></div>
+            <div><span>Modalidad</span><b>${getDrawModeLabel(campaign.draw_mode)}</b></div>
+            <div><span>Fecha del sorteo</span><b>${escapeHtml(formatDateForDisplay(campaign.draw_date))}</b></div>
           </div>
 
           <form method="POST" action="/campanas/${escapeHtml(campaign.slug)}/comprar">
@@ -9820,7 +9823,7 @@ if (isLottery) {
               </div>
 
              
-              <div>
+              <div class="purchase-main-section">
                 <label>Cantidad de códigos</label>
 
                <input
@@ -9942,20 +9945,25 @@ ${
           ></div>
         </div>
 
-        <div class="lottery-board" id="lotteryBoard">
-          ${
-            availableLotteryNumbers.map(number => `
-  <label class="lottery-number">
-    <input
-      type="checkbox"
-      name="selected_numbers"
-      value="${number}"
-    >
-    <span>${number}</span>
-  </label>
-`).join("")
-          }
-        </div>
+        <details class="number-browser" id="numberBrowser">
+          <summary>Ver todos los números disponibles</summary>
+          <div class="number-browser-content">
+            <div class="lottery-board" id="lotteryBoard">
+              ${
+                availableLotteryNumbers.map(number => `
+      <label class="lottery-number">
+        <input
+          type="checkbox"
+          name="selected_numbers"
+          value="${number}"
+        >
+        <span>${number}</span>
+      </label>
+    `).join("")
+              }
+            </div>
+          </div>
+        </details>
 
         <div class="small-note">
   Esta selección manual solo aplica para campañas de lotería.
@@ -10217,6 +10225,9 @@ ${
     const numberLabel = matchingInput.closest(".lottery-number");
 
     if (numberLabel) {
+      const numberBrowser = document.getElementById("numberBrowser");
+      if (numberBrowser) numberBrowser.open = true;
+
       document.querySelectorAll(".lottery-number.search-highlight").forEach(item => {
         item.classList.remove("search-highlight");
       });
