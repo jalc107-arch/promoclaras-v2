@@ -2025,24 +2025,45 @@ function calculateWompiFeeForPayment(amount) {
 }
 
 function calculateCampaignFinancialSummary(campaign, campaignOrders = [], campaignPayments = []) {
-  const paidOrderIds = new Set(
-    (campaignOrders || [])
-      .filter(o => o.payment_status === "paid")
-      .map(o => o.id)
+  const recognizedOrders = (campaignOrders || []).filter(o =>
+    ["paid", "partially_paid"].includes(String(o.payment_status || ""))
+  );
+  const recognizedOrderIds = new Set(recognizedOrders.map(o => String(o.id)));
+
+  const approvedPayments = (campaignPayments || []).filter(p =>
+    p.status === "approved" && recognizedOrderIds.has(String(p.order_id))
   );
 
-  const approvedPayments = (campaignPayments || []).filter(p => {
-    return p.status === "approved" && paidOrderIds.has(p.order_id);
-  });
+  const completedOrders = recognizedOrders.filter(o => o.payment_status === "paid");
+  const installmentOrders = recognizedOrders.filter(o => o.payment_status === "partially_paid");
 
-  const soldQty = (campaignOrders || [])
-  .filter(o => o.payment_status === "paid")
-  .reduce((acc, o) => acc + Number(o.qty || 0), 0);
+  const soldQty = completedOrders.reduce(
+    (acc, o) => acc + Number(o.qty || 0),
+    0
+  );
+
+  const reservedInstallmentQty = installmentOrders.reduce(
+    (acc, o) => acc + Number(o.qty || 0),
+    0
+  );
+
+  const committedSales = recognizedOrders.reduce(
+    (acc, o) => acc + Number(o.subtotal || 0),
+    0
+  );
 
   const grossRevenue = approvedPayments.reduce(
     (acc, p) => acc + Number(p.amount || 0),
     0
   );
+
+  const outstandingBalance = recognizedOrders.reduce((acc, order) => {
+    const orderPaid = approvedPayments
+      .filter(p => String(p.order_id) === String(order.id))
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    return acc + Math.max(0, Number(order.subtotal || 0) - orderPaid);
+  }, 0);
 
   const platformFeePercent = Number(campaign.platform_fee_percent || 5);
   const platformFee = grossRevenue * (platformFeePercent / 100);
@@ -2058,19 +2079,58 @@ function calculateCampaignFinancialSummary(campaign, campaignOrders = [], campai
     ? prizeCashAmount
     : 0;
 
-  const netToOrganizer = grossRevenue - platformFee - gatewayFee - prizeDeduction;
+  const netBeforePrize = grossRevenue - platformFee - gatewayFee;
+  const netToOrganizer = netBeforePrize - prizeDeduction;
 
   return {
   approvedPaymentsCount: approvedPayments.length,
   soldQty,
+  reservedInstallmentQty,
+  committedSales,
   grossRevenue,
+  outstandingBalance,
   platformFee,
   gatewayFee,
   prizeType,
   prizeCashAmount,
   prizeDeduction,
+  netBeforePrize,
   netToOrganizer
 };
+}
+
+function calculateAdminFinancialSummary(campaigns = [], orders = [], payments = []) {
+  return (campaigns || []).reduce((summary, campaign) => {
+    const campaignOrders = (orders || []).filter(
+      order => String(order.rifa_id) === String(campaign.id)
+    );
+    const orderIds = new Set(campaignOrders.map(order => String(order.id)));
+    const campaignPayments = (payments || []).filter(
+      payment => orderIds.has(String(payment.order_id))
+    );
+    const financial = calculateCampaignFinancialSummary(
+      campaign,
+      campaignOrders,
+      campaignPayments
+    );
+
+    summary.committedSales += financial.committedSales;
+    summary.collectedRevenue += financial.grossRevenue;
+    summary.outstandingBalance += financial.outstandingBalance;
+    summary.platformFee += financial.platformFee;
+    summary.gatewayFee += financial.gatewayFee;
+    summary.netBeforePrize += financial.netBeforePrize;
+    summary.approvedPaymentsCount += financial.approvedPaymentsCount;
+    return summary;
+  }, {
+    committedSales: 0,
+    collectedRevenue: 0,
+    outstandingBalance: 0,
+    platformFee: 0,
+    gatewayFee: 0,
+    netBeforePrize: 0,
+    approvedPaymentsCount: 0
+  });
 }
 
 function prizeTypeLabel(value) {
@@ -12552,7 +12612,11 @@ if (orderIds.length > 0) {
 }
 }
   
-const adminFinancialSummary = calculateFinancialSummary(adminPayments);
+const adminFinancialSummary = calculateAdminFinancialSummary(
+  campaigns || [],
+  adminOrders,
+  adminPayments
+);
 
     const { data: adminOrganizers, error: adminOrganizersError } = await supabase
   .from("organizers")
@@ -12636,117 +12700,71 @@ const adminCampaignRows = (campaigns || []).map(c => {
   }
 
  return `
-    <tr>
-      <td colspan="9" style="padding:0;border-bottom:none;">
-        <div style="
-          margin-top:18px;
-          margin-bottom:8px;
-          padding:14px;
-          background:#f8fafc;
-          border:1px solid #e5e7eb;
-          border-radius:14px;
-        ">
-          <div style="font-weight:bold;font-size:16px;margin-bottom:10px;color:#111827;">
-            Liquidación individual de campaña: ${escapeHtml(c.title || "-")}
-          </div>
-
-          <div style="
-            display:grid;
-            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-            gap:10px;
-          ">
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;">
-              <div style="color:#1e3a8a;font-weight:bold;font-size:12px;">Recaudo aprobado</div>
-              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
-                ${moneyCOP(campaignFinancial.grossRevenue)}
-              </div>
-            </div>
-
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;">
-              <div style="color:#166534;font-weight:bold;font-size:12px;">Comisión CampaClick 5%</div>
-              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
-                ${moneyCOP(campaignFinancial.platformFee)}
-              </div>
-            </div>
-
-            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;">
-              <div style="color:#9a3412;font-weight:bold;font-size:12px;">Wompi estimado</div>
-              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
-                ${moneyCOP(campaignFinancial.gatewayFee)}
-              </div>
-            </div>
-
-            <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:12px;padding:12px;">
-              <div style="color:#065f46;font-weight:bold;font-size:12px;">Neto aproximado a girar</div>
-              <div style="font-size:20px;font-weight:900;margin-top:5px;color:#111827;">
-                ${moneyCOP(campaignFinancial.netToOrganizer)}
-              </div>
-            </div>
+    <article class="campaign-card">
+      <div class="campaign-head">
+        <div>
+          <div class="eyebrow">Campaña</div>
+          <h2>${escapeHtml(c.title || "-")}</h2>
+          <div class="status-row">
+            <span class="status-pill">${campaignStatusLabel(c.status)}</span>
+            <span class="muted">Sorteo: ${escapeHtml(c.draw_date || "-")}</span>
+            <span class="muted">Resultado: ${escapeHtml(c.result_value || "Pendiente")}</span>
           </div>
         </div>
-      </td>
-    </tr>
+        <a class="primary-link" href="/campanas/${encodeURIComponent(c.slug || "")}" target="_blank">
+          Ver campaña
+        </a>
+      </div>
 
-    <tr>
-      <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-        ${escapeHtml(c.title || "-")}
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        <div><b>${escapeHtml(organizer?.full_name || "-")}</b></div>
-        <div style="font-size:12px;color:#6b7280;">${escapeHtml(organizer?.email || "-")}</div>
-        <div style="font-size:12px;color:#6b7280;">${escapeHtml(maskPhone(organizer?.phone || ""))}</div>
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${escapeHtml(c.prize || "-")}
-        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
-          ${prizeTypeLabel(c.prize_type)}
+      <div class="money-grid">
+        <div class="metric blue">
+          <span>Ventas comprometidas</span>
+          <strong>${moneyCOP(campaignFinancial.committedSales)}</strong>
+          <small>Compras directas y planes activos</small>
         </div>
-      </td>
+        <div class="metric green">
+          <span>Dinero recaudado</span>
+          <strong>${moneyCOP(campaignFinancial.grossRevenue)}</strong>
+          <small>${campaignFinancial.approvedPaymentsCount} pago(s) aprobado(s)</small>
+        </div>
+        <div class="metric amber">
+          <span>Pendiente por cuotas</span>
+          <strong>${moneyCOP(campaignFinancial.outstandingBalance)}</strong>
+          <small>${campaignFinancial.reservedInstallmentQty} código(s) reservado(s)</small>
+        </div>
+        <div class="metric violet">
+          <span>Comisión CampaClick</span>
+          <strong>${moneyCOP(campaignFinancial.platformFee)}</strong>
+          <small>Calculada sobre dinero recibido</small>
+        </div>
+      </div>
 
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${getDrawProviderLabel(c.draw_provider)}<br/>
-        <span style="font-size:12px;color:#6b7280;">${getDrawModeLabel(c.draw_mode)}</span>
-      </td>
+      <div class="campaign-body">
+        <section class="details-panel">
+          <h3>Información de la campaña</h3>
+          <dl class="detail-grid">
+            <div><dt>Organizador</dt><dd>${escapeHtml(organizer?.full_name || "-")}</dd></div>
+            <div><dt>Contacto</dt><dd>${escapeHtml(organizer?.email || "-")} · ${escapeHtml(maskPhone(organizer?.phone || ""))}</dd></div>
+            <div><dt>Premio</dt><dd>${escapeHtml(c.prize || "-")} <small>${prizeTypeLabel(c.prize_type)}</small></dd></div>
+            <div><dt>Sorteo</dt><dd>${getDrawProviderLabel(c.draw_provider)} · ${getDrawModeLabel(c.draw_mode)}</dd></div>
+            <div><dt>Estado del premio</dt><dd>${prizeDeliveryStatusLabel(c.prize_delivery_status)}</dd></div>
+            <div><dt>Estado del giro</dt><dd>${payoutStatusLabel(c.payout_status)}</dd></div>
+          </dl>
 
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${escapeHtml(c.draw_date || "-")}
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${escapeHtml(c.result_value || "Pendiente")}
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;min-width:260px;">
-        <div style="padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;line-height:1.5;font-size:12px;color:#374151;">
-          <div>Recaudo aprobado: <b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
-          <div>CampaClick 5%: <b>${moneyCOP(campaignFinancial.platformFee)}</b></div>
-          <div>Wompi estimado: <b>${moneyCOP(campaignFinancial.gatewayFee)}</b></div>
-          <div>Descuento premio: <b>${moneyCOP(campaignFinancial.prizeDeduction)}</b></div>
-
-          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e5e7eb;font-weight:bold;color:#065f46;">
-            Neto a girar: ${moneyCOP(campaignFinancial.netToOrganizer)}
+          <div class="settlement-box">
+            <div><span>Recaudado</span><b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
+            <div><span>Comisión CampaClick</span><b>− ${moneyCOP(campaignFinancial.platformFee)}</b></div>
+            <div><span>Wompi estimado</span><b>− ${moneyCOP(campaignFinancial.gatewayFee)}</b></div>
+            <div class="subtotal"><span>Disponible antes del premio</span><b>${moneyCOP(campaignFinancial.netBeforePrize)}</b></div>
+            <div><span>Premio en dinero</span><b>− ${moneyCOP(campaignFinancial.prizeDeduction)}</b></div>
+            <div class="total"><span>Proyección después del premio</span><b>${moneyCOP(campaignFinancial.netToOrganizer)}</b></div>
           </div>
+          <p class="projection-note">La proyección después del premio es informativa mientras la campaña siga activa; no representa todavía un giro exigible.</p>
+        </section>
 
-          <div style="margin-top:8px;color:#6b7280;">
-            Pagos aprobados: ${campaignFinancial.approvedPaymentsCount}
-          </div>
-        </div>
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;">
-        <div>${campaignStatusLabel(c.status)}</div>
-        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
-          Premio: ${prizeDeliveryStatusLabel(c.prize_delivery_status)}
-        </div>
-        <div style="font-size:12px;color:#6b7280;margin-top:4px;">
-          Giro: ${payoutStatusLabel(c.payout_status)}
-        </div>
-      </td>
-
-      <td style="padding:12px;border-bottom:1px solid #eee;min-width:220px;">
-        <div style="display:flex;flex-direction:column;gap:8px;">
+        <aside class="actions-panel">
+          <h3>Acciones</h3>
+          <div class="action-stack">
 
           ${
             c.status === "pending"
@@ -12777,13 +12795,6 @@ const adminCampaignRows = (campaigns || []).map(c => {
               : ""
           }
 
-          <a
-            href="/campanas/${encodeURIComponent(c.slug || "")}"
-            target="_blank"
-            style="display:block;text-align:center;padding:9px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
-            Ver campaña
-          </a>
-
           ${
             c.status === "active" && new Date(`${c.draw_date}T00:00:00`) <= new Date()
               ? `
@@ -12804,9 +12815,10 @@ const adminCampaignRows = (campaigns || []).map(c => {
 
           ${controlHtml}
 
-        </div>
-      </td>
-    </tr>
+          </div>
+        </aside>
+      </div>
+    </article>
   `;
 }).join("");
 
@@ -12819,103 +12831,45 @@ const adminCampaignRows = (campaigns || []).map(c => {
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <title>Resultados Admin</title>
+        <style>
+          *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f3f6fb;color:#111827}
+          .page{max-width:1440px;margin:0 auto;padding:32px 22px 56px}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.topbar h1{margin:0 0 6px;font-size:30px}.subtitle{margin:0;color:#64748b}.nav{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.nav a,.primary-link{color:#fff;text-decoration:none;padding:11px 15px;border-radius:11px;font-weight:800;font-size:14px}.nav-blue{background:#2563eb}.nav-green{background:#16a34a}.nav-violet{background:#7c3aed}.nav-dark,.primary-link{background:#111827}
+          .summary-grid,.money-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary-grid{margin-bottom:24px}.summary-card,.metric{border:1px solid #e2e8f0;border-radius:16px;padding:16px;background:#fff}.summary-card span,.metric span{display:block;font-size:13px;font-weight:800;color:#475569}.summary-card strong,.metric strong{display:block;font-size:25px;margin-top:7px}.summary-card small,.metric small{display:block;color:#64748b;margin-top:5px;line-height:1.35}.blue{background:#eff6ff;border-color:#bfdbfe}.green{background:#f0fdf4;border-color:#bbf7d0}.amber{background:#fff7ed;border-color:#fed7aa}.violet{background:#f5f3ff;border-color:#ddd6fe}
+          .campaign-list{display:grid;gap:20px}.campaign-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}.campaign-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:17px}.campaign-head h2{margin:3px 0 8px;font-size:22px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:900;color:#64748b}.status-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-pill{background:#dcfce7;color:#166534;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900}.muted{font-size:13px;color:#64748b}.money-grid{margin-bottom:18px}.metric{padding:14px}.metric strong{font-size:21px}
+          .campaign-body{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px}.details-panel,.actions-panel{border:1px solid #e2e8f0;border-radius:15px;padding:16px;background:#f8fafc}.details-panel h3,.actions-panel h3{margin:0 0 13px;font-size:15px}.detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 15px}.detail-grid div{min-width:0}.detail-grid dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:900;margin-bottom:4px}.detail-grid dd{margin:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}.detail-grid small{display:block;color:#64748b;font-weight:500;margin-top:3px}.settlement-box{background:#fff;border:1px solid #e2e8f0;border-radius:13px;padding:12px}.settlement-box>div{display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:13px}.settlement-box .subtotal{border-top:1px solid #e2e8f0;margin-top:5px;padding-top:10px}.settlement-box .total{border-top:1px solid #cbd5e1;margin-top:5px;padding-top:10px;font-size:15px}.projection-note{font-size:12px;color:#64748b;line-height:1.45;margin:10px 2px 0}.action-stack{display:flex;flex-direction:column;gap:8px}.action-stack form{margin:0}.empty{background:#fff;border:1px dashed #cbd5e1;border-radius:16px;padding:30px;text-align:center;color:#64748b}
+          @media(max-width:1050px){.summary-grid,.money-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-body{grid-template-columns:1fr}.actions-panel{order:-1}.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+          @media(max-width:700px){.page{padding:20px 12px 40px}.topbar{flex-direction:column}.nav{justify-content:flex-start}.nav a{flex:1;text-align:center}.summary-grid,.money-grid,.detail-grid{grid-template-columns:1fr}.campaign-card{padding:15px}.campaign-head{flex-direction:column}.primary-link{width:100%;text-align:center}.topbar h1{font-size:25px}}
+        </style>
       </head>
 
-      <body style="font-family:Arial;background:#f3f6fb;padding:40px;">
-        <div style="max-width:1300px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);overflow-x:auto;">
-          
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-  <h1>Administrador de campañas</h1>
+      <body>
+        <main class="page">
+          <header class="topbar">
+            <div>
+              <h1>Administrador de campañas</h1>
+              <p class="subtitle">Ventas, recaudos, cuotas y liquidaciones en una sola vista.</p>
+            </div>
+            <nav class="nav">
+              <a class="nav-blue" href="/admin/organizadores">Organizadores</a>
+              <a class="nav-green" href="/admin/resultados-pendientes">Resultados pendientes</a>
+              <a class="nav-violet" href="/admin/resultados/masivo">Carga masiva</a>
+              <a class="nav-dark" href="/admin/logout">Cerrar sesión</a>
+            </nav>
+          </header>
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;">
-    <a
-      href="/admin/organizadores"
-      style="background:#2563eb;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-    >
-      Organizadores
-    </a>
+          <section class="summary-grid">
+            <div class="summary-card blue"><span>Ventas comprometidas</span><strong>${moneyCOP(adminFinancialSummary.committedSales)}</strong><small>Compras pagadas y planes activos</small></div>
+            <div class="summary-card green"><span>Dinero recaudado</span><strong>${moneyCOP(adminFinancialSummary.collectedRevenue)}</strong><small>${adminFinancialSummary.approvedPaymentsCount} pago(s) aprobado(s)</small></div>
+            <div class="summary-card amber"><span>Pendiente por cuotas</span><strong>${moneyCOP(adminFinancialSummary.outstandingBalance)}</strong><small>Cartera de planes vigentes</small></div>
+            <div class="summary-card violet"><span>Comisión CampaClick</span><strong>${moneyCOP(adminFinancialSummary.platformFee)}</strong><small>Calculada únicamente sobre lo recibido</small></div>
+            <div class="summary-card"><span>Wompi estimado</span><strong>${moneyCOP(adminFinancialSummary.gatewayFee)}</strong><small>Estimación por transacciones aprobadas</small></div>
+            <div class="summary-card"><span>Disponible antes de premios</span><strong>${moneyCOP(adminFinancialSummary.netBeforePrize)}</strong><small>Recaudo menos CampaClick y Wompi</small></div>
+          </section>
 
-    <a
-      href="/admin/resultados-pendientes"
-      style="background:#16a34a;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-    >
-      Resultados pendientes
-    </a>
-
-    <a
-      href="/admin/resultados/masivo"
-      style="background:#7c3aed;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-    >
-      Cargar resultado masivo
-    </a>
-
-   <a
-      href="/admin/logout"
-      style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-    >
-      Cerrar sesión
-    </a>
-  </div>
-</div>
-
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:22px 0;">
-  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px;">
-    <div style="color:#1e3a8a;font-weight:bold;">Recaudo bruto aprobado</div>
-    <div style="font-size:26px;font-weight:900;margin-top:8px;">
-      ${moneyCOP(adminFinancialSummary.grossRevenue)}
-    </div>
-  </div>
-
-  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px;">
-    <div style="color:#166534;font-weight:bold;">Comisión CampaClick 5%</div>
-    <div style="font-size:26px;font-weight:900;margin-top:8px;">
-      ${moneyCOP(adminFinancialSummary.platformFee)}
-    </div>
-  </div>
-
-  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:16px;">
-    <div style="color:#9a3412;font-weight:bold;">Wompi estimado</div>
-    <div style="font-size:26px;font-weight:900;margin-top:8px;">
-      ${moneyCOP(adminFinancialSummary.wompiEstimatedFee)}
-    </div>
-  </div>
-
-  <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:14px;padding:16px;">
-    <div style="color:#065f46;font-weight:bold;">Neto aproximado a girar</div>
-    <div style="font-size:26px;font-weight:900;margin-top:8px;">
-      ${moneyCOP(adminFinancialSummary.estimatedNetToOrganizer)}
-    </div>
-  </div>
-</div>
-
-          <table style="width:100%;min-width:1100px;border-collapse:collapse;">
-            <thead>
-              <tr style="background:#eff6ff;">
-                <th style="padding:12px;text-align:left;">Campaña</th>
-<th style="padding:12px;text-align:left;">Organizador</th>
-<th style="padding:12px;text-align:left;">Premio</th>
-<th style="padding:12px;text-align:left;">Sorteo / Modalidad</th>
-<th style="padding:12px;text-align:left;">Fecha sorteo</th>
-<th style="padding:12px;text-align:left;">Resultado</th>
-<th style="padding:12px;text-align:left;">Liquidación</th>
-<th style="padding:12px;text-align:left;">Estado</th>
-<th style="padding:12px;text-align:left;">Acción</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-       ${adminCampaignRows || `
-  <tr>
-    <td colspan="9" style="padding:18px;text-align:center;color:#6b7280;">
-      No hay campañas creadas.
-    </td>
-  </tr>
-`}
-           
-            </tbody>
-          </table>
-        </div>
+          <section class="campaign-list">
+            ${adminCampaignRows || `<div class="empty">No hay campañas creadas.</div>`}
+          </section>
+        </main>
       </body>
       </html>
     `);
