@@ -1,4 +1,8 @@
-
+import "dotenv/config";
+import express from "express";
+import session from "express-session";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcrypt";
