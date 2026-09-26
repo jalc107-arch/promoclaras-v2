@@ -20,11 +20,31 @@ app.set("trust proxy", 1);
 
 app.use(
   helmet({
-    contentSecurityPolicy: false
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'"],
+        "script-src-attr": ["'unsafe-inline'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "https:"],
+        "connect-src": ["'self'", "https://graph.facebook.com", "https://api.wompi.co", "https://sandbox.wompi.co"],
+        "form-action": ["'self'", "https://checkout.wompi.co"],
+        "frame-ancestors": ["'none'"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"]
+      }
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" }
   })
 );
 
-app.use(express.json({ limit: "15mb" }));
+app.use(express.json({
+  limit: "15mb",
+  verify: (req, res, buffer) => {
+    req.rawBody = Buffer.from(buffer);
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 app.get("/campaclick-share.jpg", (req, res) => {
@@ -58,7 +78,9 @@ if (!SESSION_SECRET) {
 
 app.use(
   session({
-    name: "campaclick.sid",
+    name: process.env.NODE_ENV === "production"
+      ? "__Host-campaclick.sid"
+      : "campaclick.sid",
 
     store: new PgSession({
       pool: sessionPool,
@@ -80,6 +102,132 @@ app.use(
   })
 );
 
+const CSRF_EXEMPT_PATHS = new Set([
+  "/webhooks/wompi",
+  "/webhooks/whatsapp",
+  "/internal/cuotas/procesar"
+]);
+
+function getOrCreateCsrfToken(req) {
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(32).toString("hex");
+  }
+
+  return req.session.csrfToken;
+}
+
+function isSameOriginRequest(req) {
+  const origin = String(req.get("origin") || "").trim();
+
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const requestOrigin = `${req.protocol}://${req.get("host")}`;
+    return new URL(origin).origin === new URL(requestOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
+app.use((req, res, next) => {
+  const originalSend = res.send.bind(res);
+
+  res.send = body => {
+    if (typeof body === "string" && /<form\b/i.test(body)) {
+      const csrfToken = getOrCreateCsrfToken(req);
+
+      body = body.replace(
+        /<form\b(?=[^>]*\bmethod\s*=\s*["']?post\b)([^>]*)>/gi,
+        formTag => `${formTag}<input type="hidden" name="_csrf" value="${csrfToken}">`
+      );
+    }
+
+    return originalSend(body);
+  };
+
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    return next();
+  }
+
+  if (CSRF_EXEMPT_PATHS.has(req.path)) {
+    return next();
+  }
+
+  const sessionToken = String(req.session.csrfToken || "");
+  const requestToken = String(req.body?._csrf || req.get("x-csrf-token") || "");
+
+  if (
+    !sessionToken ||
+    !requestToken ||
+    !isSameOriginRequest(req) ||
+    !safeCompare(sessionToken, requestToken)
+  ) {
+    return res.status(403).send("Solicitud de seguridad inválida. Recarga la página e inténtalo nuevamente.");
+  }
+
+  return next();
+});
+
+function bodyContainsHtmlMarkup(value, key = "") {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(item => bodyContainsHtmlMarkup(item, key));
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value).some(([childKey, childValue]) =>
+      bodyContainsHtmlMarkup(childValue, childKey)
+    );
+  }
+
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  if (
+    key === "password" ||
+    key === "_csrf" ||
+    key.endsWith("_image") ||
+    value.startsWith("data:image/")
+  ) {
+    return false;
+  }
+
+  return /[<>]/.test(value);
+}
+
+app.use((req, res, next) => {
+  if (
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    !CSRF_EXEMPT_PATHS.has(req.path) &&
+    bodyContainsHtmlMarkup(req.body)
+  ) {
+    return res.status(400).send("Los campos de texto no admiten etiquetas HTML.");
+  }
+
+  return next();
+});
+
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/admin") ||
+    req.path.startsWith("/organizers") ||
+    req.path.startsWith("/orden/") ||
+    req.path.startsWith("/cuotas/") ||
+    req.path === "/consultar"
+  ) {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+  }
+
+  return next();
+});
+
 const organizerLoginLimiter = rateLimit({
   windowMs: 1000 * 60 * 15,
   limit: 10,
@@ -88,6 +236,14 @@ const organizerLoginLimiter = rateLimit({
   skipSuccessfulRequests: true,
   message:
     "Demasiados intentos fallidos de ingreso. Espera 15 minutos e intenta nuevamente."
+});
+
+const organizerRegistrationLimiter = rateLimit({
+  windowMs: 1000 * 60 * 60,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiados registros desde esta conexión. Intenta nuevamente más tarde."
 });
 
 const adminLoginLimiter = rateLimit({
@@ -100,6 +256,30 @@ const adminLoginLimiter = rateLimit({
     "Demasiados intentos fallidos de acceso administrativo. Espera 15 minutos e intenta nuevamente."
 });
 
+const publicLookupLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiadas consultas. Espera 15 minutos e intenta nuevamente."
+});
+
+const purchaseLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiados intentos de compra. Espera 15 minutos e intenta nuevamente."
+});
+
+const webhookLimiter = rateLimit({
+  windowMs: 1000 * 60,
+  limit: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Límite temporal de solicitudes excedido."
+});
+
 const PORT = process.env.PORT || 3000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -110,6 +290,7 @@ const WOMPI_INTEGRITY_SECRET = process.env.WOMPI_INTEGRITY_SECRET;
 const WOMPI_EVENTS_SECRET = String(process.env.WOMPI_EVENTS_SECRET || "").trim();
 const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
+const ADMIN_PASSWORD_HASH = String(process.env.ADMIN_PASSWORD_HASH || "").trim();
 
 const APP_BASE_URL = String(
   process.env.APP_BASE_URL || "https://promoclaras.com"
@@ -118,6 +299,7 @@ const APP_BASE_URL = String(
 const WHATSAPP_CLOUD_TOKEN = String(process.env.WHATSAPP_CLOUD_TOKEN || "").trim();
 const WHATSAPP_PHONE_NUMBER_ID = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
 const WHATSAPP_BUSINESS_ACCOUNT_ID = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
+const WHATSAPP_APP_SECRET = String(process.env.WHATSAPP_APP_SECRET || "").trim();
 const WHATSAPP_INSTALLMENT_TEMPLATE_NAME = String(
   process.env.WHATSAPP_INSTALLMENT_TEMPLATE_NAME || "recordatorio_cuota"
 ).trim();
@@ -133,6 +315,14 @@ const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
 );
+
+if (process.env.NODE_ENV === "production" && !ADMIN_PASSWORD_HASH) {
+  console.warn("Seguridad: configura ADMIN_PASSWORD_HASH y elimina ADMIN_PASSWORD.");
+}
+
+if (process.env.NODE_ENV === "production" && !WHATSAPP_APP_SECRET) {
+  console.warn("Seguridad: falta WHATSAPP_APP_SECRET; el webhook de WhatsApp rechazará eventos.");
+}
 
 const ORGANIZER_SUPPORT_BUCKET = "organizer-supports";
 const MAX_ORGANIZER_SUPPORT_BYTES = 5 * 1024 * 1024;
@@ -289,6 +479,26 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return ["http:", "https:"].includes(url.protocol) ? url.toString() : "#";
+  } catch {
+    return "#";
+  }
+}
+
+function sendServerError(res, error, context = "Error interno") {
+  const incidentId = crypto.randomBytes(6).toString("hex");
+
+  console.error(`[${incidentId}] ${context}:`, error);
+
+  return res
+    .status(500)
+    .type("text/plain")
+    .send(`Ocurrió un error interno. Código de seguimiento: ${incidentId}`);
+}
+
 function slugify(text) {
   return String(text || "")
     .toLowerCase()
@@ -338,6 +548,30 @@ function safeCompare(a, b) {
   }
 
   return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
+}
+
+function createOrderAccessToken(orderId) {
+  return crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(`order:${String(orderId || "")}`)
+    .digest("hex");
+}
+
+function buildPublicOrderPath(orderId) {
+  const safeOrderId = encodeURIComponent(String(orderId || ""));
+  const accessToken = createOrderAccessToken(orderId);
+
+  return `/orden/${safeOrderId}?access=${accessToken}`;
+}
+
+function hasValidOrderAccess(req, orderId) {
+  if (req.session?.isAdmin || req.session?.organizerId) {
+    return true;
+  }
+
+  const receivedToken = String(req.query.access || "");
+
+  return receivedToken && safeCompare(receivedToken, createOrderAccessToken(orderId));
 }
 
 function maskPhone(phone) {
@@ -562,17 +796,19 @@ function getAvailableInstallmentDates(drawDate, maximumCount = 120) {
 
   if (!cutoff || cutoff < today) return [];
 
-  const futureDates = [];
-  let cursor = new Date(cutoff);
+  const availableDates = [today];
 
-  while (cursor > today && futureDates.length < maximumCount - 1) {
-    futureDates.push(new Date(cursor));
-    cursor = addMonthsClamped(cursor, -1);
+  for (let monthOffset = 1; availableDates.length < maximumCount; monthOffset++) {
+    const nextMonthlyDate = addMonthsClamped(today, monthOffset);
+
+    if (nextMonthlyDate > cutoff) {
+      break;
+    }
+
+    availableDates.push(nextMonthlyDate);
   }
 
-  futureDates.reverse();
-
-  return [today, ...futureDates];
+  return availableDates;
 }
 
 function getCampaignInstallmentConfiguration(campaign) {
@@ -653,7 +889,7 @@ function buildInstallmentSchedule(campaign, installmentCount, qty) {
     qty
   );
   const allDates = configuration.availableDates;
-  const selectedDates = [allDates[0], ...allDates.slice(-(count - 1))];
+  const selectedDates = allDates.slice(0, count);
 
   return amounts.map((amount, index) => {
     const dueDate = selectedDates[index];
@@ -1012,7 +1248,6 @@ async function sendWhatsAppMessage(phone, message) {
     const result = await response.json();
 
     console.log("WhatsApp Cloud API status:", response.status);
-    console.log("WhatsApp Cloud API response:", JSON.stringify(result, null, 2));
 
     return {
       ok: response.ok,
@@ -1106,7 +1341,6 @@ async function sendWhatsAppTemplateConfirmacionCodigos(phone, buyerName, orderDe
     const result = await response.json();
 
     console.log("WhatsApp plantilla confirmacion_codigos status:", response.status);
-    console.log("WhatsApp plantilla confirmacion_codigos response:", JSON.stringify(result, null, 2));
 
     return {
       ok: response.ok,
@@ -1183,7 +1417,6 @@ async function sendWhatsAppTemplateOrganizadorAprobado(phone, organizerName, pan
     const result = await response.json();
 
     console.log("WhatsApp plantilla organizador_aprobado status:", response.status);
-    console.log("WhatsApp plantilla organizador_aprobado response:", JSON.stringify(result, null, 2));
 
     return {
       ok: response.ok,
@@ -1270,7 +1503,6 @@ async function sendWhatsAppTemplateGanadorCampana(phone, winnerName, campaignNam
     const result = await response.json();
 
     console.log("WhatsApp plantilla ganador_campana status:", response.status);
-    console.log("WhatsApp plantilla ganador_campana response:", JSON.stringify(result, null, 2));
 
     return {
       ok: response.ok,
@@ -1350,7 +1582,6 @@ async function sendWhatsAppInstallmentTemplate({
     const result = await response.json();
 
     console.log("WhatsApp plantilla de cuotas status:", response.status);
-    console.log("WhatsApp plantilla de cuotas response:", JSON.stringify(result, null, 2));
 
     return {
       ok: response.ok,
@@ -1453,7 +1684,7 @@ if (tickets.length !== expectedTicketsCount) {
 }
 
     const baseUrl = APP_BASE_URL;
-    const orderUrl = `${baseUrl}/orden/${order.id}`;
+    const orderUrl = `${baseUrl}${buildPublicOrderPath(order.id)}`;
 
     const couponList = tickets
       .map(t => t.combination || t.ticket_code || "-")
@@ -2311,6 +2542,34 @@ async function reserveCodesForInstallmentOrder(orderId) {
   return { ok: true };
 }
 
+async function getReservedCodeLabelsForOrder(orderId) {
+  const { data: tickets, error } = await supabase
+    .from("tickets")
+    .select("combination, ticket_code, status")
+    .eq("order_id", orderId)
+    .in("status", ["reserved_installment", "active"])
+    .order("ticket_code", { ascending: true });
+
+  if (error) throw error;
+
+  return (tickets || [])
+    .map(ticket => String(ticket.combination || ticket.ticket_code || "").trim())
+    .filter(Boolean);
+}
+
+function getReservedCodesNotice(order, codeLabels) {
+  if (!Array.isArray(codeLabels) || codeLabels.length === 0) {
+    return "Tu código quedó reservado.";
+  }
+
+  const isLottery = isLoteriaProvider(order?.rifas?.draw_provider);
+  const label = isLottery
+    ? (codeLabels.length === 1 ? "Número reservado" : "Números reservados")
+    : (codeLabels.length === 1 ? "Código reservado" : "Códigos reservados");
+
+  return `${label}: ${codeLabels.join(", ")}.`;
+}
+
 async function activateInstallmentOrder(orderId) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -2500,6 +2759,9 @@ async function processApprovedInstallmentPayment(payment) {
 
     if (orderError) throw orderError;
 
+    const reservedCodeLabels = await getReservedCodeLabelsForOrder(plan.order_id);
+    const reservedCodesNotice = getReservedCodesNotice(order, reservedCodeLabels);
+
     await sendWhatsAppInstallmentTemplate({
       phone: order.buyers?.phone,
       buyerName: order.buyers?.full_name,
@@ -2509,8 +2771,8 @@ async function processApprovedInstallmentPayment(payment) {
       dueDate: nextInstallment.due_date,
       paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
       notice: approvedSchedules.length === 1
-        ? "Tu código quedó reservado. Conserva al día las próximas cuotas."
-        : "Tu pago fue aprobado. Esta es tu próxima cuota."
+        ? `${reservedCodesNotice} Conserva al día las próximas cuotas.`
+        : `${reservedCodesNotice} Tu pago fue aprobado. Esta es tu próxima cuota.`
     });
   }
 
@@ -2642,6 +2904,9 @@ async function processInstallmentReminders() {
 
     if (alreadySent) continue;
 
+    const reservedCodeLabels = await getReservedCodeLabelsForOrder(plan.order_id);
+    const reservedCodesNotice = getReservedCodesNotice(order, reservedCodeLabels);
+
     const sendResult = await sendWhatsAppInstallmentTemplate({
       phone: order.buyers?.phone,
       buyerName: order.buyers?.full_name,
@@ -2651,8 +2916,8 @@ async function processInstallmentReminders() {
       dueDate: installment.due_date,
       paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
       notice: isOverdue
-        ? `La cuota está vencida. Tienes plazo hasta ${installment.grace_deadline}; después se liberará el código.`
-        : "Recuerda realizar el pago dentro del plazo indicado."
+        ? `${reservedCodesNotice} La cuota está vencida. Tienes plazo hasta ${installment.grace_deadline}; después se liberará.`
+        : `${reservedCodesNotice} Recuerda realizar el pago dentro del plazo indicado.`
     });
 
     if (sendResult.ok) {
@@ -3393,7 +3658,7 @@ app.get("/organizers/register", (req, res) => {
   `);
 });
 
-app.post("/organizers/register", async (req, res) => {
+app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) => {
   try {
     const fullName = String(req.body.full_name || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -3402,6 +3667,21 @@ app.post("/organizers/register", async (req, res) => {
 
     if (!fullName || !email || !password) {
       return res.status(400).send("Faltan campos obligatorios");
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).send("El correo electrónico no es válido.");
+    }
+
+    if (
+      password.length < 12 ||
+      !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) ||
+      !/\d/.test(password)
+    ) {
+      return res.status(400).send(
+        "La contraseña debe tener al menos 12 caracteres, una mayúscula, una minúscula y un número."
+      );
     }
 
     const { data: existingOrganizer, error: existingError } = await supabase
@@ -3443,7 +3723,7 @@ app.post("/organizers/register", async (req, res) => {
 
     return res.redirect(`/organizers/login?registered=1&email=${encodeURIComponent(organizer.email)}`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -3691,7 +3971,7 @@ app.get("/organizers/login", (req, res) => {
             <input
               type="email"
               name="email"
-              value="${email}"
+              value="${escapeHtml(email)}"
               required
               placeholder="Ej: correo@ejemplo.com"
             >
@@ -3749,11 +4029,15 @@ if (!passwordOk) {
   return res.status(401).send("Correo o contraseña incorrectos");
 }
 
+    await new Promise((resolve, reject) => {
+      req.session.regenerate(error => error ? reject(error) : resolve());
+    });
+
     req.session.organizerId = organizer.id;
 
     return res.redirect(`/organizers/${organizer.id}/panel`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -3804,7 +4088,7 @@ if (organizer.verification_status === "verified") {
         ? `
           <div style="margin-top:10px;padding:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;color:#9a3412;line-height:1.5;">
             <b>Motivo del rechazo:</b><br/>
-            ${organizer.rejection_reason}
+            ${escapeHtml(organizer.rejection_reason)}
           </div>
         `
         : ""
@@ -3941,8 +4225,8 @@ const campaignRows = (campaigns || []).map(c => {
   return `
   
   <tr>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.title}</td>
-    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${c.prize}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${escapeHtml(c.title)}</td>
+    <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${escapeHtml(c.prize)}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawProviderLabel(c.draw_provider)}</td>
     <td style="padding:12px;border-bottom:1px solid #e5e7eb;">${getDrawModeLabel(c.draw_mode)}</td>
    <td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;min-width:230px;">
@@ -4051,7 +4335,7 @@ const campaignRows = (campaigns || []).map(c => {
         ? `
           <div style="margin-top:8px;padding:8px;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;color:#7f1d1d;font-size:12px;line-height:1.4;text-align:left;">
             <b>Motivo:</b><br/>
-            ${c.rejection_reason}
+            ${escapeHtml(c.rejection_reason)}
           </div>
         `
         : ""
@@ -4104,7 +4388,7 @@ const campaignRows = (campaigns || []).map(c => {
 }
 
   <a
-    href="/campanas/${c.slug}"
+    href="/campanas/${encodeURIComponent(c.slug || "")}"
     style="
       display:block;
       padding:8px 12px;
@@ -4936,7 +5220,7 @@ Aún no tienes campañas creadas.
 </html>
 `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -5024,7 +5308,7 @@ if (orderIds.length > 0) {
       <head>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Detalle campaña - ${campaign.title}</title>
+        <title>Detalle campaña - ${escapeHtml(campaign.title)}</title>
 
         <style>
           * {
@@ -5291,8 +5575,8 @@ if (orderIds.length > 0) {
             <h1>Detalle de campaña</h1>
 
             <p class="subtitle">
-              <b>${campaign.title}</b><br/>
-              Premio: ${campaign.prize || "-"}<br/>
+              <b>${escapeHtml(campaign.title)}</b><br/>
+              Premio: ${escapeHtml(campaign.prize || "-")}<br/>
               Sorteo: ${getDrawProviderLabel(campaign.draw_provider)} — ${getDrawModeLabel(campaign.draw_mode)}
             </p>
 
@@ -5441,20 +5725,20 @@ const assignedQty = orderTickets.length;
   >
                             <td>
   <div style="font-weight:bold;">
-    ${order.buyers?.full_name || "-"}
+    ${escapeHtml(order.buyers?.full_name || "-")}
   </div>
 
   <div style="margin-top:5px;font-size:11px;color:#cbd5e1;">
     Orden: ${String(order.id || "").slice(0, 8)}
   </div>
 </td>
-                            <td>${order.buyers?.phone || "-"}</td>
-                            <td>${order.qty || 0}</td>
+                            <td>${escapeHtml(maskPhone(order.buyers?.phone || ""))}</td>
+                            <td>${Number(order.qty || 0)}</td>
                             <td>$${Number(order.total_paid || 0).toLocaleString("es-CO")}</td>
 
                             <td>
                               <span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
-                                ${order.payment_status === "paid" ? "approved" : order.payment_status}
+                                ${escapeHtml(order.payment_status === "paid" ? "approved" : order.payment_status)}
                               </span>
                             </td>
 
@@ -5479,7 +5763,7 @@ const assignedQty = orderTickets.length;
         <div class="code-list">
           ${orderTickets.map(ticket => `
             <span class="code">
-              ${ticket.combination || ticket.ticket_code || "-"}
+              ${escapeHtml(ticket.combination || ticket.ticket_code || "-")}
             </span>
           `).join("")}
         </div>
@@ -5642,7 +5926,7 @@ const assignedQty = orderTickets.length;
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -5697,7 +5981,7 @@ app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-whatsapp", async (r
 
     return res.redirect(`/organizers/${organizerId}/campanas/${order.rifa_id}/detalle`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -5754,7 +6038,7 @@ app.post("/organizers/:organizerId/campanas/:rifaId/visibilidad", async (req, re
 
     return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -5833,7 +6117,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) 
       <head>
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
-        <title>Referidos - ${campaign.title}</title>
+        <title>Referidos - ${escapeHtml(campaign.title)}</title>
       </head>
 
       <body style="font-family:Arial;background:#f3f6fb;padding:30px;">
@@ -5843,7 +6127,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) 
             <div>
               <h1 style="margin:0;">Referidos de campaña</h1>
               <p style="color:#6b7280;margin:8px 0 0;">
-                Campaña: <b>${campaign.title}</b>
+                Campaña: <b>${escapeHtml(campaign.title)}</b>
               </p>
             </div>
 
@@ -5939,11 +6223,11 @@ app.get("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) 
 
                         return `
                           <tr>
-                            <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">${referrer.full_name}</td>
-                            <td style="padding:12px;border-bottom:1px solid #eee;">${referrer.phone}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">${escapeHtml(referrer.full_name)}</td>
+                            <td style="padding:12px;border-bottom:1px solid #eee;">${escapeHtml(maskPhone(referrer.phone))}</td>
                             <td style="padding:12px;border-bottom:1px solid #eee;">
                               <span style="background:#dbeafe;color:#1e40af;padding:7px 10px;border-radius:999px;font-weight:bold;">
-                                ${referrer.referral_code}
+                                ${escapeHtml(referrer.referral_code)}
                               </span>
                             </td>
                             <td style="padding:12px;border-bottom:1px solid #eee;">
@@ -5978,7 +6262,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res) 
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -6050,7 +6334,7 @@ app.post("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res)
 
     return res.redirect(`/organizers/${organizerId}/campanas/${rifaId}/referidos`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -6096,7 +6380,7 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
           <form method="POST" action="/organizers/${organizer.id}/verificacion">
             <div style="margin-bottom:12px;">
               <label>Número de cédula</label><br/>
-              <input type="text" name="document_number" required value="${organizer.document_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="document_number" required value="${escapeHtml(organizer.document_number || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
 <div style="margin-bottom:16px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
@@ -6274,27 +6558,27 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
 
             <div style="margin-bottom:12px;">
               <label>Banco</label><br/>
-              <input type="text" name="bank_name" value="${organizer.bank_name || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="bank_name" value="${escapeHtml(organizer.bank_name || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
               <label>Tipo de cuenta</label><br/>
-              <input type="text" name="account_type" value="${organizer.account_type || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="account_type" value="${escapeHtml(organizer.account_type || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
               <label>Número de cuenta</label><br/>
-              <input type="text" name="account_number" value="${organizer.account_number || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="account_number" value="${escapeHtml(organizer.account_number || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:12px;">
               <label>Titular de la cuenta</label><br/>
-              <input type="text" name="account_holder" value="${organizer.account_holder || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="text" name="account_holder" value="${escapeHtml(organizer.account_holder || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:16px;">
               <label>Link soporte del premio</label><br/>
-              <input type="text" name="prize_proof_url" value="${organizer.prize_proof_url || ""}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
+              <input type="url" name="prize_proof_url" value="${escapeHtml(organizer.prize_proof_url || "")}" style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
             <div style="margin-bottom:18px;">
@@ -6323,7 +6607,7 @@ app.get("/organizers/:organizerId/verificacion", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -6439,7 +6723,7 @@ if (!finalIdFrontUrl || !finalIdBackUrl || !finalSelfieIdUrl) {
 
     return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -6721,7 +7005,7 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -6940,7 +7224,7 @@ campaign_terms_accepted: true,
 
     return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -7014,7 +7298,7 @@ const contactOrganizerMessage = encodeURIComponent(
     }
 
     const baseUrl = APP_BASE_URL;
-    const campaignPublicUrl = `${baseUrl}/campanas/${campaign.slug}`;
+    const campaignPublicUrl = `${baseUrl}/campanas/${encodeURIComponent(campaign.slug || "")}`;
     
    const whatsappShareMessage = [
   `Te invito a participar en esta campaña de CampaClick.`,
@@ -7046,16 +7330,16 @@ const whatsappShareText = encodeURIComponent(whatsappShareMessage);
 <title>${escapeHtml(campaign.title)}</title>
 
 
-<meta property="og:title" content="${campaign.title} | CampaClick" />
-<meta property="og:description" content="Premio: ${campaign.prize || "-"} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")} · Fecha del sorteo: ${campaign.draw_date || "-"}" />
-<meta property="og:url" content="${campaignPublicUrl}" />
+<meta property="og:title" content="${escapeHtml(campaign.title)} | CampaClick" />
+<meta property="og:description" content="Premio: ${escapeHtml(campaign.prize || "-")} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")} · Fecha del sorteo: ${escapeHtml(campaign.draw_date || "-")}" />
+<meta property="og:url" content="${escapeHtml(campaignPublicUrl)}" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="CampaClick" />
 <meta property="og:image" content="${APP_BASE_URL}/campaclick-share.jpg" />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="${campaign.title} | CampaClick" />
-<meta name="twitter:description" content="Premio: ${campaign.prize || "-"} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}" />
+<meta name="twitter:title" content="${escapeHtml(campaign.title)} | CampaClick" />
+<meta name="twitter:description" content="Premio: ${escapeHtml(campaign.prize || "-")} · Valor por código: $${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}" />
 <meta name="twitter:image" content="${APP_BASE_URL}/campaclick-share.jpg" />
 <style>
 * {
@@ -7551,7 +7835,7 @@ body {
     ? `
       <a
   class="button button-main"
-  href="/campanas/${campaign.slug}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">
+  href="/campanas/${encodeURIComponent(campaign.slug || "")}/comprar${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}">
   Participar ahora
 </a>
 
@@ -7625,7 +7909,7 @@ body {
 </html>
 `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -7989,17 +8273,22 @@ body::before {
 </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
-app.get("/consultar", async (req, res) => {
+app.get("/consultar", publicLookupLimiter, async (req, res) => {
   try {
     const phone = String(req.query.phone || "").trim();
+    const orderReference = String(req.query.order_reference || "").trim();
+    const orderIdMatch = orderReference.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
+    );
+    const requestedOrderId = orderIdMatch ? orderIdMatch[0] : "";
 
     let orders = [];
 
-    if (phone) {
+    if (phone && requestedOrderId) {
       const cleanPhone = phone.replace(/\D/g, "");
 
       const { data: buyer, error: buyerError } = await supabase
@@ -8020,16 +8309,12 @@ app.get("/consultar", async (req, res) => {
             installment_plans(*)
           `)
           .eq("buyer_id", buyer.id)
-          .order("created_at", { ascending: false });
+          .eq("id", requestedOrderId)
+          .maybeSingle();
 
         if (ordersError) throw ordersError;
 
-        orders = (ordersData || []).sort((a, b) => {
-          const aPaid = a.payment_status === "paid" ? 1 : 0;
-          const bPaid = b.payment_status === "paid" ? 1 : 0;
-
-          return bPaid - aPaid;
-        });
+        orders = ordersData ? [ordersData] : [];
       }
     }
 
@@ -8336,8 +8621,8 @@ app.get("/consultar", async (req, res) => {
             <h1>Consultar mis códigos</h1>
 
             <p class="subtitle">
-              Ingresa el número de teléfono usado en la compra para consultar tus órdenes
-              y códigos promocionales asignados.
+              Por seguridad, ingresa el teléfono usado en la compra y la referencia
+              de la orden que recibiste en el enlace de WhatsApp.
             </p>
 
             <form method="GET" action="/consultar">
@@ -8346,8 +8631,18 @@ app.get("/consultar", async (req, res) => {
               <input
                 type="text"
                 name="phone"
-                value="${phone}"
+                value="${escapeHtml(phone)}"
                 placeholder="Ej: 3238123392"
+                required
+              />
+
+              <label style="margin-top:14px;">Referencia o enlace de la orden</label>
+
+              <input
+                type="text"
+                name="order_reference"
+                value="${escapeHtml(orderReference)}"
+                placeholder="Pega aquí el enlace recibido por WhatsApp"
                 required
               />
 
@@ -8361,10 +8656,10 @@ app.get("/consultar", async (req, res) => {
             </a>
 
             ${
-              phone && orders.length === 0
+              phone && orderReference && orders.length === 0
                 ? `
                   <div class="alert">
-                    No encontramos órdenes asociadas a ese teléfono.
+                    No encontramos una orden que coincida con esos datos.
                   </div>
                 `
                 : ""
@@ -8418,21 +8713,21 @@ const coupons = visibleTickets
                       }
 
                       const shareText = encodeURIComponent(
-                        `Hola, estos son mis códigos promocionales de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+                        `Hola, estos son mis códigos promocionales de la campaña ${order.rifas?.title || ""}: ${coupons || "pendientes"}. Consulta la orden aquí: ${baseUrl}${buildPublicOrderPath(order.id)}`
                       );
 
                       return `
                         <div class="order-card">
                           <div class="order-title">
-                            ${order.rifas?.title || "Campaña"}
+                            ${escapeHtml(order.rifas?.title || "Campaña")}
                           </div>
 
                           <div class="info-line">
-                            <b>Estado:</b> ${paymentStatusLabel}
+                            <b>Estado:</b> ${escapeHtml(paymentStatusLabel)}
                           </div>
 
                           <div class="info-line">
-                            <b>Cantidad:</b> ${order.qty}
+                            <b>Cantidad:</b> ${Number(order.qty || 0)}
                           </div>
 
                           <div class="info-line">
@@ -8453,7 +8748,7 @@ const coupons = visibleTickets
                                   <div class="coupon-list">
                                     ${visibleTickets.map(t => `
                                     <span class="coupon">
-                                    ${t.combination || t.ticket_code || "-"}
+                                    ${escapeHtml(t.combination || t.ticket_code || "-")}
                                     </span>
                                     `).join("")}
                                   </div>
@@ -8468,11 +8763,11 @@ const coupons = visibleTickets
                           }
 
                           <div class="actions">
-                            <a class="btn btn-green" href="${order.payment_mode === "installments" && installmentPlan?.public_token ? `/cuotas/${installmentPlan.public_token}` : `/orden/${order.id}`}">
+                            <a class="btn btn-green" href="${order.payment_mode === "installments" && installmentPlan?.public_token ? `/cuotas/${encodeURIComponent(installmentPlan.public_token)}` : buildPublicOrderPath(order.id)}">
                               ${paid ? "Ver orden" : order.payment_mode === "installments" ? "Ver y pagar cuotas" : "Continuar pago"}
                             </a>
 
-                            <a class="btn btn-dark" href="/campanas/${order.rifas?.slug || ""}">
+                            <a class="btn btn-dark" href="/campanas/${encodeURIComponent(order.rifas?.slug || "")}">
                               Ver campaña
                             </a>
 
@@ -8502,11 +8797,11 @@ const coupons = visibleTickets
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
-app.get("/campanas/:slug/comprar", async (req, res) => {
+app.get("/campanas/:slug/comprar", publicLookupLimiter, async (req, res) => {
   try {
     const { slug } = req.params;
 
@@ -8616,7 +8911,7 @@ if (isLottery) {
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-        <title>Comprar - ${campaign.title}</title>
+        <title>Comprar - ${escapeHtml(campaign.title)}</title>
 
         <style>
           * {
@@ -9642,11 +9937,11 @@ ${
     `);
 
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
-app.post("/campanas/:slug/comprar", async (req, res) => {
+app.post("/campanas/:slug/comprar", purchaseLimiter, async (req, res) => {
   try {
     const { slug } = req.params;
 
@@ -10079,9 +10374,9 @@ if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
 
     if (paymentError) throw paymentError;
 
-    return res.redirect(`/orden/${order.id}`);
+    return res.redirect(buildPublicOrderPath(order.id));
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -10383,13 +10678,17 @@ app.get("/cuotas/:publicToken", async (req, res) => {
     `);
   } catch (error) {
     console.error("Error mostrando plan de cuotas:", error);
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
-app.get("/orden/:orderId", async (req, res) => {
+app.get("/orden/:orderId", publicLookupLimiter, async (req, res) => {
   try {
     const { orderId } = req.params;
+
+    if (!hasValidOrderAccess(req, orderId)) {
+      return res.status(404).send("Orden no encontrada");
+    }
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -10512,7 +10811,7 @@ if (transactionCurrency !== "COP") {
   await sendOrderCouponsWhatsApp(orderId);
   await processReferralReward(orderId);
 
-  return res.redirect(`/orden/${orderId}`);
+  return res.redirect(buildPublicOrderPath(orderId));
 }
 }
 
@@ -10538,7 +10837,7 @@ if (transactionCurrency !== "COP") {
     );
 
     const baseUrl = APP_BASE_URL;
-    const redirectUrl = `${APP_BASE_URL}/orden/${order.id}`;
+    const redirectUrl = `${APP_BASE_URL}${buildPublicOrderPath(order.id)}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`
@@ -10547,31 +10846,31 @@ if (transactionCurrency !== "COP") {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Orden ${order.id}</title>
+        <title>Orden ${escapeHtml(order.id)}</title>
       </head>
       <body style="font-family: Arial, sans-serif; background:#f5f7fb; padding:40px;">
         <div style="max-width:860px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
           <h1 style="margin-top:0;">Resumen de tu orden</h1>
 
-          <div style="margin-bottom:10px;"><b>Campaña:</b> ${order.rifas?.title || "-"}</div>
-          <div style="margin-bottom:10px;"><b>Comprador:</b> ${order.buyers?.full_name || "-"}</div>
-          <div style="margin-bottom:10px;"><b>Teléfono:</b> ${order.buyers?.phone || "-"}</div>
-          <div style="margin-bottom:10px;"><b>Cantidad:</b> ${order.qty}</div>
+          <div style="margin-bottom:10px;"><b>Campaña:</b> ${escapeHtml(order.rifas?.title || "-")}</div>
+          <div style="margin-bottom:10px;"><b>Comprador:</b> ${escapeHtml(order.buyers?.full_name || "-")}</div>
+          <div style="margin-bottom:10px;"><b>Teléfono:</b> ${escapeHtml(maskPhone(order.buyers?.phone || ""))}</div>
+          <div style="margin-bottom:10px;"><b>Cantidad:</b> ${Number(order.qty || 0)}</div>
 
           ${
   Array.isArray(order.selected_numbers) && order.selected_numbers.length > 0
     ? `
       <div style="margin-bottom:10px;">
         <b>Números escogidos:</b>
-        ${order.selected_numbers.join(", ")}
+        ${escapeHtml(order.selected_numbers.join(", "))}
       </div>
     `
     : ""
 }
          <div style="margin-bottom:10px;"><b>Subtotal:</b> $${Number(order.subtotal || 0).toLocaleString("es-CO")}</div>
           <div style="margin-bottom:10px;"><b>Total:</b> $${Number(order.total_paid || 0).toLocaleString("es-CO")}</div>
-          <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${order.payment_status}</div>
-          <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${payment.status || "-"}</div>
+          <div style="margin-bottom:10px;"><b>Estado de orden:</b> ${escapeHtml(order.payment_status)}</div>
+          <div style="margin-bottom:18px;"><b>Estado de pago:</b> ${escapeHtml(payment.status || "-")}</div>
 
        ${
   tickets && tickets.length
@@ -10588,7 +10887,7 @@ if (transactionCurrency !== "COP") {
             border-radius:10px;
             font-weight:bold;
           ">
-            ${t.combination || t.ticket_code || "-"}
+            ${escapeHtml(t.combination || t.ticket_code || "-")}
           </div>
         `).join("")}
       </div>
@@ -10596,7 +10895,7 @@ if (transactionCurrency !== "COP") {
       <a
         target="_blank"
         href="https://wa.me/?text=${encodeURIComponent(
-  `Hola, estas son mis Códigos de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}/orden/${order.id}`
+  `Hola, estas son mis Códigos de la campaña ${order.rifas?.title || ""}: ${(tickets || []).map(t => t.combination || t.ticket_code).join(", ")}. Consulta la orden aquí: ${baseUrl}${buildPublicOrderPath(order.id)}`
 )}"
         style="
           display:block;
@@ -10677,7 +10976,7 @@ text-align:center;
 
 <div style="margin-top:18px;">
   <a
-    href="/campanas/${order.rifas?.slug || ""}"
+    href="/campanas/${encodeURIComponent(order.rifas?.slug || "")}"
     style="
       display:block;
       padding:14px;
@@ -10716,11 +11015,11 @@ text-align:center;
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
-app.post("/webhooks/wompi", async (req, res) => {
+app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
     const event = payload.event;
@@ -10970,7 +11269,7 @@ return res.status(200).send("Pago fallido registrado");
     return res.status(200).send("Pago pendiente registrado");
   } catch (error) {
     console.error("Webhook Wompi error:", error);
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -10994,7 +11293,7 @@ app.post("/internal/cuotas/procesar", async (req, res) => {
     return res.json({ ok: true, processed: results.length, results });
   } catch (error) {
     console.error("Error procesando recordatorios de cuotas:", error);
-    return res.status(500).json({ ok: false, error: error.message });
+    return res.status(500).json({ ok: false, error: "Error interno" });
   }
 });
 
@@ -11052,7 +11351,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
 
             <div class="winner-row">
               <span>Nombre</span>
-              <strong>${ticket.buyers?.full_name || "-"}</strong>
+              <strong>${escapeHtml(ticket.buyers?.full_name || "-")}</strong>
             </div>
 
             <div class="winner-row">
@@ -11062,7 +11361,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
 
             <div class="winner-row">
               <span>Código promocional ganador</span>
-              <strong class="ticket-badge">${ticket.combination || ticket.ticket_code || "-"}</strong>
+              <strong class="ticket-badge">${escapeHtml(ticket.combination || ticket.ticket_code || "-")}</strong>
             </div>
           </div>
         `;
@@ -11080,7 +11379,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
       `;
     }
 
-    const publicCampaignUrl = rifa.slug ? `/campanas/${rifa.slug}` : "/";
+    const publicCampaignUrl = rifa.slug ? `/campanas/${encodeURIComponent(rifa.slug)}` : "/";
     const shareText = encodeURIComponent(
       `Resultado de la campaña ${rifa.title}: ${rifa.result_value || "pendiente"}`
     );
@@ -11094,7 +11393,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
         <meta charset="utf-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-        <title>Resultado - ${rifa.title}</title>
+        <title>Resultado - ${escapeHtml(rifa.title)}</title>
 
         <style>
           * {
@@ -11319,14 +11618,14 @@ app.get("/resultado/:rifaId", async (req, res) => {
         <div class="container">
           <div class="main-card">
 
-            <h2 class="campaign-title">${rifa.title}</h2>
+            <h2 class="campaign-title">${escapeHtml(rifa.title)}</h2>
             <p class="campaign-subtitle">
-              Premio: ${rifa.prize || "-"}
+              Premio: ${escapeHtml(rifa.prize || "-")}
             </p>
 
             <div class="result-box">
               <div class="result-label">Resultado oficial</div>
-              <div class="result-value">${rifa.result_value || "Pendiente"}</div>
+              <div class="result-value">${escapeHtml(rifa.result_value || "Pendiente")}</div>
             </div>
 
             ${statusBoxHtml}
@@ -11358,7 +11657,7 @@ app.get("/resultado/:rifaId", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -11569,15 +11868,35 @@ app.get("/admin/login", (req, res) => {
   `);
 });
 
-app.post("/admin/login", adminLoginLimiter, (req, res) => {
+app.post("/admin/login", adminLoginLimiter, async (req, res) => {
   const password = String(req.body.password || "").trim();
 
-  if (!ADMIN_PASSWORD) {
-    return res.status(500).send("Falta ADMIN_PASSWORD en Railway");
+  if (!ADMIN_PASSWORD_HASH && !ADMIN_PASSWORD) {
+    return res.status(500).send("Falta configurar la credencial administrativa.");
   }
 
-  if (password !== ADMIN_PASSWORD) {
+  let adminPasswordOk = false;
+
+  try {
+    adminPasswordOk = ADMIN_PASSWORD_HASH
+      ? await bcrypt.compare(password, ADMIN_PASSWORD_HASH)
+      : safeCompare(password, ADMIN_PASSWORD);
+  } catch (error) {
+    console.error("La credencial administrativa no tiene un formato válido:", error);
+    return res.status(500).send("La credencial administrativa requiere revisión.");
+  }
+
+  if (!adminPasswordOk) {
     return res.status(401).send("Clave incorrecta");
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      req.session.regenerate(error => error ? reject(error) : resolve());
+    });
+  } catch (error) {
+    console.error("No se pudo renovar la sesión administrativa:", error);
+    return res.status(500).send("No fue posible iniciar sesión. Inténtalo nuevamente.");
   }
 
   req.session.isAdmin = true;
@@ -11690,23 +12009,23 @@ app.get("/admin/organizadores", async (req, res) => {
                 return `
                   <tr>
                     <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-                      ${o.full_name || "-"}
+                      ${escapeHtml(o.full_name || "-")}
                     </td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
-                      ${o.email || "-"}
+                      ${escapeHtml(o.email || "-")}
                     </td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
-                      ${o.phone || "-"}
+                      ${escapeHtml(maskPhone(o.phone || ""))}
                     </td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
-                      ${o.document_number || "-"}
+                      ${escapeHtml(o.document_number || "-")}
                     </td>
 
                     <td style="padding:12px;border-bottom:1px solid #eee;">
-  ${o.payout_method || "-"}
+  ${escapeHtml(o.payout_method || "-")}
 </td>
 
 <td style="padding:12px;border-bottom:1px solid #eee;">
@@ -11731,7 +12050,7 @@ app.get("/admin/organizadores", async (req, res) => {
 
     ${
       o.prize_proof_url
-        ? `<a href="${o.prize_proof_url}" target="_blank" style="color:#2563eb;font-weight:bold;">Soporte premio</a>`
+        ? `<a href="${escapeHtml(safeHttpUrl(o.prize_proof_url))}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;font-weight:bold;">Soporte premio</a>`
         : `<span style="color:#9ca3af;">Sin soporte premio</span>`
     }
   </div>
@@ -11808,7 +12127,7 @@ app.get("/admin/organizadores", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -11892,7 +12211,7 @@ console.log("Resultado WhatsApp aprobación organizador:", JSON.stringify(whatsa
     
     return res.redirect("/admin/organizadores");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -11961,7 +12280,7 @@ app.post("/admin/organizadores/:organizerId/reenviar-aprobacion", async (req, re
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12020,7 +12339,7 @@ if (!rejectionReason) {
 
     return res.redirect("/admin/organizadores");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12126,7 +12445,7 @@ const adminCampaignRows = (campaigns || []).map(c => {
       </div>
 
       <div style="margin-top:6px;font-size:12px;color:#374151;">
-        Ref: ${c.payout_reference || "-"}
+        Ref: ${escapeHtml(c.payout_reference || "-")}
       </div>
     `;
   } else if (payoutAllowed) {
@@ -12167,7 +12486,7 @@ const adminCampaignRows = (campaigns || []).map(c => {
           border-radius:14px;
         ">
           <div style="font-weight:bold;font-size:16px;margin-bottom:10px;color:#111827;">
-            Liquidación individual de campaña: ${c.title || "-"}
+            Liquidación individual de campaña: ${escapeHtml(c.title || "-")}
           </div>
 
           <div style="
@@ -12209,17 +12528,17 @@ const adminCampaignRows = (campaigns || []).map(c => {
 
     <tr>
       <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-        ${c.title || "-"}
+        ${escapeHtml(c.title || "-")}
       </td>
 
       <td style="padding:12px;border-bottom:1px solid #eee;">
-        <div><b>${organizer?.full_name || "-"}</b></div>
-        <div style="font-size:12px;color:#6b7280;">${organizer?.email || "-"}</div>
-        <div style="font-size:12px;color:#6b7280;">${organizer?.phone || "-"}</div>
+        <div><b>${escapeHtml(organizer?.full_name || "-")}</b></div>
+        <div style="font-size:12px;color:#6b7280;">${escapeHtml(organizer?.email || "-")}</div>
+        <div style="font-size:12px;color:#6b7280;">${escapeHtml(maskPhone(organizer?.phone || ""))}</div>
       </td>
 
       <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${c.prize || "-"}
+        ${escapeHtml(c.prize || "-")}
         <div style="font-size:12px;color:#6b7280;margin-top:4px;">
           ${prizeTypeLabel(c.prize_type)}
         </div>
@@ -12231,11 +12550,11 @@ const adminCampaignRows = (campaigns || []).map(c => {
       </td>
 
       <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${c.draw_date || "-"}
+        ${escapeHtml(c.draw_date || "-")}
       </td>
 
       <td style="padding:12px;border-bottom:1px solid #eee;">
-        ${c.result_value || "Pendiente"}
+        ${escapeHtml(c.result_value || "Pendiente")}
       </td>
 
       <td style="padding:12px;border-bottom:1px solid #eee;min-width:260px;">
@@ -12298,7 +12617,7 @@ const adminCampaignRows = (campaigns || []).map(c => {
           }
 
           <a
-            href="/campanas/${c.slug}"
+            href="/campanas/${encodeURIComponent(c.slug || "")}"
             target="_blank"
             style="display:block;text-align:center;padding:9px;background:#111827;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
             Ver campaña
@@ -12440,7 +12759,7 @@ const adminCampaignRows = (campaigns || []).map(c => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12532,11 +12851,11 @@ app.get("/admin/resultados-pendientes", async (req, res) => {
                       ${grouped[groupName].map(c => `
                         <tr>
                           <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-                            ${c.title || "-"}
+                            ${escapeHtml(c.title || "-")}
                           </td>
 
                           <td style="padding:12px;border-bottom:1px solid #eee;">
-                            ${c.prize || "-"}
+                            ${escapeHtml(c.prize || "-")}
                           </td>
 
                           <td style="padding:12px;border-bottom:1px solid #eee;">
@@ -12572,7 +12891,7 @@ app.get("/admin/resultados-pendientes", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12655,7 +12974,7 @@ app.get("/admin/resultados/masivo", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12827,7 +13146,7 @@ app.post("/admin/resultados/masivo", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12894,7 +13213,7 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
 
     return res.redirect("/admin/resultados");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -12965,7 +13284,7 @@ if (!rejectionReason) {
 
     return res.redirect("/admin/resultados");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13053,7 +13372,7 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
         </p>
 
         <div style="margin-top:14px;padding:16px;background:#eff6ff;border-radius:12px;color:#1e3a8a;font-weight:bold;">
-          Resultado registrado: ${rifa.result_value}
+          Resultado registrado: ${escapeHtml(rifa.result_value)}
         </div>
 
         <a
@@ -13088,7 +13407,7 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
         <div style="max-width:650px;margin:auto;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
           <h1>Cargar resultado</h1>
 
-          <p><b>Campaña:</b> ${rifa.title}</p>
+          <p><b>Campaña:</b> ${escapeHtml(rifa.title)}</p>
           <p><b>Sorteo:</b> ${getDrawProviderLabel(rifa.draw_provider)}</p>
           <p><b>Modalidad:</b> ${getDrawModeLabel(rifa.draw_mode)}</p>
 
@@ -13100,7 +13419,7 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
   name="result_value"
   required
   placeholder="${getResultPlaceholder(rifa.draw_mode)}"
-  value="${rifa.result_value || ""}"
+  value="${escapeHtml(rifa.result_value || "")}"
   style="width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin:8px 0 8px;"
 />
 
@@ -13123,7 +13442,7 @@ app.get("/admin/campanas/:rifaId/resultado", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13191,7 +13510,7 @@ if (winnerTicketId) {
 return res.redirect(`/resultado/${rifaId}`);
     
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13344,7 +13663,7 @@ app.post("/admin/campanas/:rifaId/premio-entregado", async (req, res) => {
 
     return res.redirect("/admin/resultados");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13461,18 +13780,36 @@ app.post("/admin/campanas/:rifaId/giro-organizador", async (req, res) => {
 
     return res.redirect("/admin/resultados");
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
 const WHATSAPP_VERIFY_TOKEN = String(process.env.WHATSAPP_VERIFY_TOKEN || "").trim();
+
+function hasValidWhatsAppWebhookSignature(req) {
+  if (!WHATSAPP_APP_SECRET || !Buffer.isBuffer(req.rawBody)) {
+    return false;
+  }
+
+  const receivedSignature = String(req.get("x-hub-signature-256") || "").trim();
+  const expectedSignature = `sha256=${crypto
+    .createHmac("sha256", WHATSAPP_APP_SECRET)
+    .update(req.rawBody)
+    .digest("hex")}`;
+
+  return safeCompare(receivedSignature, expectedSignature);
+}
 
 app.get("/webhooks/whatsapp", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
+  if (
+    mode === "subscribe" &&
+    WHATSAPP_VERIFY_TOKEN &&
+    safeCompare(token, WHATSAPP_VERIFY_TOKEN)
+  ) {
     console.log("Webhook WhatsApp verificado correctamente");
     return res.status(200).send(challenge);
   }
@@ -13481,10 +13818,17 @@ app.get("/webhooks/whatsapp", (req, res) => {
   return res.sendStatus(403);
 });
 
-app.post("/webhooks/whatsapp", async (req, res) => {
+app.post("/webhooks/whatsapp", webhookLimiter, async (req, res) => {
   try {
-    console.log("Webhook WhatsApp recibido:");
-    console.log(JSON.stringify(req.body, null, 2));
+    if (!WHATSAPP_APP_SECRET) {
+      console.error("Falta WHATSAPP_APP_SECRET; el webhook de WhatsApp permanece cerrado.");
+      return res.sendStatus(503);
+    }
+
+    if (!hasValidWhatsAppWebhookSignature(req)) {
+      console.warn("Webhook WhatsApp rechazado por firma inválida.");
+      return res.sendStatus(401);
+    }
 
     return res.sendStatus(200);
   } catch (error) {
@@ -13550,7 +13894,7 @@ app.get("/admin/test-whatsapp", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13604,7 +13948,7 @@ app.post("/admin/test-whatsapp", async (req, res) => {
       </html>
     `);
   } catch (error) {
-    return res.status(500).send(error.message);
+    return sendServerError(res, error);
   }
 });
 
@@ -13669,7 +14013,7 @@ app.get("/sitemap.xml", async (req, res) => {
 ${xmlUrls}
 </urlset>`);
   } catch (error) {
-    return res.status(500).type("text/plain").send(error.message);
+    return sendServerError(res, error);
   }
 });
 
