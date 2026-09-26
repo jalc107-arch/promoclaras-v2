@@ -2762,7 +2762,7 @@ async function processApprovedInstallmentPayment(payment) {
     const reservedCodeLabels = await getReservedCodeLabelsForOrder(plan.order_id);
     const reservedCodesNotice = getReservedCodesNotice(order, reservedCodeLabels);
 
-    await sendWhatsAppInstallmentTemplate({
+    const sendResult = await sendWhatsAppInstallmentTemplate({
       phone: order.buyers?.phone,
       buyerName: order.buyers?.full_name,
       campaignName: order.rifas?.title,
@@ -2774,6 +2774,13 @@ async function processApprovedInstallmentPayment(payment) {
         ? `${reservedCodesNotice} Conserva al día las próximas cuotas.`
         : `${reservedCodesNotice} Tu pago fue aprobado. Esta es tu próxima cuota.`
     });
+
+    if (sendResult.ok) {
+      await supabase
+        .from("orders")
+        .update({ whatsapp_sent: true })
+        .eq("id", plan.order_id);
+    }
   }
 
   return { ok: true, completed: false };
@@ -2921,6 +2928,11 @@ async function processInstallmentReminders() {
     });
 
     if (sendResult.ok) {
+      await supabase
+        .from("orders")
+        .update({ whatsapp_sent: true })
+        .eq("id", plan.order_id);
+
       await supabase
         .from("installment_schedules")
         .update(isOverdue
@@ -5273,6 +5285,24 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
 
   const orderIds = (orders || []).map(order => order.id);
 
+let installmentPlans = [];
+
+if (orderIds.length > 0) {
+  for (const chunk of chunkArray(orderIds, 100)) {
+    const { data: planRows, error: planRowsError } = await supabase
+      .from("installment_plans")
+      .select("order_id, public_token, total_amount, amount_paid, balance_due, status")
+      .in("order_id", chunk);
+
+    if (planRowsError) throw planRowsError;
+    installmentPlans = installmentPlans.concat(planRows || []);
+  }
+}
+
+const installmentPlanByOrderId = new Map(
+  installmentPlans.map(plan => [String(plan.order_id), plan])
+);
+
 let tickets = [];
 
 if (orderIds.length > 0) {
@@ -5296,6 +5326,10 @@ if (orderIds.length > 0) {
 
   tickets = allTickets;
 }
+
+    const assignedOrReservedTickets = tickets.filter(ticket =>
+      ["active", "reserved_installment"].includes(String(ticket.status || "active"))
+    );
 
     const paidOrders = (orders || []).filter(order => order.payment_status === "paid");
     const pendingOrders = (orders || []).filter(order => order.payment_status !== "paid");
@@ -5611,8 +5645,8 @@ if (orderIds.length > 0) {
               </div>
 
               <div class="metric">
-                Códigos asignados
-                <strong>${tickets.length}</strong>
+                Códigos asignados o reservados
+                <strong>${assignedOrReservedTickets.length}</strong>
               </div>
             </div>
           </div>
@@ -5640,8 +5674,10 @@ if (orderIds.length > 0) {
     <select id="filterPayment">
   <option value="">Todos</option>
   <option value="paid">Aprobados / pagados</option>
+  <option value="partially_paid">Planes de cuotas activos</option>
   <option value="created">Pendientes / creados</option>
   <option value="failed">Fallidos</option>
+  <option value="defaulted">Planes incumplidos</option>
 </select>
   </div>
 
@@ -5700,10 +5736,12 @@ if (orderIds.length > 0) {
                 ${
                   orders.length > 0
                     ? orders.map(order => {
+                        const installmentPlan = installmentPlanByOrderId.get(String(order.id));
+                        const isInstallmentOrder = order.payment_mode === "installments" || Boolean(installmentPlan);
                         const orderTickets = tickets
   .filter(ticket =>
     String(ticket.order_id) === String(order.id) &&
-    String(ticket.status || "active") === "active"
+    ["active", "reserved_installment"].includes(String(ticket.status || "active"))
   )
   .sort((a, b) => {
     const codeA = String(a.ticket_code || "");
@@ -5713,6 +5751,28 @@ if (orderIds.length > 0) {
 
 const expectedQty = Number(order.qty || 0);
 const assignedQty = orderTickets.length;
+const totalAmount = isInstallmentOrder
+  ? Number(installmentPlan?.total_amount || 0) ||
+    Number(order.amount_paid || 0) + Number(order.balance_due || 0) ||
+    Number(order.subtotal || 0)
+  : Number(order.total_paid || order.subtotal || 0);
+const paidAmount = isInstallmentOrder
+  ? Number(installmentPlan?.amount_paid ?? order.amount_paid ?? order.total_paid ?? 0)
+  : Number(order.total_paid || 0);
+const balanceDue = isInstallmentOrder
+  ? Number(installmentPlan?.balance_due ?? order.balance_due ?? Math.max(0, totalAmount - paidAmount))
+  : 0;
+const paymentStatusText = order.payment_status === "paid"
+  ? "Pagado"
+  : order.payment_status === "partially_paid"
+    ? "Plan activo"
+    : order.payment_status === "defaulted"
+      ? "Plan incumplido"
+      : order.payment_status === "created"
+        ? "Pendiente"
+        : order.payment_status === "failed"
+          ? "Fallido"
+          : String(order.payment_status || "Pendiente");
 
                         return `
   <tr
@@ -5734,11 +5794,21 @@ const assignedQty = orderTickets.length;
 </td>
                             <td>${escapeHtml(maskPhone(order.buyers?.phone || ""))}</td>
                             <td>${Number(order.qty || 0)}</td>
-                            <td>$${Number(order.total_paid || 0).toLocaleString("es-CO")}</td>
+                            <td>
+                              <b>${moneyCOP(totalAmount)}</b>
+                              ${isInstallmentOrder ? `
+                                <div style="margin-top:5px;font-size:11px;color:#bbf7d0;">
+                                  Pagado: ${moneyCOP(paidAmount)}
+                                </div>
+                                <div style="margin-top:2px;font-size:11px;color:#fde68a;">
+                                  Saldo: ${moneyCOP(balanceDue)}
+                                </div>
+                              ` : ""}
+                            </td>
 
                             <td>
                               <span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
-                                ${escapeHtml(order.payment_status === "paid" ? "approved" : order.payment_status)}
+                                ${escapeHtml(paymentStatusText)}
                               </span>
                             </td>
 
@@ -5767,6 +5837,12 @@ const assignedQty = orderTickets.length;
             </span>
           `).join("")}
         </div>
+
+        ${orderTickets.some(ticket => String(ticket.status) === "reserved_installment") ? `
+          <div style="margin-top:8px;color:#fde68a;font-size:12px;font-weight:bold;">
+            Reservado por plan de cuotas
+          </div>
+        ` : ""}
 
         ${
           assignedQty !== expectedQty
@@ -5809,6 +5885,16 @@ const assignedQty = orderTickets.length;
                                       </button>
                                     </form>
                                   `
+                                  : isInstallmentOrder && installmentPlan?.public_token
+                                    ? `
+                                      <a
+                                        href="/cuotas/${encodeURIComponent(installmentPlan.public_token)}"
+                                        target="_blank"
+                                        style="display:inline-block;padding:9px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;font-size:13px;white-space:nowrap;"
+                                      >
+                                        Ver plan de cuotas
+                                      </a>
+                                    `
                                   : `
                                     <span style="color:#9ca3af;font-size:12px;">
                                       No disponible
@@ -10580,6 +10666,15 @@ app.get("/cuotas/:publicToken", async (req, res) => {
     if (freshSchedulesError) throw freshSchedulesError;
     schedules = freshSchedules || [];
 
+    const reservedCodeLabels = await getReservedCodeLabelsForOrder(order.id);
+    const reservedCodeTitle = isLoteriaProvider(order.rifas?.draw_provider)
+      ? reservedCodeLabels.length === 1
+        ? "Número reservado"
+        : "Números reservados"
+      : reservedCodeLabels.length === 1
+        ? "Código reservado"
+        : "Códigos reservados";
+
     const nextInstallment = schedules.find(item =>
       ["pending", "overdue"].includes(item.status)
     );
@@ -10638,6 +10733,18 @@ app.get("/cuotas/:publicToken", async (req, res) => {
             <div><b>Pagado:</b> ${moneyCOP(freshPlan.amount_paid)}</div>
             <div><b>Saldo:</b> ${moneyCOP(freshPlan.balance_due)}</div>
           </div>
+
+          ${reservedCodeLabels.length > 0 ? `
+            <div style="margin-top:14px;padding:15px;background:#f0fdf4;border:1px solid #86efac;border-radius:14px;line-height:1.6;">
+              <div style="font-size:13px;color:#166534;font-weight:700;">${escapeHtml(reservedCodeTitle)}</div>
+              <div style="margin-top:3px;font-size:22px;color:#14532d;font-weight:900;word-break:break-word;">
+                ${reservedCodeLabels.map(escapeHtml).join(", ")}
+              </div>
+              <div style="margin-top:5px;font-size:12px;color:#166534;">
+                La reserva se mantiene mientras el plan de cuotas permanezca al día.
+              </div>
+            </div>
+          ` : ""}
 
           <div style="margin-top:18px;display:grid;gap:9px;">
             ${schedules.map(item => `
