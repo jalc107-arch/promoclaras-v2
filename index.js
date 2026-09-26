@@ -14435,3 +14435,5 @@ setTimeout(() => {
     console.error("Error en verificación inicial de cuotas:", error.message);
   });
 }, 1000 * 60).unref();
+
+// Reintento Railway 26-09-2026
