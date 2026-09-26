@@ -1,8 +1,4 @@
-import "dotenv/config";
-import express from "express";
-import session from "express-session";
-import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
+
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcrypt";
@@ -3380,8 +3376,7 @@ app.get("/", (req, res) => {
 
           <section class="content">
             <div class="notice">
-              Consulta tus códigos promocionales, explora campañas activas, ingresa como organizador
-              o administra la plataforma desde un solo lugar.
+              Consulta tus códigos promocionales, explora campañas activas o ingresa como organizador.
             </div>
 
             <div class="grid">
@@ -3405,10 +3400,12 @@ app.get("/", (req, res) => {
                 <small>Registra tu perfil para solicitar verificación.</small>
               </a>
 
-              <a class="action purple admin-wide" href="/admin/login">
-                <span>Ingreso administrador</span>
-                <small>Revisión de organizadores, campañas y resultados.</small>
-              </a>
+              ${req.session?.isAdmin ? `
+                <a class="action purple admin-wide" href="/admin/resultados">
+                  <span>Panel administrador</span>
+                  <small>Sesión administrativa autenticada.</small>
+                </a>
+              ` : ""}
             </div>
 
             <div class="footer">
@@ -4597,6 +4594,113 @@ ${
       </tr>
 `;
 }).join("");
+
+const organizerCampaignCards = (campaigns || []).map(c => {
+  const campaignOrders = orders.filter(o => String(o.rifa_id) === String(c.id));
+  const campaignOrderIds = new Set(campaignOrders.map(o => String(o.id)));
+  const campaignPayments = payments.filter(p => campaignOrderIds.has(String(p.order_id)));
+  const campaignFinancial = calculateCampaignFinancialSummary(c, campaignOrders, campaignPayments);
+  const sold = Number(campaignFinancial.soldQty || c.sold_tickets || 0);
+  const reserved = Number(campaignFinancial.reservedInstallmentQty || 0);
+  const total = Number(c.max_tickets || 0);
+  const occupied = Math.min(total, sold + reserved);
+  const percent = total > 0 ? Math.min(100, Math.round((occupied / total) * 100)) : 0;
+  const panelId = `organizer-campaign-${String(c.id).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const shareText = encodeURIComponent(
+`Te invito a participar en esta campaña de CampaClick.
+
+Campaña: ${c.title}
+Premio: ${c.prize || "-"}
+Valor por código promocional: $${Number(c.price_per_ticket || 0).toLocaleString("es-CO")}
+Sorteo: ${getDrawProviderLabel(c.draw_provider)}
+Modalidad: ${getDrawModeLabel(c.draw_mode)}
+Fecha del sorteo: ${c.draw_date || "-"}
+
+Link para participar:
+${baseUrl}/campanas/${c.slug}`
+  );
+
+  return `
+    <article class="org-campaign-card">
+      <div class="org-campaign-head">
+        <div class="org-campaign-title">
+          <div class="org-eyebrow">Campaña</div>
+          <h3>${escapeHtml(c.title || "-")}</h3>
+          <div class="org-status-line">
+            <span class="badge ${campaignStatusClass(c.status)}">${campaignStatusLabel(c.status)}</span>
+            <span>Sorteo: ${escapeHtml(c.draw_date || "-")}</span>
+            <span>${occupied} de ${total} códigos ocupados</span>
+          </div>
+        </div>
+
+        <div class="org-quick-money">
+          <div><span>Ventas</span><b>${moneyCOP(campaignFinancial.committedSales)}</b></div>
+          <div><span>Recaudado</span><b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
+          <div><span>Pendiente</span><b>${moneyCOP(campaignFinancial.outstandingBalance)}</b></div>
+        </div>
+
+        <button class="org-toggle" type="button" aria-expanded="false" aria-controls="${panelId}">
+          <span>Ver detalles</span><span class="org-chevron" aria-hidden="true">⌄</span>
+        </button>
+      </div>
+
+      <div class="org-campaign-content" id="${panelId}" hidden>
+        <div class="org-metric-grid">
+          <div class="org-metric"><span>Precio por código</span><strong>${moneyCOP(c.price_per_ticket)}</strong></div>
+          <div class="org-metric"><span>Ventas comprometidas</span><strong>${moneyCOP(campaignFinancial.committedSales)}</strong></div>
+          <div class="org-metric"><span>Dinero recaudado</span><strong>${moneyCOP(campaignFinancial.grossRevenue)}</strong></div>
+          <div class="org-metric"><span>Pendiente por cuotas</span><strong>${moneyCOP(campaignFinancial.outstandingBalance)}</strong></div>
+        </div>
+
+        <div class="org-detail-layout">
+          <section class="org-panel">
+            <h4>Información y avance</h4>
+            <div class="org-info-grid">
+              <div><span>Premio</span><b>${escapeHtml(c.prize || "-")}</b></div>
+              <div><span>Sorteo</span><b>${getDrawProviderLabel(c.draw_provider)}</b></div>
+              <div><span>Modalidad</span><b>${getDrawModeLabel(c.draw_mode)}</b></div>
+              <div><span>Tipo de premio</span><b>${prizeTypeLabel(c.prize_type)}</b></div>
+            </div>
+            <div class="org-progress-label"><b>${occupied} / ${total}</b><span>${percent}% ocupado</span></div>
+            <div class="org-progress"><span style="width:${percent}%"></span></div>
+            <p class="org-help">Confirmados: ${sold}. Reservados mediante plan de cuotas: ${reserved}.</p>
+          </section>
+
+          <section class="org-panel">
+            <h4>Liquidación estimada</h4>
+            <div class="org-settlement">
+              <div><span>Recaudado</span><b>${moneyCOP(campaignFinancial.grossRevenue)}</b></div>
+              <div><span>Comisión CampaClick (5%)</span><b>− ${moneyCOP(campaignFinancial.platformFee)}</b></div>
+              <div><span>Wompi estimado</span><b>− ${moneyCOP(campaignFinancial.gatewayFee)}</b></div>
+              <div class="org-subtotal"><span>Disponible antes del premio</span><b>${moneyCOP(campaignFinancial.netBeforePrize)}</b></div>
+              <div><span>Premio en dinero</span><b>− ${moneyCOP(campaignFinancial.prizeDeduction)}</b></div>
+              <div class="org-total"><span>Proyección después del premio</span><b>${moneyCOP(campaignFinancial.netToOrganizer)}</b></div>
+            </div>
+            <p class="org-help">Wompi se estima en 2,65% + $700 + IVA por cada transacción aprobada. El valor definitivo depende del reporte del proveedor.</p>
+          </section>
+
+          <aside class="org-panel org-actions">
+            <h4>Acciones</h4>
+            ${(c.status === "finished" || c.status === "active") ? `<a class="org-button blue-btn" href="/resultado/${c.id}">Ver resultado</a>` : `<span class="org-button disabled-btn">Resultado no disponible</span>`}
+            <a class="org-button green-btn" href="/campanas/${encodeURIComponent(c.slug || "")}">Ver campaña</a>
+            ${c.status === "active" ? `<a class="org-button whatsapp-btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${shareText}">Compartir por WhatsApp</a>` : ""}
+            <a class="org-button violet-btn" href="/organizers/${organizer.id}/campanas/${c.id}/referidos">Referidos</a>
+            <a class="org-button dark-btn" href="/organizers/${organizer.id}/campanas/${c.id}/detalle">Órdenes y códigos</a>
+            ${c.status === "active" ? `
+              <form method="POST" action="/organizers/${organizer.id}/campanas/${c.id}/visibilidad">
+                <input type="hidden" name="is_public" value="${c.is_public ? "false" : "true"}">
+                <button class="org-button ${c.is_public ? "danger-btn" : "green-btn"}" type="submit" onclick="return confirm('${c.is_public ? "¿Deseas ocultar esta campaña de la página pública?" : "¿Deseas publicar esta campaña?"}');">
+                  ${c.is_public ? "Ocultar campaña" : "Publicar campaña"}
+                </button>
+              </form>
+              <small class="visibility-state">${c.is_public ? "Visible en campañas activas." : "Oculta de la página pública."}</small>
+            ` : ""}
+          </aside>
+        </div>
+      </div>
+    </article>
+  `;
+}).join("");
     
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 res.send(`
@@ -5193,6 +5297,179 @@ td a[style*="background:#7c3aed"] {
   border-radius: 999px;
 }
 
+/* Panel de campañas plegable y de ancho amplio */
+.container {
+  width: 100% !important;
+  max-width: 1760px !important;
+  padding-left: 28px !important;
+  padding-right: 28px !important;
+}
+
+.table-card {
+  overflow: visible !important;
+  padding: 24px !important;
+}
+
+.organizer-campaign-list {
+  display: grid;
+  gap: 14px;
+}
+
+.org-campaign-card {
+  overflow: hidden;
+  border: 1px solid rgba(148,163,184,.24);
+  border-radius: 20px;
+  background: rgba(255,255,255,.055);
+  box-shadow: 0 12px 30px rgba(0,0,0,.16);
+}
+
+.org-campaign-card.is-open {
+  border-color: rgba(96,165,250,.62);
+  box-shadow: 0 18px 44px rgba(30,64,175,.18);
+}
+
+.org-campaign-head {
+  display: grid;
+  grid-template-columns: minmax(280px,1.25fr) minmax(370px,1fr) auto;
+  align-items: center;
+  gap: 22px;
+  padding: 20px;
+}
+
+.org-eyebrow {
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.org-campaign-title h3 {
+  margin: 5px 0 9px;
+  color: #fff;
+  font-size: 21px;
+}
+
+.org-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.org-quick-money {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px;
+}
+
+.org-quick-money div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 12px;
+  background: rgba(15,23,42,.52);
+}
+
+.org-quick-money span,
+.org-metric span {
+  display: block;
+  margin-bottom: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.org-quick-money b {
+  color: #f8fafc;
+  font-size: 15px;
+}
+
+.org-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 132px;
+  padding: 11px 14px;
+  border: 1px solid rgba(147,197,253,.48);
+  border-radius: 12px;
+  background: rgba(37,99,235,.20);
+  color: #dbeafe;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.org-toggle:hover { background: rgba(37,99,235,.34); }
+.org-chevron { font-size: 18px;line-height:1;transition:transform .2s; }
+.org-toggle[aria-expanded="true"] .org-chevron { transform: rotate(180deg); }
+.org-campaign-content[hidden] { display: none; }
+
+.org-campaign-content {
+  padding: 0 20px 20px;
+  border-top: 1px solid rgba(148,163,184,.16);
+}
+
+.org-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+  padding: 18px 0;
+}
+
+.org-metric {
+  padding: 14px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 14px;
+  background: rgba(15,23,42,.62);
+}
+
+.org-metric strong { color:#fff;font-size:20px; }
+
+.org-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr) 250px;
+  gap: 14px;
+}
+
+.org-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148,163,184,.20);
+  border-radius: 15px;
+  background: rgba(15,23,42,.54);
+}
+
+.org-panel h4 { margin:0 0 14px;color:#fff;font-size:15px; }
+.org-info-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
+.org-info-grid span { display:block;color:#94a3b8;font-size:11px;text-transform:uppercase;font-weight:900;margin-bottom:4px; }
+.org-info-grid b { color:#f8fafc;font-size:13px;overflow-wrap:anywhere; }
+.org-progress-label { display:flex;justify-content:space-between;gap:10px;margin-top:18px;color:#cbd5e1;font-size:12px; }
+.org-progress { height:9px;margin-top:7px;overflow:hidden;border-radius:999px;background:rgba(148,163,184,.24); }
+.org-progress span { display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#86efac); }
+.org-help { margin:10px 0 0;color:#94a3b8;font-size:11px;line-height:1.45; }
+.org-settlement>div { display:flex;justify-content:space-between;gap:14px;padding:6px 0;color:#cbd5e1;font-size:12px; }
+.org-settlement b { color:#f8fafc;text-align:right; }
+.org-settlement .org-subtotal,.org-settlement .org-total { margin-top:5px;padding-top:10px;border-top:1px solid rgba(148,163,184,.24); }
+.org-settlement .org-total { color:#86efac;font-size:13px;font-weight:900; }
+.org-settlement .org-total b { color:#86efac; }
+.org-actions { display:flex;flex-direction:column;gap:8px; }
+.org-actions h4 { margin-bottom:6px; }
+.org-actions form { margin:0; }
+.org-button { display:block;width:100%;padding:10px 12px;border:0;border-radius:10px;color:#fff;text-align:center;text-decoration:none;font-size:12px;font-weight:900;cursor:pointer; }
+.blue-btn{background:#2563eb}.green-btn{background:#16a34a}.whatsapp-btn{background:#059669}.violet-btn{background:#7c3aed}.dark-btn{background:#0f172a;border:1px solid rgba(255,255,255,.18)}.danger-btn{background:#dc2626}.disabled-btn{background:#475569;color:#cbd5e1;cursor:not-allowed}.visibility-state{display:block;color:#cbd5e1;text-align:center;line-height:1.35}
+.organizer-empty { padding:30px;border:1px dashed rgba(148,163,184,.35);border-radius:16px;color:#cbd5e1;text-align:center; }
+
+@media (max-width: 1180px) {
+  .org-campaign-head { grid-template-columns:minmax(260px,1fr) minmax(340px,1fr); }
+  .org-toggle { grid-column:1 / -1;width:100%; }
+  .org-detail-layout { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .org-actions { grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .org-actions h4,.org-actions .visibility-state { grid-column:1 / -1; }
+}
+
 /* Móvil */
 @media (max-width: 800px) {
   .header {
@@ -5207,6 +5484,15 @@ td a[style*="background:#7c3aed"] {
   td {
     font-size: 12px !important;
   }
+
+  .container { padding-left:12px !important;padding-right:12px !important; }
+  .table-card { padding:15px !important; }
+  .org-campaign-head { grid-template-columns:1fr;padding:16px;gap:14px; }
+  .org-quick-money { grid-template-columns:1fr; }
+  .org-toggle { width:100%; }
+  .org-campaign-content { padding:0 14px 14px; }
+  .org-metric-grid,.org-detail-layout,.org-info-grid { grid-template-columns:1fr; }
+  .org-actions { display:flex; }
 }
 
 </style>
@@ -5254,31 +5540,9 @@ ${verificationHtml}
 
 <h2>Mis campañas</h2>
 
-<table>
-<thead>
-<tr>
-<th>Campaña</th>
-<th>Premio</th>
-<th>Sorteo</th>
-<th>Modalidad</th>
-<th>Precio</th>
-<th>Avance</th>
-<th>Liquidación</th>
-<th>Estado</th>
-<th>Acciones</th>
-</tr>
-</thead>
-
-<tbody>
-${campaignRows || `
-<tr>
-<td colspan="9" style="padding:18px;text-align:center;color:#6b7280;">
-Aún no tienes campañas creadas.
-</td>
-</tr>
-`}
-</tbody>
-</table>
+<div class="organizer-campaign-list">
+${organizerCampaignCards || `<div class="organizer-empty">Aún no tienes campañas creadas.</div>`}
+</div>
 
 </div>
 
@@ -5287,6 +5551,35 @@ Aún no tienes campañas creadas.
 <div class="footer">
 © CampaClick — Panel de campañas
 </div>
+
+<script>
+document.querySelectorAll('.org-toggle').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var card = button.closest('.org-campaign-card');
+    var panel = document.getElementById(button.getAttribute('aria-controls'));
+    var willOpen = button.getAttribute('aria-expanded') !== 'true';
+
+    document.querySelectorAll('.org-campaign-card.is-open').forEach(function(openCard) {
+      if (openCard === card) return;
+      openCard.classList.remove('is-open');
+      var openButton = openCard.querySelector('.org-toggle');
+      var openPanel = openCard.querySelector('.org-campaign-content');
+      if (openButton) {
+        openButton.setAttribute('aria-expanded', 'false');
+        var openLabel = openButton.querySelector('span:first-child');
+        if (openLabel) openLabel.textContent = 'Ver detalles';
+      }
+      if (openPanel) openPanel.hidden = true;
+    });
+
+    card.classList.toggle('is-open', willOpen);
+    button.setAttribute('aria-expanded', String(willOpen));
+    panel.hidden = !willOpen;
+    var label = button.querySelector('span:first-child');
+    if (label) label.textContent = willOpen ? 'Ocultar detalles' : 'Ver detalles';
+  });
+});
+</script>
 
 </body>
 </html>
@@ -12699,6 +12992,8 @@ const adminCampaignRows = (campaigns || []).map(c => {
     `;
   }
 
+ const campaignPanelId = `campaign-panel-${String(c.id).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
  return `
     <article class="campaign-card">
       <div class="campaign-head">
@@ -12710,36 +13005,47 @@ const adminCampaignRows = (campaigns || []).map(c => {
             <span class="muted">Sorteo: ${escapeHtml(c.draw_date || "-")}</span>
             <span class="muted">Resultado: ${escapeHtml(c.result_value || "Pendiente")}</span>
           </div>
+          <div class="compact-finance">
+            <span>Ventas: <b>${moneyCOP(campaignFinancial.committedSales)}</b></span>
+            <span>Recaudado: <b>${moneyCOP(campaignFinancial.grossRevenue)}</b></span>
+            <span>Pendiente: <b>${moneyCOP(campaignFinancial.outstandingBalance)}</b></span>
+          </div>
         </div>
-        <a class="primary-link" href="/campanas/${encodeURIComponent(c.slug || "")}" target="_blank">
-          Ver campaña
-        </a>
-      </div>
-
-      <div class="money-grid">
-        <div class="metric blue">
-          <span>Ventas comprometidas</span>
-          <strong>${moneyCOP(campaignFinancial.committedSales)}</strong>
-          <small>Compras directas y planes activos</small>
-        </div>
-        <div class="metric green">
-          <span>Dinero recaudado</span>
-          <strong>${moneyCOP(campaignFinancial.grossRevenue)}</strong>
-          <small>${campaignFinancial.approvedPaymentsCount} pago(s) aprobado(s)</small>
-        </div>
-        <div class="metric amber">
-          <span>Pendiente por cuotas</span>
-          <strong>${moneyCOP(campaignFinancial.outstandingBalance)}</strong>
-          <small>${campaignFinancial.reservedInstallmentQty} código(s) reservado(s)</small>
-        </div>
-        <div class="metric violet">
-          <span>Comisión CampaClick</span>
-          <strong>${moneyCOP(campaignFinancial.platformFee)}</strong>
-          <small>Calculada sobre dinero recibido</small>
+        <div class="campaign-head-actions">
+          <button class="toggle-campaign" type="button" aria-expanded="false" aria-controls="${campaignPanelId}">
+            <span>Ver detalles</span><span class="chevron" aria-hidden="true">⌄</span>
+          </button>
+          <a class="primary-link" href="/campanas/${encodeURIComponent(c.slug || "")}" target="_blank">
+            Ver campaña
+          </a>
         </div>
       </div>
 
-      <div class="campaign-body">
+      <div class="campaign-content" id="${campaignPanelId}" hidden>
+        <div class="money-grid">
+          <div class="metric blue">
+            <span>Ventas comprometidas</span>
+            <strong>${moneyCOP(campaignFinancial.committedSales)}</strong>
+            <small>Compras directas y planes activos</small>
+          </div>
+          <div class="metric green">
+            <span>Dinero recaudado</span>
+            <strong>${moneyCOP(campaignFinancial.grossRevenue)}</strong>
+            <small>${campaignFinancial.approvedPaymentsCount} pago(s) aprobado(s)</small>
+          </div>
+          <div class="metric amber">
+            <span>Pendiente por cuotas</span>
+            <strong>${moneyCOP(campaignFinancial.outstandingBalance)}</strong>
+            <small>${campaignFinancial.reservedInstallmentQty} código(s) reservado(s)</small>
+          </div>
+          <div class="metric violet">
+            <span>Comisión CampaClick</span>
+            <strong>${moneyCOP(campaignFinancial.platformFee)}</strong>
+            <small>Calculada sobre dinero recibido</small>
+          </div>
+        </div>
+
+        <div class="campaign-body">
         <section class="details-panel">
           <h3>Información de la campaña</h3>
           <dl class="detail-grid">
@@ -12817,6 +13123,7 @@ const adminCampaignRows = (campaigns || []).map(c => {
 
           </div>
         </aside>
+        </div>
       </div>
     </article>
   `;
@@ -12835,10 +13142,10 @@ const adminCampaignRows = (campaigns || []).map(c => {
           *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f3f6fb;color:#111827}
           .page{max-width:1440px;margin:0 auto;padding:32px 22px 56px}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.topbar h1{margin:0 0 6px;font-size:30px}.subtitle{margin:0;color:#64748b}.nav{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.nav a,.primary-link{color:#fff;text-decoration:none;padding:11px 15px;border-radius:11px;font-weight:800;font-size:14px}.nav-blue{background:#2563eb}.nav-green{background:#16a34a}.nav-violet{background:#7c3aed}.nav-dark,.primary-link{background:#111827}
           .summary-grid,.money-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary-grid{margin-bottom:24px}.summary-card,.metric{border:1px solid #e2e8f0;border-radius:16px;padding:16px;background:#fff}.summary-card span,.metric span{display:block;font-size:13px;font-weight:800;color:#475569}.summary-card strong,.metric strong{display:block;font-size:25px;margin-top:7px}.summary-card small,.metric small{display:block;color:#64748b;margin-top:5px;line-height:1.35}.blue{background:#eff6ff;border-color:#bfdbfe}.green{background:#f0fdf4;border-color:#bbf7d0}.amber{background:#fff7ed;border-color:#fed7aa}.violet{background:#f5f3ff;border-color:#ddd6fe}
-          .campaign-list{display:grid;gap:20px}.campaign-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.06)}.campaign-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:17px}.campaign-head h2{margin:3px 0 8px;font-size:22px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:900;color:#64748b}.status-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-pill{background:#dcfce7;color:#166534;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900}.muted{font-size:13px;color:#64748b}.money-grid{margin-bottom:18px}.metric{padding:14px}.metric strong{font-size:21px}
+          .campaign-list{display:grid;gap:13px}.campaign-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:18px 22px;box-shadow:0 8px 24px rgba(15,23,42,.06);transition:border-color .2s,box-shadow .2s}.campaign-card.is-open{border-color:#bfdbfe;box-shadow:0 12px 32px rgba(37,99,235,.10)}.campaign-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0}.campaign-card.is-open .campaign-head{margin-bottom:17px}.campaign-head h2{margin:3px 0 8px;font-size:22px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:900;color:#64748b}.status-row,.compact-finance{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-pill{background:#dcfce7;color:#166534;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900}.muted{font-size:13px;color:#64748b}.compact-finance{margin-top:10px;color:#475569;font-size:12px}.compact-finance span{padding-right:9px;border-right:1px solid #cbd5e1}.compact-finance span:last-child{border-right:0}.campaign-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.toggle-campaign{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #2563eb;background:#eff6ff;color:#1d4ed8;padding:10px 14px;border-radius:11px;font-weight:900;font-size:14px;cursor:pointer}.toggle-campaign:hover{background:#dbeafe}.chevron{font-size:18px;line-height:1;transition:transform .2s}.toggle-campaign[aria-expanded="true"] .chevron{transform:rotate(180deg)}.campaign-content[hidden]{display:none}.money-grid{margin-bottom:18px}.metric{padding:14px}.metric strong{font-size:21px}
           .campaign-body{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px}.details-panel,.actions-panel{border:1px solid #e2e8f0;border-radius:15px;padding:16px;background:#f8fafc}.details-panel h3,.actions-panel h3{margin:0 0 13px;font-size:15px}.detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 15px}.detail-grid div{min-width:0}.detail-grid dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:900;margin-bottom:4px}.detail-grid dd{margin:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}.detail-grid small{display:block;color:#64748b;font-weight:500;margin-top:3px}.settlement-box{background:#fff;border:1px solid #e2e8f0;border-radius:13px;padding:12px}.settlement-box>div{display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:13px}.settlement-box .subtotal{border-top:1px solid #e2e8f0;margin-top:5px;padding-top:10px}.settlement-box .total{border-top:1px solid #cbd5e1;margin-top:5px;padding-top:10px;font-size:15px}.projection-note{font-size:12px;color:#64748b;line-height:1.45;margin:10px 2px 0}.action-stack{display:flex;flex-direction:column;gap:8px}.action-stack form{margin:0}.empty{background:#fff;border:1px dashed #cbd5e1;border-radius:16px;padding:30px;text-align:center;color:#64748b}
           @media(max-width:1050px){.summary-grid,.money-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-body{grid-template-columns:1fr}.actions-panel{order:-1}.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-          @media(max-width:700px){.page{padding:20px 12px 40px}.topbar{flex-direction:column}.nav{justify-content:flex-start}.nav a{flex:1;text-align:center}.summary-grid,.money-grid,.detail-grid{grid-template-columns:1fr}.campaign-card{padding:15px}.campaign-head{flex-direction:column}.primary-link{width:100%;text-align:center}.topbar h1{font-size:25px}}
+          @media(max-width:700px){.page{padding:20px 12px 40px}.topbar{flex-direction:column}.nav{justify-content:flex-start}.nav a{flex:1;text-align:center}.summary-grid,.money-grid,.detail-grid{grid-template-columns:1fr}.campaign-card{padding:15px}.campaign-head{flex-direction:column}.campaign-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.toggle-campaign,.primary-link{width:100%;text-align:center}.compact-finance{align-items:flex-start;flex-direction:column;gap:4px}.compact-finance span{border-right:0;padding-right:0}.topbar h1{font-size:25px}}
         </style>
       </head>
 
@@ -12870,6 +13177,34 @@ const adminCampaignRows = (campaigns || []).map(c => {
             ${adminCampaignRows || `<div class="empty">No hay campañas creadas.</div>`}
           </section>
         </main>
+        <script>
+          document.querySelectorAll('.toggle-campaign').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var card = button.closest('.campaign-card');
+              var panel = document.getElementById(button.getAttribute('aria-controls'));
+              var willOpen = button.getAttribute('aria-expanded') !== 'true';
+
+              document.querySelectorAll('.campaign-card.is-open').forEach(function (openCard) {
+                if (openCard === card) return;
+                openCard.classList.remove('is-open');
+                var openButton = openCard.querySelector('.toggle-campaign');
+                var openPanel = openCard.querySelector('.campaign-content');
+                if (openButton) {
+                  openButton.setAttribute('aria-expanded', 'false');
+                  var openLabel = openButton.querySelector('span:first-child');
+                  if (openLabel) openLabel.textContent = 'Ver detalles';
+                }
+                if (openPanel) openPanel.hidden = true;
+              });
+
+              card.classList.toggle('is-open', willOpen);
+              button.setAttribute('aria-expanded', String(willOpen));
+              panel.hidden = !willOpen;
+              var label = button.querySelector('span:first-child');
+              if (label) label.textContent = willOpen ? 'Ocultar detalles' : 'Ver detalles';
+            });
+          });
+        </script>
       </body>
       </html>
     `);
@@ -14435,5 +14770,3 @@ setTimeout(() => {
     console.error("Error en verificación inicial de cuotas:", error.message);
   });
 }, 1000 * 60).unref();
-
-// Reintento Railway 26-09-2026
