@@ -12010,6 +12010,60 @@ app.post("/admin/login", adminLoginLimiter, async (req, res) => {
   return res.redirect("/admin/resultados");
 });
 
+app.get("/admin/migrar-clave-segura", async (req, res) => {
+  if (!req.session.isAdmin) {
+    return res.redirect("/admin/login");
+  }
+
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+
+  if (ADMIN_PASSWORD_HASH) {
+    return res.status(410).send(
+      "La contraseña administrativa ya utiliza un hash seguro. Esta herramienta de migración está desactivada."
+    );
+  }
+
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).send(
+      "No existe una contraseña administrativa temporal para migrar."
+    );
+  }
+
+  try {
+    const generatedHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+
+    return res.type("html").send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Migrar contraseña administrativa</title>
+      </head>
+      <body style="margin:0;background:#0f172a;color:#e2e8f0;font-family:Arial;padding:24px;">
+        <main style="max-width:760px;margin:40px auto;background:#111827;border:1px solid #334155;border-radius:18px;padding:28px;">
+          <h1 style="margin-top:0;">Migrar contraseña administrativa</h1>
+          <p>Este hash corresponde a la contraseña administrativa actual. La contraseña original no se muestra ni se transmite en esta página.</p>
+          <label for="adminHash" style="display:block;font-weight:bold;margin:22px 0 8px;">Valor para ADMIN_PASSWORD_HASH</label>
+          <textarea id="adminHash" readonly style="width:100%;min-height:96px;box-sizing:border-box;border-radius:10px;padding:12px;font-family:monospace;font-size:14px;">${escapeHtml(generatedHash)}</textarea>
+          <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('adminHash').value)" style="margin-top:14px;padding:12px 18px;border:0;border-radius:10px;background:#2563eb;color:white;font-weight:bold;cursor:pointer;">Copiar hash</button>
+          <ol style="line-height:1.6;margin-top:24px;">
+            <li>Crea en Railway la variable <b>ADMIN_PASSWORD_HASH</b> con este valor.</li>
+            <li>Guarda y comprueba que puedes iniciar sesión con tu contraseña habitual.</li>
+            <li>Solo después de comprobarlo, elimina la variable <b>ADMIN_PASSWORD</b>.</li>
+          </ol>
+          <p style="color:#fbbf24;font-weight:bold;">No cierres tu sesión administrativa hasta verificar el nuevo inicio de sesión en una ventana privada.</p>
+        </main>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("No se pudo generar el hash administrativo:", error);
+    return res.status(500).send("No fue posible generar el hash administrativo.");
+  }
+});
+
 app.get("/admin/logout", (req, res) => {
   req.session.destroy(() => {
     res.redirect("/admin/login");
