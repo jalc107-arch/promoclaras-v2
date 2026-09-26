@@ -9201,7 +9201,6 @@ app.get("/campanas/:slug/comprar", publicLookupLimiter, async (req, res) => {
     }
 
     const minimumQty = getMinimumQtyByPrice(campaign.price_per_ticket);
-    const minimumQtyText = getMinimumQtyText(campaign.price_per_ticket);
     const installmentConfiguration = getCampaignInstallmentConfiguration(campaign);
     const installmentPlanOptions = installmentConfiguration.enabled
       ? Array.from(
@@ -9736,11 +9735,130 @@ body.purchase-page::before { display:none; }
 
 body.purchase-page .glass-card {
   margin:0 auto;
-  max-width:900px;
+  max-width:780px;
   background:#111827;
   border-color:#334155;
   backdrop-filter:none;
   -webkit-backdrop-filter:none;
+}
+
+body.purchase-page .top-badge {
+  width:58px;
+  height:58px;
+  margin-bottom:12px;
+  border-radius:20px;
+  font-size:27px;
+}
+
+body.purchase-page h1 {
+  font-size:30px;
+  line-height:1.12;
+}
+
+body.purchase-page .price {
+  margin:13px auto 18px;
+  padding:9px 18px;
+  font-size:25px;
+}
+
+.purchase-section-title {
+  margin:4px 0 12px;
+  color:#fff;
+  font-size:18px;
+  font-weight:900;
+}
+
+.purchase-rule-line {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:10px;
+  padding:11px 13px;
+  border-radius:14px;
+  background:#1e293b;
+  border:1px solid #334155;
+  color:#cbd5e1;
+  font-size:13px;
+}
+
+.purchase-rule-line b { color:#fff; }
+
+.reservation-details {
+  margin-top:12px;
+  border:1px solid rgba(253,230,138,.32);
+  border-radius:15px;
+  background:rgba(245,158,11,.12);
+  overflow:hidden;
+}
+
+.reservation-details summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px 13px;
+  color:#fef3c7;
+  font-size:13px;
+  font-weight:900;
+  cursor:pointer;
+  list-style:none;
+}
+
+.reservation-details summary::-webkit-details-marker { display:none; }
+.reservation-details summary::after { content:'＋';font-size:18px; }
+.reservation-details[open] summary::after { content:'−'; }
+.reservation-details p {
+  margin:0;
+  padding:0 13px 13px;
+  color:#fde68a;
+  font-size:12px;
+  line-height:1.45;
+}
+
+.terms-box {
+  margin-top:15px;
+  padding:13px;
+  border-radius:16px;
+  background:#1e293b;
+  border:1px solid #475569;
+  color:#e2e8f0;
+  line-height:1.4;
+  font-size:13px;
+}
+
+.installment-help {
+  margin-top:10px;
+  border-top:1px solid rgba(110,231,183,.25);
+}
+
+.installment-help summary {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding-top:10px;
+  color:#bfdbfe;
+  font-size:13px;
+  font-weight:900;
+  cursor:pointer;
+  list-style:none;
+}
+
+.installment-help summary::-webkit-details-marker { display:none; }
+.installment-help summary::after { content:'＋';font-size:17px; }
+.installment-help[open] summary::after { content:'−'; }
+.installment-help p {
+  margin:8px 0 0;
+  color:#d1fae5;
+  font-size:12px;
+  line-height:1.45;
+}
+.installment-help a {
+  display:inline-block;
+  margin-top:7px;
+  color:#bfdbfe;
+  font-size:12px;
+  font-weight:900;
 }
 
 
@@ -9771,10 +9889,47 @@ body.purchase-page .glass-card {
               min-height: 50px;
             }
 
-            .form-grid,
+            .form-grid { grid-template-columns:1fr; }
+
             .purchase-summary {
-              grid-template-columns:1fr;
+              grid-template-columns:repeat(2,minmax(0,1fr));
+              gap:7px;
             }
+
+            .purchase-summary div { padding:10px; }
+
+            body.purchase-page {
+              padding:10px;
+            }
+
+            body.purchase-page .glass-card {
+              padding:18px 16px;
+              border-radius:24px;
+            }
+
+            body.purchase-page h1 { font-size:25px; }
+            body.purchase-page .price { font-size:23px; }
+
+            .lottery-board-box {
+              padding:14px;
+              border-radius:18px;
+            }
+
+            .lottery-search {
+              grid-template-columns:1fr 1fr;
+              gap:8px;
+            }
+
+            .lottery-search input { grid-column:1 / -1; }
+
+            .lottery-search button {
+              padding:10px 8px;
+              min-height:46px;
+              font-size:13px;
+            }
+
+            .installment-box { padding:14px; }
+            .pay-button { margin-top:15px; }
 
             .purchase-main-section { grid-column:auto; }
           }
@@ -9802,6 +9957,8 @@ body.purchase-page .glass-card {
           <input type="hidden" name="referral_code" value="${escapeHtml(referralCode)}">
             <div class="form-grid">
 
+              <div class="purchase-main-section purchase-section-title">Tus datos</div>
+
               <div>
                 <label>Nombre completo</label>
                 <input
@@ -9822,9 +9979,10 @@ body.purchase-page .glass-card {
                 >
               </div>
 
-             
+              
               <div class="purchase-main-section">
-                <label>Cantidad de códigos</label>
+                <div class="purchase-section-title">Tu compra</div>
+                <label for="qty">Cantidad de códigos</label>
 
                <input
   type="number"
@@ -9836,14 +9994,9 @@ body.purchase-page .glass-card {
   required
 >
 
-                <div class="info-box">
-                  Compra mínima para esta campaña:
-                  <b>${minimumQty}</b> ${minimumQty === 1 ? "código promocional" : "códigos promocionales"}.
-                </div>
-
-                <div class="rule-box">
-                  <b>Regla de compra:</b><br/>
-                  ${minimumQtyText}
+                <div class="purchase-rule-line">
+                  <span>Compra mínima</span>
+                  <b>${minimumQty} ${minimumQty === 1 ? "código" : "códigos"}</b>
                 </div>
 
                 ${
@@ -9861,21 +10014,20 @@ body.purchase-page .glass-card {
                           `).join("")}
                         </select>
 
-                        <div style="margin-top:10px;color:#d1fae5;font-size:13px;line-height:1.5;">
-                          Esta campaña permite máximo <b>${installmentConfiguration.maximumInstallments} cuotas</b>.
-                          El código se reserva cuando Wompi aprueba la primera cuota.
-                        </div>
-
-                        <a
-                          href="/politica-campanas#pagos-cuotas"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style="display:inline-block;margin-top:11px;color:#bfdbfe;font-size:13px;font-weight:900;"
-                        >
-                          Consulta cómo funciona el pago a cuotas y sus condiciones
-                        </a>
-
                         <div id="installmentPreview" class="installment-preview"></div>
+
+                        <details class="installment-help">
+                          <summary>¿Cómo funcionan las cuotas?</summary>
+                          <p>
+                            Puedes pagar hasta en <b>${installmentConfiguration.maximumInstallments} cuotas</b>.
+                            El número queda reservado cuando Wompi aprueba la primera.
+                          </p>
+                          <a
+                            href="/politica-campanas#pagos-cuotas"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >Ver condiciones completas</a>
+                        </details>
                       </div>
                     `
                     : ""
@@ -9885,11 +10037,10 @@ ${
   isLottery
     ? `
       <div class="lottery-board-box">
-        <h3>Escoge tus números disponibles</h3>
+        <h3>Elige tus números</h3>
 
         <p>
-          Selecciona exactamente la misma cantidad de números que vas a comprar.
-          Los números que ya fueron vendidos no aparecen disponibles.
+          Busca uno específico o deja que el sistema elija por ti.
         </p>
 
         <div class="selected-counter">
@@ -9965,25 +10116,13 @@ ${
           </div>
         </details>
 
-        <div class="small-note">
-  Esta selección manual solo aplica para campañas de lotería.
-  En Baloto los códigos siguen siendo asignados automáticamente.
-</div>
-
-<div style="
-  margin-top:12px;
-  padding:13px;
-  border-radius:16px;
-  background:rgba(245,158,11,.18);
-  border:1px solid rgba(253,230,138,.35);
-  color:#fef3c7;
-  font-size:13px;
-  line-height:1.5;
-">
-  <b>Importante:</b><br/>
-  Los números escogidos quedan reservados temporalmente durante el proceso de pago.
-  La asignación definitiva se confirma únicamente cuando el pago sea aprobado.
-</div>
+        <details class="reservation-details">
+          <summary>¿Cómo se reservan mis números?</summary>
+          <p>
+            Los números elegidos se reservan temporalmente mientras realizas el pago.
+            La asignación definitiva se confirma cuando Wompi aprueba la transacción.
+          </p>
+        </details>
       </div>
     `
     : ""
@@ -9992,16 +10131,7 @@ ${
               </div>
 
             </div>
-<div style="
-  margin-top:18px;
-  padding:15px;
-  border-radius:18px;
-  background:rgba(255,255,255,.11);
-  border:1px solid rgba(255,255,255,.24);
-  color:rgba(255,255,255,.88);
-  line-height:1.5;
-  font-size:14px;
-">
+<div class="terms-box">
   <label style="display:flex;gap:10px;align-items:flex-start;margin:0;">
     <input
       type="checkbox"
@@ -10012,7 +10142,7 @@ ${
     >
 
     <span>
-      Declaro que he leído y acepto los
+      Acepto los
       <a href="/terminos-y-condiciones" target="_blank" style="color:#93c5fd;font-weight:bold;">
         términos y condiciones
       </a>,
@@ -10024,7 +10154,7 @@ ${
       <a href="/politica-campanas" target="_blank" style="color:#93c5fd;font-weight:bold;">
         política de campañas promocionales
       </a>.
-      Autorizo el tratamiento de mis datos personales y el envío de mensajes relacionados con mi orden.
+      También autorizo el tratamiento de mis datos y los mensajes relacionados con esta orden.
     </span>
   </label>
 </div>
@@ -10032,14 +10162,6 @@ ${
               Continuar al pago
             </button>
           </form>
-
-          <div class="small-note">
-            ${
-  isLottery
-    ? "Tus números escogidos quedarán reservados temporalmente mientras completas el pago. La asignación final se confirma después del pago aprobado."
-    : "Tus códigos promocionales se asignan automáticamente después del pago aprobado."
-}
-          </div>
 
           <a class="back" href="/campanas/${encodeURIComponent(campaign.slug || "")}">
             Volver a la campaña
