@@ -9762,21 +9762,68 @@ body.purchase-page .price {
   font-weight:900;
 }
 
-.purchase-rule-line {
+.quantity-control-row {
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  margin-top:10px;
-  padding:11px 13px;
-  border-radius:14px;
-  background:#1e293b;
-  border:1px solid #334155;
-  color:#cbd5e1;
-  font-size:13px;
+  gap:14px;
 }
 
-.purchase-rule-line b { color:#fff; }
+.quantity-control-row label {
+  margin:0;
+  font-size:16px;
+}
+
+.quantity-label-helper {
+  margin-left:4px;
+  color:#94a3b8;
+  font-size:12px;
+  font-weight:700;
+}
+
+.quantity-stepper {
+  display:grid;
+  grid-template-columns:48px 62px 48px;
+  align-items:stretch;
+  flex:0 0 auto;
+  overflow:hidden;
+  border:1px solid #475569;
+  border-radius:999px;
+  background:#1e293b;
+}
+
+.quantity-stepper button {
+  border:0;
+  background:transparent;
+  color:#fff;
+  font-size:26px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.quantity-stepper button:first-child { border-right:1px solid #475569; }
+.quantity-stepper button:last-child { border-left:1px solid #475569; }
+.quantity-stepper button:disabled { opacity:.35;cursor:not-allowed; }
+
+.quantity-stepper input {
+  min-width:0;
+  padding:12px 8px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  text-align:center;
+  font-size:18px;
+  font-weight:900;
+  box-shadow:none;
+}
+
+.quantity-stepper input::-webkit-outer-spin-button,
+.quantity-stepper input::-webkit-inner-spin-button {
+  margin:0;
+  -webkit-appearance:none;
+}
+
+.quantity-stepper input[type=number] { -moz-appearance:textfield; }
 
 .reservation-details {
   margin-top:12px;
@@ -9976,21 +10023,26 @@ body.purchase-page .price {
               
               <div class="purchase-main-section">
                 <div class="purchase-section-title">Tu compra</div>
-                <label for="qty">Cantidad de códigos</label>
+                <div class="quantity-control-row">
+                  <label for="qty">
+                    Cantidad de códigos <span class="quantity-label-helper">(boletas)</span>
+                  </label>
 
-               <input
-  type="number"
-  id="qty"
-  name="qty"
-  min="${minimumQty}"
-  max="${Math.min(20, Number(campaign.available_tickets || 0))}"
-  value="${minimumQty}"
-  required
->
-
-                <div class="purchase-rule-line">
-                  <span>Compra mínima</span>
-                  <b>${minimumQty} ${minimumQty === 1 ? "código" : "códigos"}</b>
+                  <div class="quantity-stepper" aria-label="Selector de cantidad de códigos">
+                    <button type="button" id="decreaseQty" aria-label="Disminuir cantidad">−</button>
+                    <input
+                      type="number"
+                      id="qty"
+                      name="qty"
+                      min="${minimumQty}"
+                      max="${Math.min(20, Number(campaign.available_tickets || 0))}"
+                      value="${minimumQty}"
+                      readonly
+                      required
+                      aria-live="polite"
+                    >
+                    <button type="button" id="increaseQty" aria-label="Aumentar cantidad">＋</button>
+                  </div>
                 </div>
 
                 ${
@@ -10200,6 +10252,40 @@ ${
         '<b>' + formatMoney(item.amount * qty) + '</b>' +
       '</div>';
     }).join("");
+  }
+
+  function syncQuantityButtons() {
+    const qtyInput = document.getElementById("qty");
+    const decreaseButton = document.getElementById("decreaseQty");
+    const increaseButton = document.getElementById("increaseQty");
+
+    if (!qtyInput) return;
+
+    const minimum = Number(qtyInput.min || 1);
+    const maximum = Number(qtyInput.max || minimum);
+    const current = Number(qtyInput.value || minimum);
+
+    if (decreaseButton) decreaseButton.disabled = current <= minimum;
+    if (increaseButton) increaseButton.disabled = current >= maximum;
+  }
+
+  function changeQuantity(delta) {
+    const qtyInput = document.getElementById("qty");
+
+    if (!qtyInput) return;
+
+    const minimum = Number(qtyInput.min || 1);
+    const maximum = Number(qtyInput.max || minimum);
+    const current = Number(qtyInput.value || minimum);
+    const next = Math.min(maximum, Math.max(minimum, current + delta));
+
+    if (next === current) {
+      syncQuantityButtons();
+      return;
+    }
+
+    qtyInput.value = String(next);
+    qtyInput.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function syncSelectedCount(changedCheckbox = null) {
@@ -10446,6 +10532,8 @@ ${
     });
 
     const qtyInput = document.getElementById("qty");
+    const decreaseQtyButton = document.getElementById("decreaseQty");
+    const increaseQtyButton = document.getElementById("increaseQty");
 
     if (qtyInput) {
       qtyInput.addEventListener("change", () => {
@@ -10457,7 +10545,16 @@ ${
         setLotterySearchStatus("");
         syncSelectedCount();
         updateInstallmentPreview();
+        syncQuantityButtons();
       });
+    }
+
+    if (decreaseQtyButton) {
+      decreaseQtyButton.addEventListener("click", () => changeQuantity(-1));
+    }
+
+    if (increaseQtyButton) {
+      increaseQtyButton.addEventListener("click", () => changeQuantity(1));
     }
 
     const installmentSelect = document.getElementById("installmentCount");
@@ -10499,6 +10596,7 @@ ${
 
     syncSelectedCount();
     updateInstallmentPreview();
+    syncQuantityButtons();
   });
 </script>
         
