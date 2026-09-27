@@ -102,6 +102,29 @@ app.use(
   })
 );
 
+const ADMIN_PUBLIC_PATHS = new Set(["/login", "/login/"]);
+
+app.use("/admin", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+
+  if (ADMIN_PUBLIC_PATHS.has(req.path)) {
+    return next();
+  }
+
+  if (req.session?.isAdmin === true) {
+    return next();
+  }
+
+  if (["GET", "HEAD"].includes(req.method)) {
+    return res.redirect("/admin/login");
+  }
+
+  return res.status(401).send(
+    "Sesión administrativa requerida. Inicia sesión nuevamente."
+  );
+});
+
 const CSRF_EXEMPT_PATHS = new Set([
   "/webhooks/wompi",
   "/webhooks/whatsapp",
