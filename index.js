@@ -2448,9 +2448,19 @@ const finalManualCombinations = isManualLottery
     throw new Error("No hay suficientes tickets disponibles");
   }
 
-  const { error: insertError } = await supabase
-  .from("tickets")
-  .insert(assignedTickets);
+  const atomicTicketRows = assignedTickets.map(ticket => ({
+    ticket_code: ticket.ticket_code,
+    combination: ticket.combination
+  }));
+
+  const { error: insertError } = await supabase.rpc(
+    "assign_order_tickets_atomic",
+    {
+      p_order_id: orderData.id,
+      p_tickets: atomicTicketRows,
+      p_ticket_status: ticketStatus
+    }
+  );
 
 if (insertError) {
   if (String(insertError.code) === "23505") {
@@ -5654,7 +5664,15 @@ app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) =>
 
     if (ordersError) throw ordersError;
 
-  const orderIds = (orders || []).map(order => order.id);
+  // El panel operativo no debe mezclar ventas reales con intentos fallidos.
+  // Los registros siguen en la base para conciliacion y auditoria.
+  const visibleOrders = (orders || []).filter(order => {
+    const paymentStatus = String(order.payment_status || "").toLowerCase();
+    return !order.archived_at && !["failed", "abandoned"].includes(paymentStatus);
+  });
+
+  const archivedAttemptCount = Math.max(0, (orders || []).length - visibleOrders.length);
+  const orderIds = visibleOrders.map(order => order.id);
 
 let installmentPlans = [];
 
@@ -5702,8 +5720,8 @@ if (orderIds.length > 0) {
       ["active", "reserved_installment"].includes(String(ticket.status || "active"))
     );
 
-    const paidOrders = (orders || []).filter(order => order.payment_status === "paid");
-    const pendingOrders = (orders || []).filter(order => order.payment_status !== "paid");
+    const paidOrders = visibleOrders.filter(order => order.payment_status === "paid");
+    const pendingOrders = visibleOrders.filter(order => order.payment_status !== "paid");
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -6002,7 +6020,7 @@ if (orderIds.length > 0) {
             <div class="metrics">
               <div class="metric">
                 Órdenes totales
-                <strong>${orders.length}</strong>
+                <strong>${visibleOrders.length}</strong>
               </div>
 
               <div class="metric">
@@ -6020,6 +6038,12 @@ if (orderIds.length > 0) {
                 <strong>${assignedOrReservedTickets.length}</strong>
               </div>
             </div>
+
+            ${archivedAttemptCount > 0 ? `
+              <p style="margin:12px 0 0;color:#94a3b8;font-size:12px;">
+                ${archivedAttemptCount} intento${archivedAttemptCount === 1 ? "" : "s"} no completado${archivedAttemptCount === 1 ? "" : "s"} oculto${archivedAttemptCount === 1 ? "" : "s"} de esta vista operativa.
+              </p>
+            ` : ""}
           </div>
 
           <div class="card">
@@ -6105,8 +6129,8 @@ if (orderIds.length > 0) {
 
               <tbody>
                 ${
-                  orders.length > 0
-                    ? orders.map(order => {
+                  visibleOrders.length > 0
+                    ? visibleOrders.map(order => {
                         const installmentPlan = installmentPlanByOrderId.get(String(order.id));
                         const isInstallmentOrder = order.payment_mode === "installments" || Boolean(installmentPlan);
                         const orderTickets = tickets
@@ -10901,7 +10925,9 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
     const firstPaymentAmount = isInstallmentOrder
       ? Number(installmentSchedule[0]?.amount || 0)
       : subtotal;
-    const totalPaid = isInstallmentOrder ? 0 : subtotal;
+    // Una orden nueva no representa dinero recibido. El valor pagado solo se
+    // registra despues de que Wompi confirme la transaccion.
+    const totalPaid = 0;
     const commission = 0;
 
     const { data: order, error: orderError } = await supabase
@@ -10940,7 +10966,9 @@ if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
     await supabase
       .from("orders")
       .update({
-        payment_status: "failed"
+        payment_status: "failed",
+        archived_at: new Date().toISOString(),
+        archive_reason: "number_reservation_failed"
       })
       .eq("id", order.id);
 
@@ -11097,7 +11125,9 @@ if (activeTicketsCount === 0) {
       total_paid: Number(orderData.subtotal || orderData.total_paid || 0),
       amount_paid: Number(orderData.subtotal || orderData.total_paid || 0),
       balance_due: 0,
-      commission: Math.round(Number(orderData.subtotal || orderData.total_paid || 0) * 0.05)
+      commission: Math.round(Number(orderData.subtotal || orderData.total_paid || 0) * 0.05),
+      archived_at: null,
+      archive_reason: null
     })
     .eq("id", orderId);
 
@@ -11934,10 +11964,12 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
         })
         .eq("id", payment.id);
 
-      await supabase
+await supabase
   .from("orders")
   .update({
-    payment_status: "failed"
+    payment_status: "failed",
+    archived_at: new Date().toISOString(),
+    archive_reason: `wompi_${transactionStatus.toLowerCase()}`
   })
   .eq("id", payment.order_id);
 
