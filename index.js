@@ -15014,6 +15014,32 @@ app.get("/politica-campanas", (req, res) => {
   `);
 });
 
+const STALE_PENDING_ORDER_HOURS = 48;
+let stalePendingCleanupRunning = false;
+
+async function archiveStalePendingOrders() {
+  if (stalePendingCleanupRunning) return;
+  stalePendingCleanupRunning = true;
+
+  try {
+    const { data, error } = await supabase.rpc(
+      "archive_stale_pending_orders",
+      { p_age_hours: STALE_PENDING_ORDER_HOURS }
+    );
+
+    if (error) throw error;
+
+    const archivedCount = Number(data || 0);
+    if (archivedCount > 0) {
+      console.log(
+        `Ordenes pendientes archivadas automaticamente: ${archivedCount}`
+      );
+    }
+  } finally {
+    stalePendingCleanupRunning = false;
+  }
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
@@ -15031,3 +15057,23 @@ setTimeout(() => {
     console.error("Error en verificación inicial de cuotas:", error.message);
   });
 }, 1000 * 60).unref();
+
+const stalePendingOrdersInterval = setInterval(() => {
+  archiveStalePendingOrders().catch(error => {
+    console.error(
+      "Error en archivado automático de órdenes pendientes:",
+      error.message
+    );
+  });
+}, 1000 * 60 * 60);
+
+stalePendingOrdersInterval.unref();
+
+setTimeout(() => {
+  archiveStalePendingOrders().catch(error => {
+    console.error(
+      "Error en verificación inicial de órdenes pendientes:",
+      error.message
+    );
+  });
+}, 1000 * 60 * 2).unref();
