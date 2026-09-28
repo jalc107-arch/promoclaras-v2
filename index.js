@@ -60,9 +60,18 @@ app.get("/google927c009d9a2214fc.html", (req, res) => {
 
 const PgSession = connectPgSimple(session);
 const { Pool } = pg;
+const SESSION_DATABASE_URL = String(
+  process.env.SESSION_DATABASE_URL || process.env.DATABASE_URL || ""
+).trim();
+
+if (!SESSION_DATABASE_URL) {
+  throw new Error(
+    "Configuración incompleta: falta DATABASE_URL o SESSION_DATABASE_URL."
+  );
+}
 
 const sessionPool = new Pool({
-  connectionString: process.env.SESSION_DATABASE_URL || process.env.DATABASE_URL,
+  connectionString: SESSION_DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }
@@ -390,13 +399,14 @@ const WOMPI_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY;
 const ADMIN_PASSWORD_HASH = String(process.env.ADMIN_PASSWORD_HASH || "").trim();
 
 const APP_BASE_URL = String(
-  process.env.APP_BASE_URL || "https://promoclaras.com"
+  process.env.APP_BASE_URL || "https://www.promoclaras.com"
 ).replace(/\/$/, "");
 
 const WHATSAPP_CLOUD_TOKEN = String(process.env.WHATSAPP_CLOUD_TOKEN || "").trim();
 const WHATSAPP_PHONE_NUMBER_ID = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
 const WHATSAPP_BUSINESS_ACCOUNT_ID = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
 const WHATSAPP_APP_SECRET = String(process.env.WHATSAPP_APP_SECRET || "").trim();
+const WHATSAPP_VERIFY_TOKEN = String(process.env.WHATSAPP_VERIFY_TOKEN || "").trim();
 const WHATSAPP_INSTALLMENT_TEMPLATE_NAME = String(
   process.env.WHATSAPP_INSTALLMENT_TEMPLATE_NAME || "recordatorio_cuota"
 ).trim();
@@ -408,6 +418,47 @@ const INSTALLMENT_CRON_SECRET = String(
   process.env.INSTALLMENT_CRON_SECRET || ""
 ).trim();
 
+const REQUIRED_CONFIGURATION = {
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
+  WOMPI_PUBLIC_KEY,
+  WOMPI_INTEGRITY_SECRET,
+  WOMPI_EVENTS_SECRET,
+  WOMPI_PRIVATE_KEY,
+  ADMIN_PASSWORD_HASH,
+  APP_BASE_URL,
+  WHATSAPP_CLOUD_TOKEN,
+  WHATSAPP_PHONE_NUMBER_ID,
+  WHATSAPP_BUSINESS_ACCOUNT_ID,
+  WHATSAPP_APP_SECRET,
+  WHATSAPP_VERIFY_TOKEN,
+  INSTALLMENT_CRON_SECRET
+};
+
+const missingConfiguration = Object.entries(REQUIRED_CONFIGURATION)
+  .filter(([, value]) => !String(value || "").trim())
+  .map(([name]) => name);
+
+if (missingConfiguration.length > 0) {
+  throw new Error(
+    `Configuración incompleta: faltan ${missingConfiguration.join(", ")}.`
+  );
+}
+
+try {
+  const appBaseUrl = new URL(APP_BASE_URL);
+
+  if (process.env.NODE_ENV === "production" && appBaseUrl.protocol !== "https:") {
+    throw new Error("APP_BASE_URL debe utilizar HTTPS en producción.");
+  }
+} catch (error) {
+  if (error?.message === "APP_BASE_URL debe utilizar HTTPS en producción.") {
+    throw error;
+  }
+
+  throw new Error("Configuración inválida: APP_BASE_URL no es una URL válida.");
+}
+
 const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
@@ -417,10 +468,6 @@ if (!ADMIN_PASSWORD_HASH) {
   throw new Error(
     "Seguridad: falta ADMIN_PASSWORD_HASH. El servidor no puede iniciar sin la credencial administrativa protegida."
   );
-}
-
-if (process.env.NODE_ENV === "production" && !WHATSAPP_APP_SECRET) {
-  console.warn("Seguridad: falta WHATSAPP_APP_SECRET; el webhook de WhatsApp rechazará eventos.");
 }
 
 const ORGANIZER_SUPPORT_BUCKET = "organizer-supports";
@@ -14583,8 +14630,6 @@ app.post("/admin/campanas/:rifaId/giro-organizador", async (req, res) => {
     return sendServerError(res, error);
   }
 });
-
-const WHATSAPP_VERIFY_TOKEN = String(process.env.WHATSAPP_VERIFY_TOKEN || "").trim();
 
 function hasValidWhatsAppWebhookSignature(req) {
   if (!WHATSAPP_APP_SECRET || !Buffer.isBuffer(req.rawBody)) {
