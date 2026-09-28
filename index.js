@@ -14717,13 +14717,20 @@ app.get("/webhooks/whatsapp", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
+  const challengeNumber =
+    typeof challenge === "string" && /^\d{1,20}$/.test(challenge)
+      ? Number(challenge)
+      : Number.NaN;
+
   if (
     mode === "subscribe" &&
     WHATSAPP_VERIFY_TOKEN &&
-    safeCompare(token, WHATSAPP_VERIFY_TOKEN)
+    safeCompare(token, WHATSAPP_VERIFY_TOKEN) &&
+    Number.isSafeInteger(challengeNumber) &&
+    challengeNumber >= 0
   ) {
     console.log("Webhook WhatsApp verificado correctamente");
-    return res.status(200).type("text/plain").send(String(challenge || ""));
+    return res.status(200).type("text/plain").send(String(challengeNumber));
   }
 
   console.log("Error verificando webhook WhatsApp");
