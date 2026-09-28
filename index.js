@@ -125,6 +125,44 @@ app.use("/admin", (req, res, next) => {
   );
 });
 
+const ORGANIZER_PUBLIC_PATHS = new Set([
+  "/login",
+  "/login/",
+  "/register",
+  "/register/"
+]);
+
+app.use("/organizers", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+
+  if (ORGANIZER_PUBLIC_PATHS.has(req.path)) {
+    return next();
+  }
+
+  if (req.session?.organizerId) {
+    return next();
+  }
+
+  if (["GET", "HEAD"].includes(req.method)) {
+    return res.redirect("/organizers/login");
+  }
+
+  return res.status(401).send(
+    "Sesión de organizador requerida. Inicia sesión nuevamente."
+  );
+});
+
+app.use("/organizers/:organizerId", (req, res, next) => {
+  if (String(req.session?.organizerId) !== String(req.params.organizerId)) {
+    return res.status(403).send(
+      "Acceso denegado: esta cuenta no puede consultar ni modificar los datos de otro organizador."
+    );
+  }
+
+  return next();
+});
+
 const CSRF_EXEMPT_PATHS = new Set([
   "/webhooks/wompi",
   "/webhooks/whatsapp",
