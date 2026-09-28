@@ -69,6 +69,9 @@ const sessionPool = new Pool({
 });
 
 const SESSION_SECRET = String(process.env.SESSION_SECRET || "").trim();
+const SESSION_COOKIE_NAME = process.env.NODE_ENV === "production"
+  ? "__Host-campaclick.sid"
+  : "campaclick.sid";
 
 if (!SESSION_SECRET) {
   throw new Error(
@@ -78,9 +81,7 @@ if (!SESSION_SECRET) {
 
 app.use(
   session({
-    name: process.env.NODE_ENV === "production"
-      ? "__Host-campaclick.sid"
-      : "campaclick.sid",
+    name: SESSION_COOKIE_NAME,
 
     store: new PgSession({
       pool: sessionPool,
@@ -101,6 +102,32 @@ app.use(
     }
   })
 );
+
+function closeSession(req, res, redirectTo) {
+  const clearSessionCookieAndRedirect = () => {
+    res.clearCookie(SESSION_COOKIE_NAME, {
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax"
+    });
+
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    return res.redirect(303, redirectTo);
+  };
+
+  if (!req.session) {
+    return clearSessionCookieAndRedirect();
+  }
+
+  return req.session.destroy(error => {
+    if (error) {
+      console.error("No se pudo eliminar completamente la sesión:", error);
+    }
+
+    return clearSessionCookieAndRedirect();
+  });
+}
 
 const ADMIN_PUBLIC_PATHS = new Set(["/login", "/login/"]);
 
@@ -4206,10 +4233,8 @@ if (!passwordOk) {
   }
 });
 
-app.get("/organizers/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/organizers/login");
-  });
+app.post("/organizers/logout", (req, res) => {
+  return closeSession(req, res, "/organizers/login");
 });
 
 app.get("/organizers/:organizerId/panel", async (req, res) => {
@@ -5618,12 +5643,14 @@ td a[style*="background:#7c3aed"] {
         Mi verificación
       </a>
 
-      <a
-        href="/organizers/logout"
-        style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-      >
-        Cerrar sesión
-      </a>
+      <form action="/organizers/logout" method="POST" style="margin:0;display:inline;">
+        <button
+          type="submit"
+          style="background:#111827;color:white;border:none;padding:12px 16px;border-radius:12px;font-weight:bold;cursor:pointer;font:inherit;"
+        >
+          Cerrar sesión
+        </button>
+      </form>
     </div>
   </div>
 </div>
@@ -12686,10 +12713,8 @@ app.post("/admin/login", adminLoginLimiter, async (req, res) => {
   return res.redirect("/admin/resultados");
 });
 
-app.get("/admin/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/admin/login");
-  });
+app.post("/admin/logout", (req, res) => {
+  return closeSession(req, res, "/admin/login");
 });
 
 app.get("/admin/organizadores", async (req, res) => {
@@ -12752,11 +12777,13 @@ app.get("/admin/organizadores", async (req, res) => {
                 Campañas
               </a>
 
-              <a
-                href="/admin/logout"
-                style="background:#111827;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;">
-                Cerrar sesión
-              </a>
+              <form action="/admin/logout" method="POST" style="margin:0;display:inline;">
+                <button
+                  type="submit"
+                  style="background:#111827;color:white;border:none;padding:12px 16px;border-radius:12px;font-weight:bold;cursor:pointer;font:inherit;">
+                  Cerrar sesión
+                </button>
+              </form>
             </div>
           </div>
 
@@ -13409,12 +13436,12 @@ const adminCampaignRows = (campaigns || []).map(c => {
         <title>Resultados Admin</title>
         <style>
           *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f3f6fb;color:#111827}
-          .page{max-width:1440px;margin:0 auto;padding:32px 22px 56px}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.topbar h1{margin:0 0 6px;font-size:30px}.subtitle{margin:0;color:#64748b}.nav{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.nav a,.primary-link{color:#fff;text-decoration:none;padding:11px 15px;border-radius:11px;font-weight:800;font-size:14px}.nav-blue{background:#2563eb}.nav-green{background:#16a34a}.nav-violet{background:#7c3aed}.nav-dark,.primary-link{background:#111827}
+          .page{max-width:1440px;margin:0 auto;padding:32px 22px 56px}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}.topbar h1{margin:0 0 6px;font-size:30px}.subtitle{margin:0;color:#64748b}.nav{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.nav a,.nav button,.primary-link{color:#fff;text-decoration:none;padding:11px 15px;border-radius:11px;font-weight:800;font-size:14px}.nav-blue{background:#2563eb}.nav-green{background:#16a34a}.nav-violet{background:#7c3aed}.nav-dark,.primary-link{background:#111827}
           .summary-grid,.money-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary-grid{margin-bottom:24px}.summary-card,.metric{border:1px solid #e2e8f0;border-radius:16px;padding:16px;background:#fff}.summary-card span,.metric span{display:block;font-size:13px;font-weight:800;color:#475569}.summary-card strong,.metric strong{display:block;font-size:25px;margin-top:7px}.summary-card small,.metric small{display:block;color:#64748b;margin-top:5px;line-height:1.35}.blue{background:#eff6ff;border-color:#bfdbfe}.green{background:#f0fdf4;border-color:#bbf7d0}.amber{background:#fff7ed;border-color:#fed7aa}.violet{background:#f5f3ff;border-color:#ddd6fe}
           .campaign-list{display:grid;gap:13px}.campaign-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:18px 22px;box-shadow:0 8px 24px rgba(15,23,42,.06);transition:border-color .2s,box-shadow .2s}.campaign-card.is-open{border-color:#bfdbfe;box-shadow:0 12px 32px rgba(37,99,235,.10)}.campaign-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0}.campaign-card.is-open .campaign-head{margin-bottom:17px}.campaign-head h2{margin:3px 0 8px;font-size:22px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:900;color:#64748b}.status-row,.compact-finance{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.status-pill{background:#dcfce7;color:#166534;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900}.muted{font-size:13px;color:#64748b}.compact-finance{margin-top:10px;color:#475569;font-size:12px}.compact-finance span{padding-right:9px;border-right:1px solid #cbd5e1}.compact-finance span:last-child{border-right:0}.campaign-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.toggle-campaign{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #2563eb;background:#eff6ff;color:#1d4ed8;padding:10px 14px;border-radius:11px;font-weight:900;font-size:14px;cursor:pointer}.toggle-campaign:hover{background:#dbeafe}.chevron{font-size:18px;line-height:1;transition:transform .2s}.toggle-campaign[aria-expanded="true"] .chevron{transform:rotate(180deg)}.campaign-content[hidden]{display:none}.money-grid{margin-bottom:18px}.metric{padding:14px}.metric strong{font-size:21px}
           .campaign-body{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px}.details-panel,.actions-panel{border:1px solid #e2e8f0;border-radius:15px;padding:16px;background:#f8fafc}.details-panel h3,.actions-panel h3{margin:0 0 13px;font-size:15px}.detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 15px}.detail-grid div{min-width:0}.detail-grid dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:900;margin-bottom:4px}.detail-grid dd{margin:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}.detail-grid small{display:block;color:#64748b;font-weight:500;margin-top:3px}.settlement-box{background:#fff;border:1px solid #e2e8f0;border-radius:13px;padding:12px}.settlement-box>div{display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:13px}.settlement-box .subtotal{border-top:1px solid #e2e8f0;margin-top:5px;padding-top:10px}.settlement-box .total{border-top:1px solid #cbd5e1;margin-top:5px;padding-top:10px;font-size:15px}.projection-note{font-size:12px;color:#64748b;line-height:1.45;margin:10px 2px 0}.action-stack{display:flex;flex-direction:column;gap:8px}.action-stack form{margin:0}.empty{background:#fff;border:1px dashed #cbd5e1;border-radius:16px;padding:30px;text-align:center;color:#64748b}
           @media(max-width:1050px){.summary-grid,.money-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-body{grid-template-columns:1fr}.actions-panel{order:-1}.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-          @media(max-width:700px){.page{padding:20px 12px 40px}.topbar{flex-direction:column}.nav{justify-content:flex-start}.nav a{flex:1;text-align:center}.summary-grid,.money-grid,.detail-grid{grid-template-columns:1fr}.campaign-card{padding:15px}.campaign-head{flex-direction:column}.campaign-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.toggle-campaign,.primary-link{width:100%;text-align:center}.compact-finance{align-items:flex-start;flex-direction:column;gap:4px}.compact-finance span{border-right:0;padding-right:0}.topbar h1{font-size:25px}}
+          @media(max-width:700px){.page{padding:20px 12px 40px}.topbar{flex-direction:column}.nav{justify-content:flex-start}.nav a,.nav button{flex:1;text-align:center}.summary-grid,.money-grid,.detail-grid{grid-template-columns:1fr}.campaign-card{padding:15px}.campaign-head{flex-direction:column}.campaign-head-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.toggle-campaign,.primary-link{width:100%;text-align:center}.compact-finance{align-items:flex-start;flex-direction:column;gap:4px}.compact-finance span{border-right:0;padding-right:0}.topbar h1{font-size:25px}}
         </style>
       </head>
 
@@ -13429,7 +13456,9 @@ const adminCampaignRows = (campaigns || []).map(c => {
               <a class="nav-blue" href="/admin/organizadores">Organizadores</a>
               <a class="nav-green" href="/admin/resultados-pendientes">Resultados pendientes</a>
               <a class="nav-violet" href="/admin/resultados/masivo">Carga masiva</a>
-              <a class="nav-dark" href="/admin/logout">Cerrar sesión</a>
+              <form action="/admin/logout" method="POST" style="margin:0;display:inline;">
+                <button class="nav-dark" type="submit" style="border:none;cursor:pointer;font:inherit;">Cerrar sesión</button>
+              </form>
             </nav>
           </header>
 
