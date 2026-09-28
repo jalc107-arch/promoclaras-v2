@@ -69,13 +69,15 @@ const sessionPool = new Pool({
 });
 
 const SESSION_SECRET = String(process.env.SESSION_SECRET || "").trim();
+const SESSION_TTL_SECONDS = 4 * 60 * 60;
+const SESSION_COOKIE_MAX_AGE_MS = SESSION_TTL_SECONDS * 1000;
 const SESSION_COOKIE_NAME = process.env.NODE_ENV === "production"
   ? "__Host-campaclick.sid"
   : "campaclick.sid";
 
-if (!SESSION_SECRET) {
+if (SESSION_SECRET.length < 32) {
   throw new Error(
-    "Falta SESSION_SECRET. La aplicación no puede iniciar sin un secreto de sesión seguro."
+    "SESSION_SECRET debe contener al menos 32 caracteres aleatorios. La aplicación no puede iniciar con un secreto débil."
   );
 }
 
@@ -86,7 +88,9 @@ app.use(
     store: new PgSession({
       pool: sessionPool,
       tableName: "user_sessions",
-      createTableIfMissing: true
+      createTableIfMissing: true,
+      ttl: SESSION_TTL_SECONDS,
+      pruneSessionInterval: 15 * 60
     }),
 
     secret: SESSION_SECRET,
@@ -98,7 +102,7 @@ app.use(
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 4
+      maxAge: SESSION_COOKIE_MAX_AGE_MS
     }
   })
 );
