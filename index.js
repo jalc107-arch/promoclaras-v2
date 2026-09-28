@@ -47,7 +47,15 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
-app.get("/campaclick-share.jpg", (req, res) => {
+const publicAssetLimiter = rateLimit({
+  windowMs: 1000 * 60 * 5,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiadas solicitudes del recurso. Intenta nuevamente más tarde."
+});
+
+app.get("/campaclick-share.jpg", publicAssetLimiter, (req, res) => {
   res.sendFile(path.join(__dirname, "campaclick-share.jpg"));
 });
 
@@ -623,6 +631,47 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function isValidEmailAddress(value) {
+  const email = String(value || "");
+
+  if (!email || email.length > 254) {
+    return false;
+  }
+
+  const atIndex = email.indexOf("@");
+
+  if (
+    atIndex <= 0 ||
+    atIndex !== email.lastIndexOf("@") ||
+    atIndex > 64 ||
+    [...email].some(character => " \t\r\n".includes(character))
+  ) {
+    return false;
+  }
+
+  const localPart = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+  const domainLabels = domain.split(".");
+
+  if (
+    !localPart ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(localPart) ||
+    domain.length < 3 ||
+    domain.length > 253 ||
+    domainLabels.length < 2
+  ) {
+    return false;
+  }
+
+  return domainLabels.every(label =>
+    label.length > 0 &&
+    label.length <= 63 &&
+    !label.startsWith("-") &&
+    !label.endsWith("-") &&
+    /^[A-Za-z0-9-]+$/.test(label)
+  );
 }
 
 function safeHttpUrl(value) {
@@ -3912,7 +3961,7 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
       return res.status(400).send("Faltan campos obligatorios");
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmailAddress(email)) {
       return res.status(400).send("El correo electrónico no es válido.");
     }
 
@@ -6953,9 +7002,9 @@ app.post("/organizers/:organizerId/campanas/:rifaId/referidos", async (req, res)
 
     if (insertError) {
       return res.status(400).send(`
-        No fue posible crear el referido. Puede que el código "${referralCode}" ya exista para esta campaña.
+        No fue posible crear el referido. Puede que el código "${escapeHtml(referralCode)}" ya exista para esta campaña.
         <br/><br/>
-        <a href="/organizers/${organizerId}/campanas/${rifaId}/referidos">Volver</a>
+        <a href="/organizers/${escapeHtml(encodeURIComponent(String(organizerId || "")))}/campanas/${escapeHtml(encodeURIComponent(String(rifaId || "")))}/referidos">Volver</a>
       `);
     }
 
@@ -7315,7 +7364,7 @@ if (!finalIdFrontUrl || !finalIdBackUrl || !finalSelfieIdUrl) {
         <br/>
 
         <a
-          href="/organizers/${organizerId}/verificacion"
+          href="/organizers/${escapeHtml(encodeURIComponent(String(organizerId || "")))}/verificacion"
           style="display:inline-block;margin-top:22px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Volver a completar verificación
         </a>
@@ -7713,11 +7762,11 @@ if (referralRequiredApprovedOrders > 50) {
         <h1>Fecha de sorteo inválida</h1>
 
         <p style="line-height:1.6;color:#374151;">
-          ${dateError.message}
+          ${escapeHtml(dateError?.message || "Fecha de sorteo inválida.")}
         </p>
 
         <a
-          href="/organizers/${organizerId}/campanas/nueva"
+          href="/organizers/${escapeHtml(encodeURIComponent(String(organizerId || "")))}/campanas/nueva"
           style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Volver a crear campaña
         </a>
@@ -7745,7 +7794,7 @@ if (referralRequiredApprovedOrders > 50) {
         </p>
 
         <a
-          href="/organizers/${organizerId}/campanas/nueva"
+          href="/organizers/${escapeHtml(encodeURIComponent(String(organizerId || "")))}/campanas/nueva"
           style="display:inline-block;margin-top:18px;padding:14px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
           Volver a crear campaña
         </a>
@@ -11608,7 +11657,25 @@ if (wompiTransactionId && payment.status !== "approved") {
     ? "https://sandbox.wompi.co/v1"
     : "https://production.wompi.co/v1";
 
-  const wompiResponse = await fetch(`${wompiBaseUrl}/transactions/${wompiTransactionId}`, {
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(wompiTransactionId)) {
+    return res.status(400).send("El identificador de la transacción no es válido.");
+  }
+
+  const wompiEndpoint = new URL(
+    `/v1/transactions/${encodeURIComponent(wompiTransactionId)}`,
+    wompiBaseUrl
+  );
+
+  const allowedWompiOrigins = new Set([
+    "https://sandbox.wompi.co",
+    "https://production.wompi.co"
+  ]);
+
+  if (!allowedWompiOrigins.has(wompiEndpoint.origin)) {
+    return res.status(400).send("El destino de verificación de la transacción no es válido.");
+  }
+
+  const wompiResponse = await fetch(wompiEndpoint.toString(), {
     headers: {
       Authorization: `Bearer ${WOMPI_PRIVATE_KEY}`
     }
@@ -13935,7 +14002,7 @@ app.post("/admin/resultados/masivo", async (req, res) => {
           <h1>Resultado masivo cargado</h1>
 
           <div style="margin-bottom:18px;padding:14px;background:#ecfdf5;border:1px solid #86efac;border-radius:12px;color:#166534;font-weight:bold;">
-            Se procesaron ${processed.length} campañas de ${getDrawProviderLabel(drawProvider)} con fecha ${drawDate}.
+            Se procesaron ${processed.length} campañas de ${escapeHtml(getDrawProviderLabel(drawProvider))} con fecha ${escapeHtml(drawDate)}.
           </div>
 
           <table style="width:100%;border-collapse:collapse;">
@@ -13952,15 +14019,15 @@ app.post("/admin/resultados/masivo", async (req, res) => {
               ${processed.map(item => `
                 <tr>
                   <td style="padding:12px;border-bottom:1px solid #eee;font-weight:bold;">
-                    ${item.title}
+                    ${escapeHtml(item.title)}
                   </td>
 
                   <td style="padding:12px;border-bottom:1px solid #eee;">
-                    ${item.mode}
+                    ${escapeHtml(item.mode)}
                   </td>
 
                   <td style="padding:12px;border-bottom:1px solid #eee;">
-                    ${item.resultValue}
+                    ${escapeHtml(item.resultValue)}
                   </td>
 
                   <td style="padding:12px;border-bottom:1px solid #eee;">
@@ -14656,7 +14723,7 @@ app.get("/webhooks/whatsapp", (req, res) => {
     safeCompare(token, WHATSAPP_VERIFY_TOKEN)
   ) {
     console.log("Webhook WhatsApp verificado correctamente");
-    return res.status(200).send(challenge);
+    return res.status(200).type("text/plain").send(String(challenge || ""));
   }
 
   console.log("Error verificando webhook WhatsApp");
