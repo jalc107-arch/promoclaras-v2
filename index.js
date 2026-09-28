@@ -11601,7 +11601,7 @@ if (transactionCurrency !== "COP") {
 }
   
   if (transactionStatus === "APPROVED") {
-  const { error: paymentUpdateError } = await supabase
+  const { data: claimedPayment, error: paymentUpdateError } = await supabase
     .from("payments")
     .update({
       status: "approved",
@@ -11609,7 +11609,10 @@ if (transactionCurrency !== "COP") {
       provider_transaction_id: wompiTransactionId,
       platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
     })
-    .eq("id", payment.id);
+    .eq("id", payment.id)
+    .neq("status", "approved")
+    .select("id")
+    .maybeSingle();
 
   if (paymentUpdateError) {
     console.error(
@@ -11618,6 +11621,10 @@ if (transactionCurrency !== "COP") {
     );
 
     throw paymentUpdateError;
+  }
+
+  if (!claimedPayment) {
+    return res.redirect(buildPublicOrderPath(orderId));
   }
 
   await finalizePaidOrder(orderId);
@@ -11833,6 +11840,8 @@ text-align:center;
   }
 });
 
+const wompiWebhookPaymentsInFlight = new Set();
+
 app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
   try {
     const payload = req.body || {};
@@ -11850,8 +11859,31 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
     }
 
     const properties = Array.isArray(signature.properties) ? signature.properties : [];
-    const expectedChecksum = String(signature.checksum || "").toLowerCase();
+    const bodyChecksum = String(signature.checksum || "").trim().toLowerCase();
+    const headerChecksum = String(req.get("X-Event-Checksum") || "").trim().toLowerCase();
+    const expectedChecksum = headerChecksum || bodyChecksum;
     const timestamp = String(payload.timestamp || "").trim();
+
+    if (
+      properties.length === 0 ||
+      properties.some(property => !String(property || "").trim()) ||
+      !/^\d+$/.test(timestamp) ||
+      !/^[a-f0-9]{64}$/.test(expectedChecksum) ||
+      (headerChecksum && bodyChecksum && !safeCompare(headerChecksum, bodyChecksum))
+    ) {
+      return res.status(401).send("Firma inválida");
+    }
+
+    const expectedEnvironment = WOMPI_PUBLIC_KEY?.startsWith("pub_test_") ? "test" : "prod";
+    const eventEnvironment = String(payload.environment || "").trim().toLowerCase();
+
+    if (eventEnvironment !== expectedEnvironment) {
+      console.log("Ambiente Wompi no coincide", {
+        eventEnvironment,
+        expectedEnvironment
+      });
+      return res.status(401).send("Ambiente Wompi no válido");
+    }
 
     const getValue = (base, property) => {
       const path = String(property || "").split(".");
@@ -11869,7 +11901,6 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
     };
 
     const valuesFromData = properties.map((p) => getValue(data, p)).join("");
-    const valuesFromPayload = properties.map((p) => getValue(payload, p)).join("");
 
     const checksumFromData = crypto
       .createHash("sha256")
@@ -11877,15 +11908,7 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
       .digest("hex")
       .toLowerCase();
 
-    const checksumFromPayload = crypto
-      .createHash("sha256")
-      .update(`${valuesFromPayload}${timestamp}${WOMPI_EVENTS_SECRET}`)
-      .digest("hex")
-      .toLowerCase();
-
-    const validSignature =
-      safeCompare(checksumFromData, expectedChecksum) ||
-      safeCompare(checksumFromPayload, expectedChecksum);
+    const validSignature = safeCompare(checksumFromData, expectedChecksum);
 
     if (!validSignature) {
       console.log("Firma Wompi inválida");
@@ -11919,6 +11942,15 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
       return res.status(200).send("Pago no encontrado");
     }
 
+    if (wompiWebhookPaymentsInFlight.has(payment.id)) {
+      return res.status(200).send("Evento de pago ya está siendo procesado");
+    }
+
+    wompiWebhookPaymentsInFlight.add(payment.id);
+    const releasePaymentLock = () => wompiWebhookPaymentsInFlight.delete(payment.id);
+    res.once("finish", releasePaymentLock);
+    res.once("close", releasePaymentLock);
+
     const expectedAmountInCents = Math.round(Number(payment.amount || 0) * 100);
 
     if (transactionAmountInCents !== expectedAmountInCents) {
@@ -11947,7 +11979,7 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
       }
 
       if (transactionStatus === "APPROVED") {
-        const { error: installmentPaymentUpdateError } = await supabase
+        const { data: claimedInstallmentPayment, error: installmentPaymentUpdateError } = await supabase
           .from("payments")
           .update({
             status: "approved",
@@ -11955,9 +11987,16 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
             provider_transaction_id: transactionId,
             platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
           })
-          .eq("id", payment.id);
+          .eq("id", payment.id)
+          .neq("status", "approved")
+          .select("id")
+          .maybeSingle();
 
         if (installmentPaymentUpdateError) throw installmentPaymentUpdateError;
+
+        if (!claimedInstallmentPayment) {
+          return res.status(200).send("Cuota ya está siendo procesada");
+        }
 
         await processApprovedInstallmentPayment({
           ...payment,
@@ -11996,15 +12035,17 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
     if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
       console.log("Pago ya aprobado. Se valida consistencia sin degradar:", reference);
 
-      await finalizePaidOrder(payment.order_id);
-      await sendOrderCouponsWhatsApp(payment.order_id);
-      await processReferralReward(payment.order_id);
+      if (payment.orders?.payment_status !== "paid") {
+        await finalizePaidOrder(payment.order_id);
+        await sendOrderCouponsWhatsApp(payment.order_id);
+        await processReferralReward(payment.order_id);
+      }
 
       return res.status(200).send("Pago ya aprobado");
     }
 
     if (transactionStatus === "APPROVED") {
-      const { error: updatePaymentError } = await supabase
+      const { data: claimedPayment, error: updatePaymentError } = await supabase
         .from("payments")
         .update({
           status: "approved",
@@ -12012,9 +12053,16 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
           provider_transaction_id: transactionId,
           platform_fee: Math.round(Number(payment.amount || 0) * 0.05)
         })
-        .eq("id", payment.id);
+        .eq("id", payment.id)
+        .neq("status", "approved")
+        .select("id")
+        .maybeSingle();
 
       if (updatePaymentError) throw updatePaymentError;
+
+      if (!claimedPayment) {
+        return res.status(200).send("Pago ya está siendo procesado");
+      }
 
       await finalizePaidOrder(payment.order_id);
       await sendOrderCouponsWhatsApp(payment.order_id);
