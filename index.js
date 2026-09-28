@@ -154,6 +154,12 @@ app.use("/organizers", (req, res, next) => {
 });
 
 app.use("/organizers/:organizerId", (req, res, next) => {
+  const organizerRouteSegment = String(req.params.organizerId || "");
+
+  if (["login", "register", "logout"].includes(organizerRouteSegment)) {
+    return next();
+  }
+
   if (String(req.session?.organizerId) !== String(req.params.organizerId)) {
     return res.status(403).send(
       "Acceso denegado: esta cuenta no puede consultar ni modificar los datos de otro organizador."
