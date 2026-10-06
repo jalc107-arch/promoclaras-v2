@@ -10,6 +10,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
 import connectPgSimple from "connect-pg-simple";
+import {
+  createCampaignAvailabilityService
+} from "./services/campaignAvailabilityService.js";
+import { createPromotionalContentService } from "./services/promotionalContentService.js";
+import { registerOrganizerPromotionalContentRoutes } from "./routes/organizerPromotionalContent.js";
 
 const app = express();
 
@@ -479,6 +484,18 @@ const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
 );
+
+const campaignAvailabilityService = createCampaignAvailabilityService({
+  supabase
+});
+
+const promotionalContentService = createPromotionalContentService({
+  availabilityService: campaignAvailabilityService,
+  appBaseUrl: APP_BASE_URL,
+  getProviderLabel: getDrawProviderLabel,
+  getModeLabel: getDrawModeLabel,
+  getInstallmentConfiguration: getCampaignInstallmentConfiguration
+});
 
 if (!ADMIN_PASSWORD_HASH) {
   throw new Error(
@@ -4990,6 +5007,7 @@ ${baseUrl}/campanas/${c.slug}`
             <a class="org-button green-btn" href="/campanas/${encodeURIComponent(c.slug || "")}">Ver campaña</a>
             ${c.status === "active" ? `<a class="org-button whatsapp-btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${shareText}">Compartir por WhatsApp</a>` : ""}
             <a class="org-button violet-btn" href="/organizers/${organizer.id}/campanas/${c.id}/referidos">Referidos</a>
+            ${isLotteryCampaign(c) ? `<a class="org-button blue-btn" href="/organizers/${organizer.id}/campanas/${c.id}/contenido-promocional">Cuadrículas disponibles</a>` : ""}
             <a class="org-button dark-btn" href="/organizers/${organizer.id}/campanas/${c.id}/detalle">Órdenes y códigos</a>
             ${c.status === "active" ? `<a class="org-button" style="background:#d97706;color:white;" href="/organizers/${organizer.id}/campanas/${c.id}/venta-credito">Nueva venta a crédito</a>` : ""}
             ${c.status === "active" ? `
@@ -5897,6 +5915,13 @@ document.querySelectorAll('.org-toggle').forEach(function(button) {
   }
 });
 
+registerOrganizerPromotionalContentRoutes({
+  app,
+  supabase,
+  promotionalContentService,
+  sendServerError
+});
+
 app.get("/organizers/:organizerId/campanas/:rifaId/detalle", async (req, res) => {
   try {
     const { organizerId, rifaId } = req.params;
@@ -6297,6 +6322,12 @@ if (orderIds.length > 0) {
               <a class="btn btn-blue" href="/campanas/${encodeURIComponent(campaign.slug || "")}" target="_blank">
                 Ver campaña pública
               </a>
+
+              ${isLotteryCampaign(campaign) ? `
+                <a class="btn btn-blue" href="/organizers/${organizer.id}/campanas/${campaign.id}/contenido-promocional">
+                  Cuadrículas disponibles
+                </a>
+              ` : ""}
 
               <a class="btn btn-green" href="/resultado/${campaign.id}" target="_blank">
                 Ver resultado
