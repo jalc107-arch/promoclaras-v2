@@ -6785,6 +6785,27 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     const suggestedDueDate = endOfMonth > cutoffDate ? cutoffDate : endOfMonth;
     const lotteryDigits = getLotteryDigitsByDrawMode(campaign.draw_mode);
+    let availableCreditLotteryNumbers = [];
+
+    if (isLotteryCampaign(campaign)) {
+      const existingTickets = await fetchAllSupabaseRows((from, to) =>
+        supabase
+          .from("tickets")
+          .select("combination")
+          .eq("rifa_id", campaign.id)
+          .in("status", ["active", "reserved_installment"])
+          .range(from, to)
+      );
+      const reservedNumbers = await getReservedLotteryNumbers(campaign.id);
+      const unavailableSet = new Set([
+        ...(existingTickets || []).map(ticket => String(ticket.combination || "")),
+        ...reservedNumbers
+      ]);
+
+      availableCreditLotteryNumbers = getAllLotteryNumbersByDrawMode(
+        campaign.draw_mode
+      ).filter(number => !unavailableSet.has(number));
+    }
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -6796,7 +6817,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <title>Nueva venta a crédito - CampaClick</title>
         <style>
-          *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#111827;padding:24px}.wrap{max-width:820px;margin:auto}.card{background:#fff;border-radius:22px;padding:26px;box-shadow:0 14px 40px rgba(15,23,42,.10)}h1{margin:0 0 8px}.subtitle{color:#64748b;line-height:1.5;margin:0 0 22px}.notice{padding:14px;border-radius:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;line-height:1.5;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{margin-bottom:15px}.field.full{grid-column:1/-1}label{display:block;font-weight:800;margin-bottom:7px;font-size:14px}input,select{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;background:#fff}small{display:block;color:#64748b;line-height:1.45;margin-top:6px}.availability-actions{display:flex;gap:9px;margin-top:10px}.availability-button{border:0;border-radius:11px;background:#2563eb;color:#fff;padding:12px 15px;font-weight:900;cursor:pointer}.availability-button:disabled{opacity:.6;cursor:wait}.availability-results{display:none;margin-top:10px;padding:13px;border-radius:12px;border:1px solid #cbd5e1;background:#f8fafc}.availability-results.show{display:block}.availability-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.availability-chip{display:inline-flex;padding:7px 10px;border-radius:999px;font-weight:900;font-size:13px}.availability-chip.available{background:#dcfce7;color:#166534;border:1px solid #86efac}.availability-chip.unavailable{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.availability-message{font-size:13px;font-weight:800;line-height:1.45}.check{display:flex;align-items:flex-start;gap:10px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:13px}.check input{width:auto;margin-top:3px}.check label{margin:0;line-height:1.45}.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.button,.back{padding:14px 18px;border-radius:12px;font-weight:900;text-decoration:none;text-align:center}.button{border:0;background:#d97706;color:#fff;cursor:pointer;flex:1}.back{background:#111827;color:#fff}.summary{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:13px;margin-bottom:18px;line-height:1.6}@media(max-width:650px){body{padding:12px}.card{padding:20px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{display:grid}.button,.back{width:100%}.availability-actions{display:grid}.availability-button{width:100%}}
+          *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#111827;padding:24px}.wrap{max-width:820px;margin:auto}.card{background:#fff;border-radius:22px;padding:26px;box-shadow:0 14px 40px rgba(15,23,42,.10)}h1{margin:0 0 8px}.subtitle{color:#64748b;line-height:1.5;margin:0 0 22px}.notice{padding:14px;border-radius:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;line-height:1.5;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{margin-bottom:15px}.field.full{grid-column:1/-1}label{display:block;font-weight:800;margin-bottom:7px;font-size:14px}input,select{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;background:#fff}small{display:block;color:#64748b;line-height:1.45;margin-top:6px}.availability-actions{display:flex;gap:9px;margin-top:10px;flex-wrap:wrap}.availability-button{border:0;border-radius:11px;background:#2563eb;color:#fff;padding:12px 15px;font-weight:900;cursor:pointer}.availability-button.random{background:#d97706}.availability-button:disabled{opacity:.6;cursor:wait}.availability-results{display:none;margin-top:10px;padding:13px;border-radius:12px;border:1px solid #cbd5e1;background:#f8fafc}.availability-results.show{display:block}.availability-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.availability-chip{display:inline-flex;padding:7px 10px;border-radius:999px;font-weight:900;font-size:13px}.availability-chip.available{background:#dcfce7;color:#166534;border:1px solid #86efac}.availability-chip.unavailable{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.availability-message{font-size:13px;font-weight:800;line-height:1.45}.number-board-details{margin-top:12px;border:1px solid #bfdbfe;border-radius:14px;background:#eff6ff;overflow:hidden}.number-board-details summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;color:#1e3a8a;font-weight:900;cursor:pointer;list-style:none}.number-board-details summary::-webkit-details-marker{display:none}.number-board-details summary::after{content:'＋';font-size:20px}.number-board-details[open] summary::after{content:'−'}.number-board-help{padding:0 14px 10px;color:#475569;font-size:12px}.credit-number-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;max-height:360px;overflow-y:auto;padding:10px 12px 14px}.credit-number-option{cursor:pointer}.credit-number-option input{display:none}.credit-number-option span{display:block;padding:10px 7px;border-radius:11px;text-align:center;font-weight:900;background:#fff;color:#1e3a8a;border:1px solid #bfdbfe}.credit-number-option input:checked+span{background:linear-gradient(135deg,#16a34a,#2563eb);color:#fff;border-color:#166534;transform:scale(1.03)}.check{display:flex;align-items:flex-start;gap:10px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:13px}.check input{width:auto;margin-top:3px}.check label{margin:0;line-height:1.45}.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.button,.back{padding:14px 18px;border-radius:12px;font-weight:900;text-decoration:none;text-align:center}.button{border:0;background:#d97706;color:#fff;cursor:pointer;flex:1}.back{background:#111827;color:#fff}.summary{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:13px;margin-bottom:18px;line-height:1.6}@media(max-width:650px){body{padding:12px}.card{padding:20px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{display:grid}.button,.back{width:100%}.availability-actions{display:grid}.availability-button{width:100%}}
         </style>
       </head>
       <body>
@@ -6841,8 +6862,21 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
                     <small>Escribe uno o varios números separados por coma. Cada número debe tener ${lotteryDigits} cifras.</small>
                     <div class="availability-actions">
                       <button id="checkNumbersButton" class="availability-button" type="button">Verificar disponibilidad</button>
+                      <button id="randomNumbersButton" class="availability-button random" type="button">Elegir al azar</button>
                     </div>
                     <div id="availabilityResults" class="availability-results" aria-live="polite"></div>
+                    <details class="number-board-details">
+                      <summary>Ver números disponibles (${availableCreditLotteryNumbers.length})</summary>
+                      <div class="number-board-help">Selecciona directamente uno o varios números. La cantidad de códigos se actualizará automáticamente.</div>
+                      <div id="creditNumberBoard" class="credit-number-board">
+                        ${availableCreditLotteryNumbers.map(number => `
+                          <label class="credit-number-option">
+                            <input type="checkbox" data-number="${number}" value="${number}">
+                            <span>${number}</span>
+                          </label>
+                        `).join("")}
+                      </div>
+                    </details>
                   </div>
                 ` : `
                   <div class="field full">
@@ -6888,8 +6922,12 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
             (function () {
               const input = document.getElementById("selectedNumbersInput");
               const button = document.getElementById("checkNumbersButton");
+              const randomButton = document.getElementById("randomNumbersButton");
               const resultsBox = document.getElementById("availabilityResults");
               const qtyInput = document.querySelector('input[name="qty"]');
+              const boardInputs = Array.from(
+                document.querySelectorAll('#creditNumberBoard input[data-number]')
+              );
               let lastVerifiedValue = "";
 
               function escapeText(value) {
@@ -6906,11 +6944,96 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
                 resultsBox.innerHTML = '<div class="availability-message" style="color:' + (isError ? '#991b1b' : '#334155') + ';">' + escapeText(message) + '</div>';
               }
 
+              function clearVerification() {
+                lastVerifiedValue = "";
+                resultsBox.classList.remove("show");
+                resultsBox.innerHTML = "";
+              }
+
+              function syncSelectionFromBoard() {
+                const selected = boardInputs
+                  .filter(boardInput => boardInput.checked)
+                  .map(boardInput => boardInput.dataset.number);
+
+                input.value = selected.join(", ");
+
+                if (qtyInput) {
+                  qtyInput.value = String(Math.max(1, selected.length));
+                }
+
+                clearVerification();
+              }
+
+              function secureRandomIndex(maximum) {
+                if (!window.crypto || !window.crypto.getRandomValues) {
+                  return Math.floor(Math.random() * maximum);
+                }
+
+                const range = 0x100000000;
+                const limit = range - (range % maximum);
+                const values = new Uint32Array(1);
+                let value;
+
+                do {
+                  window.crypto.getRandomValues(values);
+                  value = values[0];
+                } while (value >= limit);
+
+                return value % maximum;
+              }
+
               input.addEventListener("input", function () {
                 if (input.value.trim() !== lastVerifiedValue) {
-                  resultsBox.classList.remove("show");
-                  resultsBox.innerHTML = "";
+                  boardInputs.forEach(boardInput => {
+                    boardInput.checked = false;
+                  });
+                  clearVerification();
                 }
+              });
+
+              boardInputs.forEach(boardInput => {
+                boardInput.addEventListener("change", function () {
+                  const selectedCount = boardInputs.filter(item => item.checked).length;
+
+                  if (selectedCount > 20) {
+                    boardInput.checked = false;
+                    showMessage("Puedes seleccionar máximo 20 números por venta.", true);
+                    return;
+                  }
+
+                  syncSelectionFromBoard();
+                });
+              });
+
+              randomButton.addEventListener("click", function () {
+                const requestedQuantity = Number(qtyInput?.value || 1);
+
+                if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1 || requestedQuantity > 20) {
+                  showMessage("Escribe una cantidad entre 1 y 20 antes de elegir al azar.", true);
+                  return;
+                }
+
+                if (boardInputs.length < requestedQuantity) {
+                  showMessage("No hay suficientes números disponibles para esa cantidad.", true);
+                  return;
+                }
+
+                const shuffled = [...boardInputs];
+
+                for (let index = shuffled.length - 1; index > 0; index--) {
+                  const randomIndex = secureRandomIndex(index + 1);
+                  [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+                }
+
+                boardInputs.forEach(boardInput => {
+                  boardInput.checked = false;
+                });
+                shuffled.slice(0, requestedQuantity).forEach(boardInput => {
+                  boardInput.checked = true;
+                });
+
+                syncSelectionFromBoard();
+                button.click();
               });
 
               button.addEventListener("click", async function () {
@@ -6930,20 +7053,36 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
                     headers: { Accept: "application/json" },
                     credentials: "same-origin"
                   });
-                  const payload = await response.json();
+                  const payload = await response.json().catch(() => null);
+
+                  if (!payload) {
+                    throw new Error("La sesión pudo haber vencido. Recarga la página e inicia sesión nuevamente.");
+                  }
 
                   if (!response.ok) {
                     throw new Error(payload.error || "No fue posible verificar los números.");
                   }
 
-                  lastVerifiedValue = rawNumbers;
-
-                  if (qtyInput && payload.results.length <= 20) {
-                    qtyInput.value = String(payload.results.length);
-                  }
-
                   const availableCount = payload.results.filter(item => item.available).length;
                   const allAvailable = availableCount === payload.results.length && payload.capacity_available;
+
+                  boardInputs.forEach(boardInput => {
+                    boardInput.checked = payload.results.some(
+                      item => item.available && item.number === boardInput.dataset.number
+                    );
+                  });
+
+                  if (allAvailable) {
+                    input.value = payload.results.map(item => item.number).join(", ");
+                    lastVerifiedValue = input.value.trim();
+
+                    if (qtyInput && payload.results.length <= 20) {
+                      qtyInput.value = String(payload.results.length);
+                    }
+                  } else {
+                    lastVerifiedValue = rawNumbers;
+                  }
+
                   const message = allAvailable
                     ? "Todos los números están disponibles. La cantidad de códigos se ajustó automáticamente."
                     : "Uno o varios números no están disponibles. Corrige la selección antes de crear la venta.";
