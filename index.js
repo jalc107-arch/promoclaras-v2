@@ -387,6 +387,14 @@ const purchaseLimiter = rateLimit({
   message: "Demasiados intentos de compra. Espera 15 minutos e intenta nuevamente."
 });
 
+const organizerCreditSaleLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Demasiadas ventas a crédito creadas en poco tiempo. Espera unos minutos e intenta nuevamente."
+});
+
 const webhookLimiter = rateLimit({
   windowMs: 1000 * 60,
   limit: 240,
@@ -1088,6 +1096,73 @@ function buildInstallmentSchedule(campaign, installmentCount, qty) {
 
   return amounts.map((amount, index) => {
     const dueDate = selectedDates[index];
+    const graceDeadline = new Date(dueDate);
+    graceDeadline.setDate(graceDeadline.getDate() + 5);
+
+    return {
+      installmentNumber: index + 1,
+      amount,
+      dueDate: formatDateOnly(dueDate),
+      graceDeadline: formatDateOnly(graceDeadline)
+    };
+  });
+}
+
+function buildOrganizerCreditSchedule(campaign, installmentCount, qty, firstDueDateValue) {
+  const count = Number(installmentCount || 1);
+  const quantity = Number(qty || 1);
+  const firstDueDateText = String(firstDueDateValue || "").trim();
+  const firstDueDate = parseLocalDate(firstDueDateText);
+  const today = getTodayInBogota();
+  const cutoffDate = getInstallmentCutoffDate(campaign?.draw_date);
+  const financialMaximum = getFinancialMaxInstallmentsPerTicket(
+    campaign?.price_per_ticket
+  );
+
+  if (!Number.isInteger(count) || count < 1 || count > financialMaximum) {
+    throw new Error("La cantidad de pagos seleccionada no está disponible para el valor de esta campaña.");
+  }
+
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+    throw new Error("La cantidad de códigos debe estar entre 1 y 20.");
+  }
+
+  const strictDateParts = firstDueDateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (
+    !firstDueDate ||
+    Number.isNaN(firstDueDate.getTime()) ||
+    !strictDateParts ||
+    firstDueDate.getFullYear() !== Number(strictDateParts[1]) ||
+    firstDueDate.getMonth() !== Number(strictDateParts[2]) - 1 ||
+    firstDueDate.getDate() !== Number(strictDateParts[3])
+  ) {
+    throw new Error("La fecha del primer pago no es válida.");
+  }
+
+  firstDueDate.setHours(0, 0, 0, 0);
+
+  if (firstDueDate < today) {
+    throw new Error("La fecha del primer pago no puede ser anterior a hoy.");
+  }
+
+  if (!cutoffDate || firstDueDate > cutoffDate) {
+    throw new Error("El primer pago debe vencer como máximo un mes antes del sorteo.");
+  }
+
+  const amounts = distributeInstallmentAmounts(
+    campaign.price_per_ticket,
+    count,
+    quantity
+  );
+
+  return amounts.map((amount, index) => {
+    const dueDate = addMonthsClamped(firstDueDate, index);
+
+    if (dueDate > cutoffDate) {
+      throw new Error("La cantidad de pagos no cabe antes de la fecha límite de la campaña.");
+    }
+
     const graceDeadline = new Date(dueDate);
     graceDeadline.setDate(graceDeadline.getDate() + 5);
 
@@ -2781,7 +2856,7 @@ async function releaseLotteryReservationsForOrder(orderId) {
       status: "released"
     })
     .eq("order_id", orderId)
-    .eq("status", "reserved");
+    .in("status", ["reserved", "completed"]);
 
   if (error) {
     console.error("Error liberando reservas de orden:", error);
@@ -5917,6 +5992,8 @@ if (orderIds.length > 0) {
 
     const paidOrders = visibleOrders.filter(order => order.payment_status === "paid");
     const pendingOrders = visibleOrders.filter(order => order.payment_status !== "paid");
+    const creditCreated = req.query.credit_created === "1";
+    const creditWhatsappSent = req.query.whatsapp === "1";
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -6001,6 +6078,10 @@ if (orderIds.length > 0) {
 
           .btn-green {
             background: #16a34a;
+          }
+
+          .btn-amber {
+            background: #d97706;
           }
 
           .metrics {
@@ -6210,6 +6291,12 @@ if (orderIds.length > 0) {
               <a class="btn btn-green" href="/resultado/${campaign.id}" target="_blank">
                 Ver resultado
               </a>
+
+              ${campaign.status === "active" ? `
+                <a class="btn btn-amber" href="/organizers/${organizer.id}/campanas/${campaign.id}/venta-credito">
+                  Nueva venta a crédito
+                </a>
+              ` : ""}
             </div>
 
             <div class="metrics">
@@ -6240,6 +6327,18 @@ if (orderIds.length > 0) {
               </p>
             ` : ""}
           </div>
+
+          ${creditCreated ? `
+            <div class="card" style="border-color:${creditWhatsappSent ? "rgba(134,239,172,.55)" : "rgba(253,230,138,.55)"};">
+              <h2 style="margin-bottom:8px;">Venta a crédito creada</h2>
+              <p class="subtitle" style="margin:0;">
+                Los códigos quedaron reservados y el plan de pago está activo.
+                ${creditWhatsappSent
+                  ? "El enlace de pago fue enviado al comprador por WhatsApp."
+                  : "No fue posible confirmar el envío por WhatsApp; puedes abrir el plan desde la tabla y compartir su enlace manualmente."}
+              </p>
+            </div>
+          ` : ""}
 
           <div class="card">
             <h2>Órdenes y códigos de esta campaña</h2>
@@ -6315,6 +6414,7 @@ if (orderIds.length > 0) {
                   <th>Cantidad</th>
                   <th>Total</th>
                   <th>Pago</th>
+                  <th>Origen</th>
                   <th>WhatsApp</th>
                   <th>Fecha</th>
                   <th>Códigos asignados</th>
@@ -6363,6 +6463,9 @@ const paymentStatusText = order.payment_status === "paid"
         : order.payment_status === "failed"
           ? "Fallido"
           : String(order.payment_status || "Pendiente");
+const orderSourceText = order.order_source === "organizer_credit"
+  ? "Crédito organizador"
+  : "Venta pública";
 
                         return `
   <tr
@@ -6399,6 +6502,12 @@ const paymentStatusText = order.payment_status === "paid"
                             <td>
                               <span class="badge ${order.payment_status === "paid" ? "approved" : "pending"}">
                                 ${escapeHtml(paymentStatusText)}
+                              </span>
+                            </td>
+
+                            <td>
+                              <span class="badge ${order.order_source === "organizer_credit" ? "pending" : "approved"}">
+                                ${escapeHtml(orderSourceText)}
                               </span>
                             </td>
 
@@ -6477,13 +6586,20 @@ const paymentStatusText = order.payment_status === "paid"
                                   `
                                   : isInstallmentOrder && installmentPlan?.public_token
                                     ? `
-                                      <a
-                                        href="/cuotas/${encodeURIComponent(installmentPlan.public_token)}"
-                                        target="_blank"
-                                        style="display:inline-block;padding:9px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;font-size:13px;white-space:nowrap;"
-                                      >
-                                        Ver plan de cuotas
-                                      </a>
+                                      <div style="display:grid;gap:7px;">
+                                        <a
+                                          href="/cuotas/${encodeURIComponent(installmentPlan.public_token)}"
+                                          target="_blank"
+                                          style="display:inline-block;padding:9px 12px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold;font-size:13px;white-space:nowrap;text-align:center;"
+                                        >
+                                          Ver plan de cuotas
+                                        </a>
+                                        <form method="POST" action="/organizers/${organizer.id}/ordenes/${order.id}/reenviar-plan">
+                                          <button type="submit" style="width:100%;padding:9px 12px;background:#d97706;color:white;border:0;border-radius:10px;font-weight:bold;font-size:13px;cursor:pointer;white-space:nowrap;">
+                                            Reenviar enlace
+                                          </button>
+                                        </form>
+                                      </div>
                                     `
                                   : `
                                     <span style="color:#9ca3af;font-size:12px;">
@@ -6497,7 +6613,7 @@ const paymentStatusText = order.payment_status === "paid"
                       }).join("")
                     : `
                       <tr>
-                        <td colspan="9" style="padding:18px;text-align:center;color:#cbd5e1;">
+                        <td colspan="10" style="padding:18px;text-align:center;color:#cbd5e1;">
                           Esta campaña aún no tiene órdenes registradas.
                         </td>
                       </tr>
@@ -6603,6 +6719,561 @@ const paymentStatusText = order.payment_status === "paid"
     `);
   } catch (error) {
     return sendServerError(res, error);
+  }
+});
+
+app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError || !organizer) {
+      return res.status(404).send("Organizador no encontrado.");
+    }
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("*")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).send("Campaña no encontrada.");
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para crear ventas en esta campaña.");
+    }
+
+    if (campaign.status !== "active") {
+      return res.status(400).send("Solo puedes crear ventas a crédito en campañas activas.");
+    }
+
+    const today = getTodayInBogota();
+    const cutoffDate = getInstallmentCutoffDate(campaign.draw_date);
+
+    if (!cutoffDate || cutoffDate < today) {
+      return res.status(400).send("Ya no hay tiempo disponible para crear un crédito antes del sorteo.");
+    }
+
+    const financialMaximum = getFinancialMaxInstallmentsPerTicket(
+      campaign.price_per_ticket
+    );
+    const availableDates = getAvailableInstallmentDates(
+      campaign.draw_date,
+      financialMaximum
+    );
+    const maximumInstallments = Math.max(
+      1,
+      Math.min(financialMaximum, availableDates.length)
+    );
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const suggestedDueDate = endOfMonth > cutoffDate ? cutoffDate : endOfMonth;
+    const lotteryDigits = getLotteryDigitsByDrawMode(campaign.draw_mode);
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>Nueva venta a crédito - CampaClick</title>
+        <style>
+          *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#111827;padding:24px}.wrap{max-width:820px;margin:auto}.card{background:#fff;border-radius:22px;padding:26px;box-shadow:0 14px 40px rgba(15,23,42,.10)}h1{margin:0 0 8px}.subtitle{color:#64748b;line-height:1.5;margin:0 0 22px}.notice{padding:14px;border-radius:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;line-height:1.5;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{margin-bottom:15px}.field.full{grid-column:1/-1}label{display:block;font-weight:800;margin-bottom:7px;font-size:14px}input,select{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;background:#fff}small{display:block;color:#64748b;line-height:1.45;margin-top:6px}.check{display:flex;align-items:flex-start;gap:10px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:13px}.check input{width:auto;margin-top:3px}.check label{margin:0;line-height:1.45}.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.button,.back{padding:14px 18px;border-radius:12px;font-weight:900;text-decoration:none;text-align:center}.button{border:0;background:#d97706;color:#fff;cursor:pointer;flex:1}.back{background:#111827;color:#fff}.summary{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:13px;margin-bottom:18px;line-height:1.6}@media(max-width:650px){body{padding:12px}.card{padding:20px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{display:grid}.button,.back{width:100%}}
+        </style>
+      </head>
+      <body>
+        <main class="wrap">
+          <section class="card">
+            <h1>Nueva venta a crédito</h1>
+            <p class="subtitle">Crea una orden autorizada por ti, reserva los códigos inmediatamente y envía al comprador su enlace de pago por WhatsApp.</p>
+
+            <div class="summary">
+              <b>${escapeHtml(campaign.title)}</b><br/>
+              Valor por código: ${moneyCOP(campaign.price_per_ticket)} · Disponibles: ${Number(campaign.available_tickets || 0)}<br/>
+              Fecha límite del último pago: ${escapeHtml(formatDateOnly(cutoffDate))}
+            </div>
+
+            <div class="notice">
+              Los códigos quedarán reservados sin pago inicial. Si una cuota no se paga, habrá cinco días calendario de gracia; después se liberarán automáticamente.
+            </div>
+
+            <form method="POST" action="/organizers/${organizer.id}/campanas/${campaign.id}/venta-credito">
+              <div class="grid">
+                <div class="field">
+                  <label>Nombre del comprador</label>
+                  <input type="text" name="buyer_name" maxlength="120" required>
+                </div>
+                <div class="field">
+                  <label>Teléfono de WhatsApp</label>
+                  <input type="tel" name="buyer_phone" inputmode="numeric" placeholder="3001234567" maxlength="18" required>
+                </div>
+                <div class="field">
+                  <label>Correo electrónico (opcional)</label>
+                  <input type="email" name="buyer_email" maxlength="254">
+                </div>
+                <div class="field">
+                  <label>Cantidad de códigos</label>
+                  <input type="number" name="qty" min="1" max="20" value="1" required>
+                </div>
+
+                ${isLotteryCampaign(campaign) ? `
+                  <div class="field full">
+                    <label>Números escogidos</label>
+                    <input type="text" name="selected_numbers" required placeholder="Ejemplo: ${lotteryDigits === 2 ? "07, 25" : lotteryDigits === 3 ? "007, 125" : "0007, 8125"}">
+                    <small>Escribe exactamente un número por cada código, separados por coma. Cada número debe tener ${lotteryDigits} cifras. El sistema verificará que sigan disponibles.</small>
+                  </div>
+                ` : `
+                  <div class="field full">
+                    <label>Combinaciones Baloto</label>
+                    <div style="padding:13px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;color:#166534;">
+                      Se generarán automáticamente y quedarán reservadas al crear la venta.
+                    </div>
+                  </div>
+                `}
+
+                <div class="field">
+                  <label>Número de pagos</label>
+                  <select name="installment_count" required>
+                    ${Array.from({ length: maximumInstallments }, (_, index) => index + 1).map(count => `
+                      <option value="${count}">${count === 1 ? "1 pago futuro" : `${count} cuotas mensuales`}</option>
+                    `).join("")}
+                  </select>
+                  <small>Máximo disponible para esta campaña: ${maximumInstallments}.</small>
+                </div>
+                <div class="field">
+                  <label>Fecha del primer pago</label>
+                  <input type="date" name="first_due_date" min="${formatDateOnly(today)}" max="${formatDateOnly(cutoffDate)}" value="${formatDateOnly(suggestedDueDate)}" required>
+                  <small>Las cuotas siguientes vencerán cada mes en el mismo día, ajustado al último día del mes cuando corresponda.</small>
+                </div>
+
+                <div class="field full">
+                  <div class="check">
+                    <input id="authorization" type="checkbox" name="customer_authorization_confirmed" value="true" required>
+                    <label for="authorization">Confirmo que el comprador autorizó esta orden, el tratamiento de sus datos y el envío de mensajes operativos por WhatsApp.</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="actions">
+                <a class="back" href="/organizers/${organizer.id}/campanas/${campaign.id}/detalle">Cancelar</a>
+                <button class="button" type="submit" onclick="return confirm('¿Crear esta venta a crédito y reservar los códigos ahora?');">Crear crédito y enviar enlace</button>
+              </div>
+            </form>
+          </section>
+        </main>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    return sendServerError(res, error, "Error mostrando venta a crédito");
+  }
+});
+
+app.post(
+  "/organizers/:organizerId/campanas/:rifaId/venta-credito",
+  organizerCreditSaleLimiter,
+  async (req, res) => {
+    let createdOrder = null;
+    let createdCampaign = null;
+
+    try {
+      const { organizerId, rifaId } = req.params;
+      const buyerName = String(req.body.buyer_name || "").trim();
+      const cleanBuyerPhone = String(req.body.buyer_phone || "").replace(/\D/g, "");
+      const buyerEmail = String(req.body.buyer_email || "").trim().toLowerCase();
+      const qty = Number(req.body.qty || 0);
+      const installmentCount = Number(req.body.installment_count || 1);
+      const firstDueDate = String(req.body.first_due_date || "").trim();
+      const authorizationConfirmed = req.body.customer_authorization_confirmed === "true";
+
+      if (!buyerName || buyerName.length > 120) {
+        return res.status(400).send("El nombre del comprador no es válido.");
+      }
+
+      if (cleanBuyerPhone.length < 10 || cleanBuyerPhone.length > 15) {
+        return res.status(400).send("El teléfono del comprador no es válido.");
+      }
+
+      if (buyerEmail && !isValidEmailAddress(buyerEmail)) {
+        return res.status(400).send("El correo electrónico no es válido.");
+      }
+
+      if (!authorizationConfirmed) {
+        return res.status(400).send("Debes confirmar la autorización del comprador.");
+      }
+
+      if (!Number.isInteger(qty) || qty < 1 || qty > 20) {
+        return res.status(400).send("La cantidad de códigos debe estar entre 1 y 20.");
+      }
+
+      const { data: organizer, error: organizerError } = await supabase
+        .from("organizers")
+        .select("*")
+        .eq("id", organizerId)
+        .single();
+
+      if (organizerError || !organizer) {
+        return res.status(404).send("Organizador no encontrado.");
+      }
+
+      const { data: campaign, error: campaignError } = await supabase
+        .from("rifas")
+        .select("*")
+        .eq("id", rifaId)
+        .single();
+
+      if (campaignError || !campaign) {
+        return res.status(404).send("Campaña no encontrada.");
+      }
+
+      createdCampaign = campaign;
+
+      if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+        return res.status(403).send("No tienes permiso para crear ventas en esta campaña.");
+      }
+
+      if (campaign.status !== "active") {
+        return res.status(400).send("Solo puedes crear ventas a crédito en campañas activas.");
+      }
+
+      if (qty > Number(campaign.available_tickets || 0)) {
+        return res.status(400).send("No hay suficientes códigos disponibles para esta venta.");
+      }
+
+      let selectedNumbers = [];
+
+      if (isLotteryCampaign(campaign)) {
+        selectedNumbers = String(req.body.selected_numbers || "")
+          .split(/[\s,;]+/)
+          .map(value => value.trim())
+          .filter(Boolean);
+
+        try {
+          selectedNumbers = validateManualLotterySelection(
+            campaign.draw_mode,
+            selectedNumbers,
+            qty
+          );
+        } catch (selectionError) {
+          return res.status(400).send(selectionError.message);
+        }
+
+        const { data: usedTickets, error: usedTicketsError } = await supabase
+          .from("tickets")
+          .select("combination")
+          .eq("rifa_id", campaign.id)
+          .in("status", ["active", "reserved_installment"])
+          .in("combination", selectedNumbers);
+
+        if (usedTicketsError) throw usedTicketsError;
+
+        const temporarilyReservedNumbers = new Set(
+          await getReservedLotteryNumbers(campaign.id)
+        );
+        const unavailableNumbers = new Set([
+          ...(usedTickets || []).map(ticket => String(ticket.combination || "")),
+          ...selectedNumbers.filter(number => temporarilyReservedNumbers.has(number))
+        ]);
+
+        if (unavailableNumbers.size > 0) {
+          return res.status(409).send(
+            `Los siguientes números ya no están disponibles: ${[...unavailableNumbers].join(", ")}`
+          );
+        }
+      }
+
+      let schedule;
+
+      try {
+        schedule = buildOrganizerCreditSchedule(
+          campaign,
+          installmentCount,
+          qty,
+          firstDueDate
+        );
+      } catch (scheduleError) {
+        return res.status(400).send(scheduleError.message);
+      }
+
+      let buyer = null;
+      const { data: existingBuyer, error: existingBuyerError } = await supabase
+        .from("buyers")
+        .select("*")
+        .eq("phone", cleanBuyerPhone)
+        .maybeSingle();
+
+      if (existingBuyerError) throw existingBuyerError;
+
+      if (existingBuyer) {
+        buyer = existingBuyer;
+      } else {
+        const { data: newBuyer, error: newBuyerError } = await supabase
+          .from("buyers")
+          .insert({
+            full_name: buyerName,
+            phone: cleanBuyerPhone,
+            email: buyerEmail || null
+          })
+          .select()
+          .single();
+
+        if (newBuyerError) throw newBuyerError;
+        buyer = newBuyer;
+      }
+
+      const subtotal = qty * Number(campaign.price_per_ticket || 0);
+      const authorizationAt = new Date().toISOString();
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          rifa_id: campaign.id,
+          buyer_id: buyer.id,
+          qty,
+          subtotal,
+          total_paid: 0,
+          amount_paid: 0,
+          balance_due: subtotal,
+          commission: 0,
+          payment_status: "partially_paid",
+          payment_mode: "installments",
+          installment_count: installmentCount,
+          selected_numbers: selectedNumbers.length > 0 ? selectedNumbers : null,
+          order_source: "organizer_credit",
+          created_by_organizer_id: organizer.id,
+          customer_authorization_confirmed: true,
+          customer_authorization_at: authorizationAt
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+      createdOrder = order;
+
+      if (isLotteryCampaign(campaign) && selectedNumbers.length > 0) {
+        await reserveLotteryNumbersForOrder({
+          rifaId: campaign.id,
+          orderId: order.id,
+          phone: cleanBuyerPhone,
+          selectedNumbers
+        });
+      }
+
+      const finalInstallment = schedule[schedule.length - 1];
+      const { data: plan, error: planError } = await supabase
+        .from("installment_plans")
+        .insert({
+          order_id: order.id,
+          total_amount: subtotal,
+          installment_count: installmentCount,
+          paid_installments: 0,
+          amount_paid: 0,
+          balance_due: subtotal,
+          status: "active",
+          final_due_date: finalInstallment.dueDate,
+          grace_days: 5
+        })
+        .select()
+        .single();
+
+      if (planError) throw planError;
+
+      const { data: schedules, error: schedulesError } = await supabase
+        .from("installment_schedules")
+        .insert(schedule.map(item => ({
+          plan_id: plan.id,
+          order_id: order.id,
+          installment_number: item.installmentNumber,
+          amount: item.amount,
+          due_date: item.dueDate,
+          grace_deadline: item.graceDeadline,
+          status: "pending"
+        })))
+        .select();
+
+      if (schedulesError) throw schedulesError;
+
+      await assignTicketsToOrder(order.id, [], "reserved_installment");
+      await markLotteryReservationsAsCompleted(order.id);
+      await reconcileCampaignCounters(campaign.id);
+
+      const firstInstallment = (schedules || []).find(
+        item => Number(item.installment_number) === 1
+      );
+
+      if (!firstInstallment) {
+        throw new Error("No fue posible crear el primer pago del crédito.");
+      }
+
+      await ensurePendingPaymentForInstallment(firstInstallment);
+
+      const codeLabels = await getReservedCodeLabelsForOrder(order.id);
+      const codeNotice = getReservedCodesNotice(
+        { ...order, rifas: campaign },
+        codeLabels
+      );
+      const whatsappResult = await sendWhatsAppInstallmentTemplate({
+        phone: cleanBuyerPhone,
+        buyerName,
+        campaignName: campaign.title,
+        installmentLabel: installmentCount === 1
+          ? "Pago único"
+          : `Cuota 1 de ${installmentCount}`,
+        amount: firstInstallment.amount,
+        dueDate: firstInstallment.due_date,
+        paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
+        notice: `${codeNotice} Venta a crédito autorizada por el organizador. Después del vencimiento tienes cinco días calendario de gracia.`
+      });
+
+      if (whatsappResult.ok) {
+        await supabase
+          .from("orders")
+          .update({ whatsapp_sent: true })
+          .eq("id", order.id);
+      }
+
+      return res.redirect(
+        303,
+        `/organizers/${organizer.id}/campanas/${campaign.id}/detalle?credit_created=1&whatsapp=${whatsappResult.ok ? "1" : "0"}`
+      );
+    } catch (error) {
+      if (createdOrder) {
+        try {
+          const failedAt = new Date().toISOString();
+
+          await supabase
+            .from("tickets")
+            .update({ status: "released" })
+            .eq("order_id", createdOrder.id)
+            .eq("status", "reserved_installment");
+
+          await releaseLotteryReservationsForOrder(createdOrder.id);
+
+          await supabase
+            .from("installment_schedules")
+            .update({ status: "defaulted", updated_at: failedAt })
+            .eq("order_id", createdOrder.id)
+            .in("status", ["pending", "overdue"]);
+
+          await supabase
+            .from("installment_plans")
+            .update({ status: "cancelled", updated_at: failedAt })
+            .eq("order_id", createdOrder.id);
+
+          await supabase
+            .from("orders")
+            .update({
+              payment_status: "failed",
+              archived_at: failedAt,
+              archive_reason: "organizer_credit_creation_failed"
+            })
+            .eq("id", createdOrder.id);
+
+          if (createdCampaign?.id) {
+            await reconcileCampaignCounters(createdCampaign.id);
+          }
+        } catch (cleanupError) {
+          console.error("No se pudo limpiar completamente el crédito fallido:", cleanupError);
+        }
+      }
+
+      return sendServerError(res, error, "Error creando venta a crédito del organizador");
+    }
+  }
+);
+
+app.post("/organizers/:organizerId/ordenes/:orderId/reenviar-plan", async (req, res) => {
+  try {
+    const { organizerId, orderId } = req.params;
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("*")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError || !organizer) {
+      return res.status(404).send("Organizador no encontrado.");
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("*, buyers(*), rifas(*)")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) {
+      return res.status(404).send("Orden no encontrada.");
+    }
+
+    if (String(order.rifas?.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).send("No tienes permiso para gestionar esta orden.");
+    }
+
+    const { data: plan, error: planError } = await supabase
+      .from("installment_plans")
+      .select("*")
+      .eq("order_id", order.id)
+      .maybeSingle();
+
+    if (planError) throw planError;
+
+    if (!plan || !["pending_first", "active"].includes(plan.status)) {
+      return res.status(400).send("Esta orden no tiene un plan pendiente de pago.");
+    }
+
+    const { data: nextInstallment, error: installmentError } = await supabase
+      .from("installment_schedules")
+      .select("*")
+      .eq("plan_id", plan.id)
+      .in("status", ["pending", "overdue"])
+      .order("installment_number", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (installmentError) throw installmentError;
+
+    if (!nextInstallment) {
+      return res.status(400).send("No hay pagos pendientes en este plan.");
+    }
+
+    await ensurePendingPaymentForInstallment(nextInstallment);
+
+    const codeLabels = await getReservedCodeLabelsForOrder(order.id);
+    const codeNotice = getReservedCodesNotice(order, codeLabels);
+    const result = await sendWhatsAppInstallmentTemplate({
+      phone: order.buyers?.phone,
+      buyerName: order.buyers?.full_name,
+      campaignName: order.rifas?.title,
+      installmentLabel: Number(plan.installment_count) === 1
+        ? "Pago único"
+        : `Cuota ${nextInstallment.installment_number} de ${plan.installment_count}`,
+      amount: nextInstallment.amount,
+      dueDate: nextInstallment.due_date,
+      paymentUrl: `${APP_BASE_URL}/cuotas/${plan.public_token}`,
+      notice: `${codeNotice} Después del vencimiento tienes cinco días calendario de gracia.`
+    });
+
+    if (result.ok) {
+      await supabase
+        .from("orders")
+        .update({ whatsapp_sent: true })
+        .eq("id", order.id);
+    }
+
+    return res.redirect(
+      303,
+      `/organizers/${organizer.id}/campanas/${order.rifa_id}/detalle?credit_created=1&whatsapp=${result.ok ? "1" : "0"}`
+    );
+  } catch (error) {
+    return sendServerError(res, error, "Error reenviando enlace de pago");
   }
 });
 
@@ -15024,6 +15695,10 @@ app.get("/terminos-y-condiciones", (req, res) => {
       El número de lotería o combinación automática de Baloto se reservará después de aprobarse la primera cuota. Si una cuota vence, el participante tendrá cinco días calendario de gracia. Vencido ese término sin pago, el código podrá liberarse y el valor pagado quedará registrado como saldo a favor, sin perjuicio de las reglas legales aplicables a devoluciones, retractos, reversión de pagos o cancelación de la campaña.
     </p>
 
+    <p>
+      Cuando el comprador lo autorice expresamente, el organizador podrá registrar desde su panel una venta a crédito y reservar los códigos antes del primer pago. El comprador recibirá por WhatsApp el detalle operativo y el enlace para pagar. A estas ventas también les aplica el plazo de cinco días calendario de gracia y la liberación de códigos por incumplimiento.
+    </p>
+
     <h2>13. Contacto</h2>
     <p>
       Para solicitudes, inquietudes o reclamaciones, el usuario podrá comunicarse con CampaClick a través de los canales publicados en la plataforma.
@@ -15078,6 +15753,10 @@ app.get("/politica-privacidad", (req, res) => {
     <h2>4. WhatsApp y comunicaciones</h2>
     <p>
       Al participar o registrarse, el usuario autoriza recibir mensajes relacionados con su orden, códigos promocionales, estado de campaña, resultados, verificación o soporte operativo.
+    </p>
+
+    <p>
+      Si el comprador solicita al organizador una venta a crédito, el organizador registrará la confirmación de esa autorización y podrá suministrar a CampaClick el nombre, teléfono, correo opcional, códigos escogidos y condiciones de pago necesarios para crear y administrar la orden.
     </p>
 
     <h2>5. Conservación de la información</h2>
@@ -15209,6 +15888,10 @@ app.get("/politica-campanas", (req, res) => {
 
     <p>
       CampaClick registra una comisión del 5% sobre el valor de cada transacción aprobada. Cuando el comprador solicite voluntariamente una devolución en dinero y esta sea aceptada, podrán descontarse esa comisión y los costos efectivamente cobrados por la pasarela de pago, salvo que una norma obligatoria exija una devolución completa.
+    </p>
+
+    <p>
+      Con autorización del comprador, el organizador propietario de la campaña podrá crear una venta a crédito desde su panel. En ese caso, los códigos quedarán reservados desde la creación de la orden, el comprador recibirá su enlace de pago por WhatsApp y el plan estará sujeto a los mismos vencimientos, cinco días de gracia y reglas de liberación por incumplimiento.
     </p>
 
     <div style="margin-top:26px;">
