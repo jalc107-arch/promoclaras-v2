@@ -4851,6 +4851,15 @@ Los códigos promocionales se asignan automáticamente después del pago aprobad
   Ver órdenes y códigos
 </a>
 
+${c.status === "active" ? `
+  <a
+    href="/organizers/${organizer.id}/campanas/${c.id}/venta-credito"
+    style="display:block;padding:10px 12px;background:#d97706;color:white;text-decoration:none;border-radius:10px;font-weight:900;font-size:13px;margin-top:7px;text-align:center;"
+  >
+    Nueva venta a crédito
+  </a>
+` : ""}
+
 ${
   c.status === "active"
     ? `
@@ -4982,6 +4991,7 @@ ${baseUrl}/campanas/${c.slug}`
             ${c.status === "active" ? `<a class="org-button whatsapp-btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${shareText}">Compartir por WhatsApp</a>` : ""}
             <a class="org-button violet-btn" href="/organizers/${organizer.id}/campanas/${c.id}/referidos">Referidos</a>
             <a class="org-button dark-btn" href="/organizers/${organizer.id}/campanas/${c.id}/detalle">Órdenes y códigos</a>
+            ${c.status === "active" ? `<a class="org-button" style="background:#d97706;color:white;" href="/organizers/${organizer.id}/campanas/${c.id}/venta-credito">Nueva venta a crédito</a>` : ""}
             ${c.status === "active" ? `
               <form method="POST" action="/organizers/${organizer.id}/campanas/${c.id}/visibilidad">
                 <input type="hidden" name="is_public" value="${c.is_public ? "false" : "true"}">
