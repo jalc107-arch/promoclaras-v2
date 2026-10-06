@@ -48,7 +48,7 @@ function prizeText(model) {
 
 function infographicTitle(value) {
   return String(value || "")
-    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[\p{Extended_Pictographic}\p{So}\uFFFD]/gu, "")
     .replace(/[\uFE0E\uFE0F\u200D]/g, "")
     .replace(/\s+/g, " ")
     .trim()
