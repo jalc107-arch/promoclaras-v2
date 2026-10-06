@@ -48,8 +48,8 @@ function prizeText(model) {
 
 function infographicTitle(value) {
   return String(value || "")
-    .replace(/[\p{Extended_Pictographic}\p{So}\uFFFD]/gu, "")
-    .replace(/[\uFE0E\uFE0F\u200D]/g, "")
+    .normalize("NFC")
+    .replace(/[^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñÀÈÌÒÙàèìòùÇç $&'().,#%+\-/]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
