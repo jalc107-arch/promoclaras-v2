@@ -6796,7 +6796,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <title>Nueva venta a crédito - CampaClick</title>
         <style>
-          *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#111827;padding:24px}.wrap{max-width:820px;margin:auto}.card{background:#fff;border-radius:22px;padding:26px;box-shadow:0 14px 40px rgba(15,23,42,.10)}h1{margin:0 0 8px}.subtitle{color:#64748b;line-height:1.5;margin:0 0 22px}.notice{padding:14px;border-radius:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;line-height:1.5;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{margin-bottom:15px}.field.full{grid-column:1/-1}label{display:block;font-weight:800;margin-bottom:7px;font-size:14px}input,select{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;background:#fff}small{display:block;color:#64748b;line-height:1.45;margin-top:6px}.check{display:flex;align-items:flex-start;gap:10px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:13px}.check input{width:auto;margin-top:3px}.check label{margin:0;line-height:1.45}.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.button,.back{padding:14px 18px;border-radius:12px;font-weight:900;text-decoration:none;text-align:center}.button{border:0;background:#d97706;color:#fff;cursor:pointer;flex:1}.back{background:#111827;color:#fff}.summary{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:13px;margin-bottom:18px;line-height:1.6}@media(max-width:650px){body{padding:12px}.card{padding:20px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{display:grid}.button,.back{width:100%}}
+          *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#111827;padding:24px}.wrap{max-width:820px;margin:auto}.card{background:#fff;border-radius:22px;padding:26px;box-shadow:0 14px 40px rgba(15,23,42,.10)}h1{margin:0 0 8px}.subtitle{color:#64748b;line-height:1.5;margin:0 0 22px}.notice{padding:14px;border-radius:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;line-height:1.5;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.field{margin-bottom:15px}.field.full{grid-column:1/-1}label{display:block;font-weight:800;margin-bottom:7px;font-size:14px}input,select{width:100%;padding:13px 14px;border:1px solid #cbd5e1;border-radius:12px;font:inherit;background:#fff}small{display:block;color:#64748b;line-height:1.45;margin-top:6px}.availability-actions{display:flex;gap:9px;margin-top:10px}.availability-button{border:0;border-radius:11px;background:#2563eb;color:#fff;padding:12px 15px;font-weight:900;cursor:pointer}.availability-button:disabled{opacity:.6;cursor:wait}.availability-results{display:none;margin-top:10px;padding:13px;border-radius:12px;border:1px solid #cbd5e1;background:#f8fafc}.availability-results.show{display:block}.availability-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.availability-chip{display:inline-flex;padding:7px 10px;border-radius:999px;font-weight:900;font-size:13px}.availability-chip.available{background:#dcfce7;color:#166534;border:1px solid #86efac}.availability-chip.unavailable{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.availability-message{font-size:13px;font-weight:800;line-height:1.45}.check{display:flex;align-items:flex-start;gap:10px;padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:13px}.check input{width:auto;margin-top:3px}.check label{margin:0;line-height:1.45}.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}.button,.back{padding:14px 18px;border-radius:12px;font-weight:900;text-decoration:none;text-align:center}.button{border:0;background:#d97706;color:#fff;cursor:pointer;flex:1}.back{background:#111827;color:#fff}.summary{padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:13px;margin-bottom:18px;line-height:1.6}@media(max-width:650px){body{padding:12px}.card{padding:20px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{display:grid}.button,.back{width:100%}.availability-actions{display:grid}.availability-button{width:100%}}
         </style>
       </head>
       <body>
@@ -6837,8 +6837,12 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
                 ${isLotteryCampaign(campaign) ? `
                   <div class="field full">
                     <label>Números escogidos</label>
-                    <input type="text" name="selected_numbers" required placeholder="Ejemplo: ${lotteryDigits === 2 ? "07, 25" : lotteryDigits === 3 ? "007, 125" : "0007, 8125"}">
-                    <small>Escribe exactamente un número por cada código, separados por coma. Cada número debe tener ${lotteryDigits} cifras. El sistema verificará que sigan disponibles.</small>
+                    <input id="selectedNumbersInput" type="text" name="selected_numbers" required placeholder="Ejemplo: ${lotteryDigits === 2 ? "07, 25" : lotteryDigits === 3 ? "007, 125" : "0007, 8125"}">
+                    <small>Escribe uno o varios números separados por coma. Cada número debe tener ${lotteryDigits} cifras.</small>
+                    <div class="availability-actions">
+                      <button id="checkNumbersButton" class="availability-button" type="button">Verificar disponibilidad</button>
+                    </div>
+                    <div id="availabilityResults" class="availability-results" aria-live="polite"></div>
                   </div>
                 ` : `
                   <div class="field full">
@@ -6879,11 +6883,197 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
             </form>
           </section>
         </main>
+        ${isLotteryCampaign(campaign) ? `
+          <script>
+            (function () {
+              const input = document.getElementById("selectedNumbersInput");
+              const button = document.getElementById("checkNumbersButton");
+              const resultsBox = document.getElementById("availabilityResults");
+              const qtyInput = document.querySelector('input[name="qty"]');
+              let lastVerifiedValue = "";
+
+              function escapeText(value) {
+                return String(value || "")
+                  .replace(/&/g, "&amp;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;")
+                  .replace(/'/g, "&#039;");
+              }
+
+              function showMessage(message, isError) {
+                resultsBox.classList.add("show");
+                resultsBox.innerHTML = '<div class="availability-message" style="color:' + (isError ? '#991b1b' : '#334155') + ';">' + escapeText(message) + '</div>';
+              }
+
+              input.addEventListener("input", function () {
+                if (input.value.trim() !== lastVerifiedValue) {
+                  resultsBox.classList.remove("show");
+                  resultsBox.innerHTML = "";
+                }
+              });
+
+              button.addEventListener("click", async function () {
+                const rawNumbers = input.value.trim();
+
+                if (!rawNumbers) {
+                  showMessage("Escribe al menos un número para verificar.", true);
+                  return;
+                }
+
+                button.disabled = true;
+                button.textContent = "Verificando...";
+
+                try {
+                  const endpoint = "/organizers/${organizer.id}/campanas/${campaign.id}/verificar-numeros?numbers=" + encodeURIComponent(rawNumbers);
+                  const response = await fetch(endpoint, {
+                    headers: { Accept: "application/json" },
+                    credentials: "same-origin"
+                  });
+                  const payload = await response.json();
+
+                  if (!response.ok) {
+                    throw new Error(payload.error || "No fue posible verificar los números.");
+                  }
+
+                  lastVerifiedValue = rawNumbers;
+
+                  if (qtyInput && payload.results.length <= 20) {
+                    qtyInput.value = String(payload.results.length);
+                  }
+
+                  const availableCount = payload.results.filter(item => item.available).length;
+                  const allAvailable = availableCount === payload.results.length && payload.capacity_available;
+                  const message = allAvailable
+                    ? "Todos los números están disponibles. La cantidad de códigos se ajustó automáticamente."
+                    : "Uno o varios números no están disponibles. Corrige la selección antes de crear la venta.";
+                  const chips = payload.results.map(item =>
+                    '<span class="availability-chip ' + (item.available ? 'available' : 'unavailable') + '">' +
+                    escapeText(item.number) + (item.available ? ' · Disponible' : ' · No disponible') +
+                    '</span>'
+                  ).join("");
+
+                  resultsBox.classList.add("show");
+                  resultsBox.innerHTML =
+                    '<div class="availability-message" style="color:' + (allAvailable ? '#166534' : '#991b1b') + ';">' +
+                    escapeText(message) +
+                    '</div><div class="availability-list">' + chips + '</div>';
+                } catch (error) {
+                  showMessage(error.message || "No fue posible verificar los números.", true);
+                } finally {
+                  button.disabled = false;
+                  button.textContent = "Verificar disponibilidad";
+                }
+              });
+            })();
+          </script>
+        ` : ""}
       </body>
       </html>
     `);
   } catch (error) {
     return sendServerError(res, error, "Error mostrando venta a crédito");
+  }
+});
+
+app.get("/organizers/:organizerId/campanas/:rifaId/verificar-numeros", async (req, res) => {
+  try {
+    const { organizerId, rifaId } = req.params;
+
+    const { data: organizer, error: organizerError } = await supabase
+      .from("organizers")
+      .select("id, profile_id")
+      .eq("id", organizerId)
+      .single();
+
+    if (organizerError || !organizer) {
+      return res.status(404).json({ ok: false, error: "Organizador no encontrado." });
+    }
+
+    const { data: campaign, error: campaignError } = await supabase
+      .from("rifas")
+      .select("id, owner_id, draw_mode, draw_provider, available_tickets, status")
+      .eq("id", rifaId)
+      .single();
+
+    if (campaignError || !campaign) {
+      return res.status(404).json({ ok: false, error: "Campaña no encontrada." });
+    }
+
+    if (String(campaign.owner_id) !== String(organizer.profile_id)) {
+      return res.status(403).json({ ok: false, error: "No tienes permiso para consultar esta campaña." });
+    }
+
+    if (campaign.status !== "active" || !isLotteryCampaign(campaign)) {
+      return res.status(400).json({ ok: false, error: "La verificación solo está disponible para campañas activas de lotería." });
+    }
+
+    const rawNumbers = String(req.query.numbers || "")
+      .split(/[\s,;]+/)
+      .map(value => value.trim())
+      .filter(Boolean);
+
+    if (rawNumbers.length < 1 || rawNumbers.length > 20) {
+      return res.status(400).json({ ok: false, error: "Puedes verificar entre 1 y 20 números a la vez." });
+    }
+
+    let normalizedNumbers;
+
+    try {
+      normalizedNumbers = rawNumbers.map(value =>
+        normalizeManualLotteryNumber(campaign.draw_mode, value)
+      );
+    } catch (normalizationError) {
+      return res.status(400).json({ ok: false, error: normalizationError.message });
+    }
+
+    if (new Set(normalizedNumbers).size !== normalizedNumbers.length) {
+      return res.status(400).json({ ok: false, error: "No puedes verificar números repetidos." });
+    }
+
+    const { data: usedTickets, error: usedTicketsError } = await supabase
+      .from("tickets")
+      .select("combination")
+      .eq("rifa_id", campaign.id)
+      .in("status", ["active", "reserved_installment"])
+      .in("combination", normalizedNumbers);
+
+    if (usedTicketsError) throw usedTicketsError;
+
+    const unavailableNumbers = new Set(
+      (usedTickets || []).map(ticket => String(ticket.combination || ""))
+    );
+    const temporarilyReservedNumbers = new Set(
+      await getReservedLotteryNumbers(campaign.id)
+    );
+
+    for (const number of normalizedNumbers) {
+      if (temporarilyReservedNumbers.has(number)) {
+        unavailableNumbers.add(number);
+      }
+    }
+
+    const capacityAvailable = normalizedNumbers.length <= Number(
+      campaign.available_tickets || 0
+    );
+
+    return res.json({
+      ok: true,
+      capacity_available: capacityAvailable,
+      available_tickets: Number(campaign.available_tickets || 0),
+      results: normalizedNumbers.map(number => ({
+        number,
+        available: capacityAvailable && !unavailableNumbers.has(number)
+      }))
+    });
+  } catch (error) {
+    const incidentId = crypto.randomBytes(6).toString("hex");
+    console.error(`[${incidentId}] Error verificando números de crédito:`, error);
+
+    return res.status(500).json({
+      ok: false,
+      error: `No fue posible verificar los números. Código: ${incidentId}`
+    });
   }
 });
 
