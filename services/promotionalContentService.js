@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import sharp from "sharp";
+import { fileURLToPath } from "node:url";
+import { Resvg } from "@resvg/resvg-js";
 import { buildInfographicCampaignData } from "../lib/infographic/dataBuilder.js";
 import { splitInfographicSheets } from "../lib/infographic/sheetBuilder.js";
 import { resolveTheme } from "../lib/infographic/themeEngine.js";
@@ -7,6 +8,25 @@ import { renderInfographicSvg } from "../lib/infographic/svgRenderer.js";
 import { validateInfographicData, validateRenderedSheet } from "../lib/infographic/validators.js";
 import { createValidatedQr } from "./qrService.js";
 import { buildShareText } from "./shareTextBuilder.js";
+
+const INFOGRAPHIC_FONT_FILES = [
+  fileURLToPath(new URL("../assets/fonts/DejaVuSans.ttf", import.meta.url)),
+  fileURLToPath(new URL("../assets/fonts/DejaVuSans-Bold.ttf", import.meta.url))
+];
+
+function renderSvgToPng(svg) {
+  const renderer = new Resvg(svg, {
+    fitTo: { mode: "original" },
+    font: {
+      fontFiles: INFOGRAPHIC_FONT_FILES,
+      loadSystemFonts: false,
+      defaultFontFamily: "DejaVu Sans",
+      sansSerifFamily: "DejaVu Sans"
+    }
+  });
+
+  return Buffer.from(renderer.render().asPng());
+}
 
 export function createPromotionalContentService({
   availabilityService,
@@ -90,7 +110,7 @@ export function createPromotionalContentService({
           theme: generation.theme,
           qrDataUrl: qr?.dataUrl || null
         });
-        const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+        const png = renderSvgToPng(svg);
         return { ...sheet, png };
       }));
       const verification = await buildGeneration(campaign, options);
