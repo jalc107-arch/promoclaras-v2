@@ -423,6 +423,26 @@ const APP_BASE_URL = String(
   process.env.APP_BASE_URL || "https://www.promoclaras.com"
 ).replace(/\/$/, "");
 
+const LEGAL_RESPONSIBLE_NAME = String(
+  process.env.LEGAL_RESPONSIBLE_NAME || "JESUS ADRIANO LADINO CASTRO"
+).trim();
+const LEGAL_CONTACT_EMAIL = String(
+  process.env.LEGAL_CONTACT_EMAIL || "promoclaras@gmail.com"
+).trim();
+const LEGAL_CONTACT_PHONE = String(
+  process.env.LEGAL_CONTACT_PHONE || "3164739413"
+).trim();
+const LEGAL_CONTACT_ADDRESS = String(
+  process.env.LEGAL_CONTACT_ADDRESS || "Calle 27 Sur # 42-12"
+).trim();
+const LEGAL_CONTACT_CITY = String(
+  process.env.LEGAL_CONTACT_CITY || "Villavicencio, Meta, Colombia"
+).trim();
+const LEGAL_DOCUMENTS_EFFECTIVE_DATE = "2026-10-06";
+const TERMS_VERSION = `terminos-${LEGAL_DOCUMENTS_EFFECTIVE_DATE}`;
+const PRIVACY_VERSION = `privacidad-${LEGAL_DOCUMENTS_EFFECTIVE_DATE}`;
+const CAMPAIGN_POLICY_VERSION = `campanas-${LEGAL_DOCUMENTS_EFFECTIVE_DATE}`;
+
 const WHATSAPP_CLOUD_TOKEN = String(process.env.WHATSAPP_CLOUD_TOKEN || "").trim();
 const WHATSAPP_PHONE_NUMBER_ID = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
 const WHATSAPP_BUSINESS_ACCOUNT_ID = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "").trim();
@@ -478,6 +498,21 @@ try {
   }
 
   throw new Error("Configuración inválida: APP_BASE_URL no es una URL válida.");
+}
+
+const missingLegalContactConfiguration = [
+  ["LEGAL_CONTACT_EMAIL", LEGAL_CONTACT_EMAIL],
+  ["LEGAL_CONTACT_PHONE", LEGAL_CONTACT_PHONE],
+  ["LEGAL_CONTACT_ADDRESS", LEGAL_CONTACT_ADDRESS],
+  ["LEGAL_CONTACT_CITY", LEGAL_CONTACT_CITY]
+]
+  .filter(([, value]) => !String(value || "").trim())
+  .map(([name]) => name);
+
+if (missingLegalContactConfiguration.length > 0) {
+  console.warn(
+    `Aviso legal: configura ${missingLegalContactConfiguration.join(", ")} para completar los datos públicos del responsable.`
+  );
 }
 
 const supabase = createClient(
@@ -768,6 +803,63 @@ function safeCompare(a, b) {
   }
 
   return crypto.timingSafeEqual(Buffer.from(valueA), Buffer.from(valueB));
+}
+
+function getRequestIp(req) {
+  const forwardedFor = String(req.get("x-forwarded-for") || "")
+    .split(",")[0]
+    .trim();
+
+  return forwardedFor || String(req.socket?.remoteAddress || "").trim() || null;
+}
+
+async function recordLegalConsent({
+  req,
+  actorType,
+  actorId,
+  orderId = null,
+  source,
+  purposes = []
+}) {
+  const { error } = await supabase
+    .from("legal_consents")
+    .insert({
+      actor_type: String(actorType || "unknown"),
+      actor_id: actorId ? String(actorId) : null,
+      order_id: orderId ? String(orderId) : null,
+      source: String(source || "web"),
+      terms_version: TERMS_VERSION,
+      privacy_version: PRIVACY_VERSION,
+      campaign_policy_version: CAMPAIGN_POLICY_VERSION,
+      purposes: Array.isArray(purposes) ? purposes : [],
+      request_ip: getRequestIp(req),
+      user_agent: String(req.get("user-agent") || "").slice(0, 1000) || null,
+      accepted_at: new Date().toISOString()
+    });
+
+  if (error) {
+    console.error(
+      "No fue posible registrar la evidencia legal de aceptación. Ejecuta la migración de legal_consents:",
+      error
+    );
+  }
+}
+
+function renderLegalResponsibleDetails() {
+  const rows = [
+    ["Responsable", LEGAL_RESPONSIBLE_NAME],
+    ["Domicilio", LEGAL_CONTACT_ADDRESS],
+    ["Ciudad o municipio", LEGAL_CONTACT_CITY],
+    ["Correo para privacidad y reclamaciones", LEGAL_CONTACT_EMAIL],
+    ["Teléfono de contacto", LEGAL_CONTACT_PHONE],
+    ["Sitio web", APP_BASE_URL]
+  ].filter(([, value]) => String(value || "").trim());
+
+  return rows
+    .map(([label, value]) => `
+      <div style="margin:7px 0;"><b>${escapeHtml(label)}:</b> ${escapeHtml(value)}</div>
+    `)
+    .join("");
 }
 
 function createOrderAccessToken(orderId) {
@@ -3735,6 +3827,10 @@ app.get("/", (req, res) => {
   Política de privacidad
 </a>
 &nbsp;|&nbsp;
+<a href="/politica-cookies" style="color:rgba(255,255,255,.82);font-weight:bold;text-decoration:none;">
+  Cookies
+</a>
+&nbsp;|&nbsp;
 <a href="/politica-campanas" style="color:rgba(255,255,255,.82);font-weight:bold;text-decoration:none;">
   Política de campañas
 </a>
@@ -4024,6 +4120,25 @@ app.get("/organizers/register", (req, res) => {
             >
           </div>
 
+          <div style="margin:18px 0;padding:14px;border:1px solid rgba(255,255,255,.22);border-radius:14px;background:rgba(255,255,255,.08);">
+            <label style="display:flex;gap:10px;align-items:flex-start;line-height:1.45;">
+              <input
+                type="checkbox"
+                name="privacy_authorization_accepted"
+                value="true"
+                required
+                style="width:auto;margin-top:4px;"
+              >
+              <span>
+                Autorizo el tratamiento de mis datos para crear y administrar mi cuenta,
+                verificar mi identidad y gestionar campañas. He leído la
+                <a href="/politica-privacidad" target="_blank" rel="noopener noreferrer" style="color:white;font-weight:800;">
+                  política de privacidad
+                </a>.
+              </span>
+            </label>
+          </div>
+
           <button type="submit">
             Crear cuenta
           </button>
@@ -4048,9 +4163,17 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
     const email = String(req.body.email || "").trim().toLowerCase();
     const phone = String(req.body.phone || "").trim();
     const password = String(req.body.password || "").trim();
+    const privacyAuthorizationAccepted =
+      req.body.privacy_authorization_accepted === "true";
 
     if (!fullName || !email || !password) {
       return res.status(400).send("Faltan campos obligatorios");
+    }
+
+    if (!privacyAuthorizationAccepted) {
+      return res.status(400).send(
+        "Debes autorizar el tratamiento de datos para crear la cuenta."
+      );
     }
 
     if (!isValidEmailAddress(email)) {
@@ -4104,6 +4227,19 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
       .single();
 
     if (organizerError) throw organizerError;
+
+    await recordLegalConsent({
+      req,
+      actorType: "organizer",
+      actorId: organizer.id,
+      source: "organizer_registration",
+      purposes: [
+        "crear_y_administrar_cuenta",
+        "verificar_identidad",
+        "gestionar_campanas",
+        "seguridad_y_prevencion_de_fraude"
+      ]
+    });
 
     return res.redirect(`/organizers/login?registered=1&email=${encodeURIComponent(organizer.email)}`);
   } catch (error) {
@@ -6935,8 +7071,20 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
 
                 <div class="field full">
                   <div class="check">
-                    <input id="authorization" type="checkbox" name="customer_authorization_confirmed" value="true" required>
-                    <label for="authorization">Confirmo que el comprador autorizó esta orden, el tratamiento de sus datos y el envío de mensajes operativos por WhatsApp.</label>
+                    <input id="privacyAuthorization" type="checkbox" name="customer_privacy_authorization_confirmed" value="true" required>
+                    <label for="privacyAuthorization">
+                      Confirmo que el comprador solicitó esta orden y autorizó el tratamiento de sus datos conforme a la
+                      <a href="/politica-privacidad" target="_blank" rel="noopener noreferrer">política de privacidad</a>.
+                    </label>
+                  </div>
+                </div>
+
+                <div class="field full">
+                  <div class="check">
+                    <input id="whatsappAuthorization" type="checkbox" name="customer_whatsapp_authorization_confirmed" value="true" required>
+                    <label for="whatsappAuthorization">
+                      Confirmo que el comprador autorizó recibir por WhatsApp mensajes operativos sobre pagos, códigos, vencimientos y resultado; no publicidad.
+                    </label>
                   </div>
                 </div>
               </div>
@@ -7262,7 +7410,10 @@ app.post(
       const qty = Number(req.body.qty || 0);
       const installmentCount = Number(req.body.installment_count || 1);
       const firstDueDate = String(req.body.first_due_date || "").trim();
-      const authorizationConfirmed = req.body.customer_authorization_confirmed === "true";
+      const privacyAuthorizationConfirmed =
+        req.body.customer_privacy_authorization_confirmed === "true";
+      const whatsappAuthorizationConfirmed =
+        req.body.customer_whatsapp_authorization_confirmed === "true";
 
       if (!buyerName || buyerName.length > 120) {
         return res.status(400).send("El nombre del comprador no es válido.");
@@ -7276,8 +7427,10 @@ app.post(
         return res.status(400).send("El correo electrónico no es válido.");
       }
 
-      if (!authorizationConfirmed) {
-        return res.status(400).send("Debes confirmar la autorización del comprador.");
+      if (!privacyAuthorizationConfirmed || !whatsappAuthorizationConfirmed) {
+        return res.status(400).send(
+          "Debes confirmar por separado la autorización de datos y de mensajes operativos del comprador."
+        );
       }
 
       if (!Number.isInteger(qty) || qty < 1 || qty > 20) {
@@ -7426,6 +7579,20 @@ app.post(
 
       if (orderError) throw orderError;
       createdOrder = order;
+
+      await recordLegalConsent({
+        req,
+        actorType: "buyer",
+        actorId: buyer.id,
+        orderId: order.id,
+        source: "organizer_credit_sale",
+        purposes: [
+          "orden_solicitada_al_organizador",
+          "administrar_plan_de_pagos",
+          "reservar_y_asignar_codigos",
+          "mensajes_operativos_whatsapp"
+        ]
+      });
 
       if (isLotteryCampaign(campaign) && selectedNumbers.length > 0) {
         await reserveLotteryNumbersForOrder({
@@ -8438,6 +8605,19 @@ if (!finalIdFrontUrl || !finalIdBackUrl || !finalSelfieIdUrl) {
 
     if (error) throw error;
 
+    await recordLegalConsent({
+      req,
+      actorType: "organizer",
+      actorId: organizerId,
+      source: "organizer_verification",
+      purposes: [
+        "verificacion_de_identidad",
+        "validacion_de_soportes",
+        "gestion_de_pagos_y_liquidaciones",
+        "aceptacion_de_terminos_para_organizadores"
+      ]
+    });
+
     return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
     return sendServerError(res, error);
@@ -8643,6 +8823,23 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
               <input type="date" name="draw_date" required style="width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;">
             </div>
 
+            <div style="margin-bottom:18px;padding:16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;">
+              <h3 style="margin-top:0;color:#9a3412;">Autorización regulatoria</h3>
+              <p style="color:#7c2d12;line-height:1.5;">La aprobación de CampaClick no sustituye el permiso de la autoridad competente. Registra exactamente los datos del acto que autoriza la campaña.</p>
+
+              <label>Autoridad que autoriza</label><br/>
+              <input type="text" name="regulatory_authority" maxlength="180" required style="width:100%;padding:12px;border:1px solid #fdba74;border-radius:8px;margin:6px 0 12px;">
+
+              <label>Número de resolución, permiso o acto</label><br/>
+              <input type="text" name="regulatory_authorization_number" maxlength="120" required style="width:100%;padding:12px;border:1px solid #fdba74;border-radius:8px;margin:6px 0 12px;">
+
+              <label>Fecha de expedición</label><br/>
+              <input type="date" name="regulatory_authorization_date" required style="width:100%;padding:12px;border:1px solid #fdba74;border-radius:8px;margin:6px 0 12px;">
+
+              <label>Enlace público del permiso o soporte (opcional)</label><br/>
+              <input type="url" name="regulatory_authorization_url" maxlength="1000" placeholder="https://..." style="width:100%;padding:12px;border:1px solid #fdba74;border-radius:8px;margin-top:6px;">
+            </div>
+
             <div style="margin-bottom:18px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
               <h3 style="margin-top:0;color:#1e3a8a;">Pagos a cuotas</h3>
 
@@ -8765,6 +8962,16 @@ app.post("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     const drawMode = String(req.body.draw_mode || "").trim();
     const pricePerTicket = Number(req.body.price_per_ticket || 0);
     const drawDate = String(req.body.draw_date || "").trim();
+    const regulatoryAuthority = String(req.body.regulatory_authority || "").trim();
+    const regulatoryAuthorizationNumber = String(
+      req.body.regulatory_authorization_number || ""
+    ).trim();
+    const regulatoryAuthorizationDate = String(
+      req.body.regulatory_authorization_date || ""
+    ).trim();
+    const regulatoryAuthorizationUrl = String(
+      req.body.regulatory_authorization_url || ""
+    ).trim();
     const campaignTermsAccepted = req.body.campaign_terms_accepted === "true";
     const referralProgramEnabled = req.body.referral_program_enabled === "true";
     const installmentsEnabled = req.body.installments_enabled === "true";
@@ -8785,6 +8992,20 @@ if (referralRequiredApprovedOrders > 50) {
 
     if (!title || !prize || !drawProvider || !drawMode || !drawDate) {
       return res.status(400).send("Faltan campos obligatorios");
+    }
+
+    if (
+      !regulatoryAuthority ||
+      !regulatoryAuthorizationNumber ||
+      !parseLocalDate(regulatoryAuthorizationDate)
+    ) {
+      return res.status(400).send(
+        "Debes registrar una autorización regulatoria válida antes de crear la campaña."
+      );
+    }
+
+    if (regulatoryAuthorizationUrl && safeHttpUrl(regulatoryAuthorizationUrl) === "#") {
+      return res.status(400).send("El enlace de la autorización regulatoria no es válido.");
     }
 
     try {
@@ -8919,6 +9140,10 @@ if (maxTickets <= 0) {
         sold_tickets: 0,
         available_tickets: maxTickets,
         draw_date: drawDate,
+        regulatory_authority: regulatoryAuthority,
+        regulatory_authorization_number: regulatoryAuthorizationNumber,
+        regulatory_authorization_date: regulatoryAuthorizationDate,
+        regulatory_authorization_url: regulatoryAuthorizationUrl || null,
         status: "pending",
         slug,
         prize_type: prizeType,
@@ -8938,6 +9163,18 @@ campaign_terms_accepted: true,
       });
 
     if (insertError) throw insertError;
+
+    await recordLegalConsent({
+      req,
+      actorType: "organizer",
+      actorId: organizer.id,
+      source: "campaign_creation",
+      purposes: [
+        "aceptacion_de_terminos_para_organizadores",
+        "creacion_y_revision_de_campana",
+        "comision_plataforma_5_por_ciento"
+      ]
+    });
 
     return res.redirect(`/organizers/${organizerId}/panel`);
   } catch (error) {
@@ -9487,6 +9724,17 @@ body.public-campaign-page {
       <div class="campaign-fact"><span>Fecha del sorteo</span><b>${escapeHtml(formatDateForDisplay(campaign.draw_date))}</b></div>
       <div class="campaign-fact price-fact"><span>Valor por código</span><b>$${Number(campaign.price_per_ticket || 0).toLocaleString("es-CO")}</b></div>
     </div>
+
+    ${campaign.regulatory_authorization_number ? `
+      <div style="margin-top:16px;padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:14px;background:rgba(255,255,255,.07);line-height:1.5;">
+        <b>Autorización regulatoria:</b>
+        ${escapeHtml(campaign.regulatory_authorization_number)} ·
+        ${escapeHtml(campaign.regulatory_authority || "Autoridad competente")}
+        ${campaign.regulatory_authorization_url ? `
+          · <a href="${escapeHtml(safeHttpUrl(campaign.regulatory_authorization_url))}" target="_blank" rel="noopener noreferrer" style="color:#93c5fd;font-weight:bold;">Ver soporte</a>
+        ` : ""}
+      </div>
+    ` : ""}
 
     ${campaign.status === "active" ? `
       <div class="campaign-actions">
@@ -11460,7 +11708,22 @@ ${
       <a href="/politica-campanas" target="_blank" style="color:#93c5fd;font-weight:bold;">
         política de campañas promocionales
       </a>.
-      También autorizo el tratamiento de mis datos y los mensajes relacionados con esta orden.
+      Autorizo el tratamiento de mis datos exclusivamente para tramitar esta compra,
+      asignar los códigos, prevenir fraude y atender reclamaciones.
+    </span>
+  </label>
+
+  <label style="display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;">
+    <input
+      type="checkbox"
+      name="whatsapp_operational_authorized"
+      value="true"
+      required
+      style="width:auto;margin-top:4px;"
+    >
+    <span>
+      Autorizo mensajes operativos por WhatsApp sobre esta orden, pagos, códigos,
+      vencimientos y resultado. Esta autorización no incluye publicidad.
     </span>
   </label>
 </div>
@@ -11882,9 +12145,17 @@ app.post("/campanas/:slug/comprar", purchaseLimiter, async (req, res) => {
     const referralCode = normalizeReferralCode(req.body.referral_code);
 
     const termsAccepted = req.body.terms_accepted === "true";
+    const whatsappOperationalAuthorized =
+      req.body.whatsapp_operational_authorized === "true";
 
 if (!termsAccepted) {
   return res.status(400).send("Debes aceptar los términos, condiciones y política de privacidad para continuar.");
+}
+
+if (!whatsappOperationalAuthorized) {
+  return res.status(400).send(
+    "Debes autorizar los mensajes operativos de esta orden para recibir pagos, códigos y resultados."
+  );
 }
 
     let selectedNumbers = req.body.selected_numbers || [];
@@ -11896,6 +12167,14 @@ if (!Array.isArray(selectedNumbers)) {
     if (!buyerName || !cleanBuyerPhone) {
   return res.status(400).send("Faltan nombre o teléfono");
 }
+
+    if (cleanBuyerPhone.length < 10 || cleanBuyerPhone.length > 15) {
+      return res.status(400).send("El teléfono del comprador no es válido.");
+    }
+
+    if (buyerEmail && !isValidEmailAddress(buyerEmail)) {
+      return res.status(400).send("El correo electrónico no es válido.");
+    }
 
     if (!Number.isInteger(qty) || qty <= 0 || qty > 20) {
       return res.status(400).send("Cantidad inválida");
@@ -12188,6 +12467,22 @@ const subtotal = qty * Number(campaign.price_per_ticket || 0);
   .single();
 
 if (orderError) throw orderError;
+
+await recordLegalConsent({
+  req,
+  actorType: "buyer",
+  actorId: buyer.id,
+  orderId: order.id,
+  source: "public_purchase",
+  purposes: [
+    "tramitar_compra",
+    "procesar_pagos",
+    "asignar_codigos",
+    "prevenir_fraude",
+    "atender_reclamaciones",
+    "mensajes_operativos_whatsapp"
+  ]
+});
 
 
 if (isLotteryCampaign(campaign) && manualLotteryCombinations.length > 0) {
@@ -15130,6 +15425,16 @@ app.post("/admin/campanas/:rifaId/aprobar", async (req, res) => {
       return res.status(404).send("Campaña no encontrada");
     }
 
+    if (
+      !campaign.regulatory_authority ||
+      !campaign.regulatory_authorization_number ||
+      !campaign.regulatory_authorization_date
+    ) {
+      return res.status(400).send(
+        "No puedes aprobar esta campaña hasta registrar y verificar su autorización regulatoria."
+      );
+    }
+
     const { error } = await supabase
   .from("rifas")
   .update({
@@ -15485,6 +15790,12 @@ app.get("/terminos-organizadores", (req, res) => {
       <div style="max-width:900px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);line-height:1.6;">
         <h1>Términos y condiciones para organizadores</h1>
 
+        <p><b>Versión:</b> ${escapeHtml(TERMS_VERSION)} · <b>Vigencia:</b> ${escapeHtml(LEGAL_DOCUMENTS_EFFECTIVE_DATE)}</p>
+
+        <div style="padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
+          ${renderLegalResponsibleDetails()}
+        </div>
+
         <p>
           Estos términos regulan el uso de CampaClick por parte de los organizadores que crean campañas promocionales dentro de la plataforma.
         </p>
@@ -15492,6 +15803,10 @@ app.get("/terminos-organizadores", (req, res) => {
         <h2>1. Naturaleza de la plataforma</h2>
         <p>
           CampaClick es una plataforma tecnológica que permite crear, administrar y consultar campañas promocionales digitales, con asignación automática de códigos promocionales después del pago aprobado.
+        </p>
+
+        <p>
+          La revisión o aprobación técnica de CampaClick no reemplaza los permisos, autorizaciones, derechos de explotación, impuestos ni demás requisitos regulatorios que correspondan a la campaña. El organizador debe obtenerlos antes de ofrecer participaciones y conservar sus soportes.
         </p>
 
         <h2>2. Comisión de la plataforma CampaClick</h2>
@@ -15509,7 +15824,7 @@ app.get("/terminos-organizadores", (req, res) => {
         </p>
 
         <p>
-          Wompi cobra sus propias tarifas por cada transacción exitosa. De acuerdo con la información comercial visualizada, dicha tarifa puede corresponder aproximadamente a <b>2.65% + $700 + IVA por transacción exitosa</b>.
+          Wompi cobra sus propias tarifas por cada transacción exitosa. La tarifa aplicable será la correspondiente al plan contratado por el comercio y podrá cambiar conforme a las condiciones vigentes del proveedor.
         </p>
 
         <p>
@@ -15558,7 +15873,7 @@ app.get("/terminos-organizadores", (req, res) => {
         <div style="margin-top:28px;padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;color:#1e3a8a;">
           <b>Resumen:</b><br/>
           Comisión CampaClick: <b>5%</b><br/>
-          Comisión Wompi aproximada: <b>2.65% + $700 + IVA por transacción exitosa</b>
+          Comisión Wompi: <b>según el plan y contrato vigente del comercio</b>
         </div>
 
         <div style="margin-top:24px;">
@@ -15992,87 +16307,51 @@ app.get("/terminos-y-condiciones", (req, res) => {
 <body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
   <div style="max-width:950px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
     <h1>Términos y condiciones de uso</h1>
+    <p><b>Versión:</b> ${escapeHtml(TERMS_VERSION)} · <b>Vigencia:</b> ${escapeHtml(LEGAL_DOCUMENTS_EFFECTIVE_DATE)}</p>
 
-    <p>
-      CampaClick es una plataforma tecnológica que permite crear, administrar y participar en campañas promocionales digitales mediante códigos promocionales asignados después del pago aprobado.
-    </p>
+    <div style="padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
+      ${renderLegalResponsibleDetails()}
+    </div>
 
-    <h2>1. Naturaleza de la plataforma</h2>
-    <p>
-      CampaClick no es una casa de apuestas, casino, operador de juegos de suerte y azar ni entidad financiera. La plataforma funciona como medio tecnológico para la gestión de campañas promocionales privadas, con reglas previamente informadas al participante.
-    </p>
+    <h2>1. Objeto y alcance</h2>
+    <p>CampaClick suministra herramientas tecnológicas para publicar campañas, registrar participantes, gestionar pagos, asignar códigos y divulgar resultados. El organizador continúa siendo responsable de la legalidad, veracidad y ejecución de su campaña, sin perjuicio de las obligaciones propias de CampaClick como proveedor tecnológico.</p>
 
-    <h2>2. Participación</h2>
-    <p>
-      Para participar, el usuario debe registrar sus datos básicos, realizar el pago correspondiente y recibir sus códigos promocionales. Los códigos solo se asignan cuando el pago haya sido aprobado por la pasarela de pagos.
-    </p>
+    <h2>2. Información antes de comprar</h2>
+    <p>Cada campaña debe informar claramente el organizador, premio, precio total por código, modalidad, fecha, fuente del resultado, disponibilidad, forma de pago, número de cuotas y condiciones de entrega. El comprador debe revisar esa información antes de aceptar y pagar.</p>
 
-    <h2>3. Asignación de códigos</h2>
-    <p>
-      En campañas basadas en Baloto, los códigos promocionales se asignan automáticamente por el sistema. En campañas basadas en loterías, el participante puede escoger números disponibles cuando la campaña así lo permita.
-    </p>
+    <h2>3. Códigos y disponibilidad</h2>
+    <p>En campañas de lotería el participante puede escoger números disponibles. En campañas Baloto las combinaciones se asignan automáticamente. Una selección temporal no constituye asignación definitiva: la confirmación depende del estado indicado en la orden y de las reglas de reserva publicadas.</p>
 
-    <h2>4. Resultados</h2>
-    <p>
-      El resultado de cada campaña se valida con base en la fuente pública o mecanismo informado en la descripción de la campaña. Una vez cargado el resultado, la campaña se cierra y no se permiten nuevas compras.
-    </p>
+    <h2>4. Pagos y constancia</h2>
+    <p>Wompi procesa los pagos y CampaClick no almacena números completos de tarjeta, claves bancarias ni códigos de autenticación. Después de crear la orden se muestra o envía una constancia con el precio, forma de pago y enlace de consulta. La aprobación definitiva depende de la confirmación verificable de la pasarela.</p>
 
-    <h2>5. Pagos</h2>
-    <p>
-      Los pagos son procesados por una pasarela externa. CampaClick no almacena datos financieros sensibles como números de tarjeta, claves bancarias o información de autenticación financiera.
-    </p>
+    <h2>5. Pagos a cuotas</h2>
+    <p>Cuando estén habilitados, antes de confirmar se informarán número de cuotas, valor de cada una, fechas de vencimiento y fecha límite. Una cuota vencida tiene cinco días calendario de gracia. Cumplido ese plazo, el plan podrá declararse incumplido y el código liberarse, respetando los derechos legales del consumidor y el tratamiento informado para saldos o devoluciones.</p>
 
-    <h2>6. Reembolsos</h2>
-    <p>
-      Una vez aprobado el pago y asignados los códigos promocionales, no habrá devolución del dinero salvo error técnico comprobado, duplicidad no corregida, cancelación de la campaña o decisión administrativa de CampaClick.
-    </p>
+    <h2>6. Retracto, reversión y devoluciones</h2>
+    <p>El consumidor podrá ejercer el retracto o solicitar la reversión del pago cuando legalmente proceda, dentro de los términos y por las causales previstas en la legislación colombiana. No se descontará la comisión de CampaClick ni costos de pasarela cuando una norma obligatoria ordene la devolución completa.</p>
+    <p>Las reclamaciones deben identificar al comprador, la orden, el motivo y un medio de respuesta. CampaClick y el organizador evaluarán la solicitud según la naturaleza de la campaña, el momento de ejecución y la regulación aplicable. Estas condiciones no limitan derechos irrenunciables del consumidor.</p>
 
-    <p>
-      Cuando el participante solicite voluntariamente una devolución que sea aceptada por CampaClick, podrán descontarse los costos efectivamente causados por cada transacción, incluida la comisión de CampaClick del 5% y los costos cobrados por la pasarela de pago. Este descuento no se aplicará cuando una norma obligatoria exija la devolución completa, ni en los casos de reversión, retracto, error atribuible a la plataforma o cancelación de la campaña que legalmente deban reintegrarse sin descuento.
-    </p>
+    <h2>7. Resultados y entrega del premio</h2>
+    <p>El resultado se obtiene de la fuente y modalidad anunciadas. El organizador responde por la existencia, legalidad y entrega del premio. CampaClick puede exigir evidencias de entrega y suspender liquidaciones mientras exista una reclamación o incumplimiento pendiente.</p>
 
-    <h2>7. Responsabilidad del organizador</h2>
-    <p>
-      El organizador es responsable de la veracidad de la campaña, la existencia del premio, la entrega del premio y el cumplimiento de las condiciones ofrecidas al público.
-    </p>
+    <h2>8. Autorizaciones regulatorias</h2>
+    <p>La publicación o aprobación tecnológica no sustituye permisos, autorizaciones, derechos de explotación, impuestos ni demás obligaciones aplicables a rifas o juegos promocionales. El organizador debe obtenerlos antes de ofrecer o vender participaciones y suministrar sus datos para revisión.</p>
 
-    <h2>8. Responsabilidad del participante</h2>
-    <p>
-      El participante debe suministrar información real, verificar sus códigos, conservar el soporte de pago y consultar oportunamente el resultado de la campaña.
-    </p>
+    <h2>9. Comisión y costos</h2>
+    <p>CampaClick cobra al organizador una comisión del <b>5% sobre cada transacción aprobada</b>. La pasarela cobra separadamente la tarifa correspondiente al plan contratado por el comercio. El comprador verá el precio total antes de pagar y no se le adicionarán cargos no informados.</p>
 
-    <h2>9. Campañas con referidos</h2>
-    <p>
-      Cuando una campaña tenga programa de referidos, los códigos de cortesía se entregarán únicamente cuando se cumpla la cantidad mínima de compras aprobadas definida para esa campaña. Las compras propias no cuentan como referido válido.
-    </p>
+    <h2>10. Datos personales y WhatsApp</h2>
+    <p>La aceptación de estos términos y la autorización de tratamiento quedan registradas de manera verificable. Los mensajes operativos de WhatsApp se autorizan por separado y no incluyen publicidad. Consulta la <a href="/politica-privacidad">política de privacidad</a> y la <a href="/politica-cookies">política de cookies</a>.</p>
 
-    <h2>10. Uso indebido</h2>
-    <p>
-      CampaClick podrá bloquear, cancelar o revisar órdenes cuando detecte fraude, manipulación, pagos irregulares, abuso del sistema de referidos, duplicidad sospechosa o cualquier conducta que afecte la transparencia de la campaña.
-    </p>
+    <h2>11. Uso indebido</h2>
+    <p>Las órdenes podrán revisarse, suspenderse o cancelarse ante fraude, suplantación, manipulación, pago irregular, abuso de referidos o afectación de la transparencia, garantizando al usuario un canal de reclamación.</p>
 
-    <h2>11. Modificaciones</h2>
-    <p>
-      CampaClick podrá actualizar estos términos cuando sea necesario. La versión publicada en esta página será la vigente.
-    </p>
+    <h2>12. Atención y reclamaciones</h2>
+    <p>Las solicitudes se reciben mediante los datos de contacto indicados al inicio. Incluye nombre, teléfono, número de orden, hechos y petición concreta. También puedes consultar información institucional sobre protección al consumidor en <a href="https://www.sic.gov.co/" target="_blank" rel="noopener noreferrer">www.sic.gov.co</a>.</p>
 
-    <h2>12. Pagos a cuotas</h2>
-    <p>
-      Algunas campañas podrán ofrecer pagos a cuotas cuando el organizador haya activado esta opción. Antes de pagar, el participante verá el número de cuotas, sus valores, fechas de vencimiento y la fecha límite del plan.
-    </p>
-
-    <p>
-      El número de lotería o combinación automática de Baloto se reservará después de aprobarse la primera cuota. Si una cuota vence, el participante tendrá cinco días calendario de gracia. Vencido ese término sin pago, el código podrá liberarse y el valor pagado quedará registrado como saldo a favor, sin perjuicio de las reglas legales aplicables a devoluciones, retractos, reversión de pagos o cancelación de la campaña.
-    </p>
-
-    <p>
-      Cuando el comprador lo autorice expresamente, el organizador podrá registrar desde su panel una venta a crédito y reservar los códigos antes del primer pago. El comprador recibirá por WhatsApp el detalle operativo y el enlace para pagar. A estas ventas también les aplica el plazo de cinco días calendario de gracia y la liberación de códigos por incumplimiento.
-    </p>
-
-    <h2>13. Contacto</h2>
-    <p>
-      Para solicitudes, inquietudes o reclamaciones, el usuario podrá comunicarse con CampaClick a través de los canales publicados en la plataforma.
-    </p>
+    <h2>13. Cambios</h2>
+    <p>Las nuevas versiones se identificarán con fecha y versión. Una modificación sustancial no se aplicará retroactivamente para reducir derechos adquiridos en órdenes anteriores.</p>
 
     <div style="margin-top:26px;">
       <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
@@ -16100,69 +16379,99 @@ app.get("/politica-privacidad", (req, res) => {
 <body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
   <div style="max-width:950px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
     <h1>Política de privacidad y tratamiento de datos personales</h1>
+    <p><b>Versión:</b> ${escapeHtml(PRIVACY_VERSION)} · <b>Vigencia:</b> ${escapeHtml(LEGAL_DOCUMENTS_EFFECTIVE_DATE)}</p>
 
-    <p>
-      CampaClick protege la información personal de usuarios, participantes y organizadores. Esta política explica qué datos se recolectan, para qué se usan y cómo pueden ejercer sus derechos.
-    </p>
+    <h2>1. Responsable del tratamiento</h2>
+    <div style="padding:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;">
+      ${renderLegalResponsibleDetails()}
+    </div>
 
-    <h2>1. Datos que recolectamos</h2>
-    <p>
-      Podemos recolectar nombre completo, número de teléfono, correo electrónico, datos de orden, códigos promocionales asignados, soportes de verificación del organizador, información de campaña y estado de pago.
-    </p>
+    <h2>2. Información tratada</h2>
+    <p>Podemos tratar nombre, teléfono, correo, datos de órdenes y pagos, códigos escogidos o asignados, comunicaciones operativas, dirección IP, navegador, evidencias de aceptación y datos de campañas. Para verificar organizadores también se tratan documento de identidad, fotografías de verificación, información bancaria de liquidación y soportes del premio.</p>
 
-    <h2>2. Finalidad del tratamiento</h2>
-    <p>
-      Los datos se usan para registrar participantes, procesar órdenes, asignar códigos promocionales, enviar confirmaciones por WhatsApp, consultar resultados, validar identidad de organizadores, prevenir fraude y administrar campañas.
-    </p>
+    <h2>3. Finalidades</h2>
+    <ul>
+      <li>Crear y administrar cuentas, campañas, órdenes y planes de cuotas.</li>
+      <li>Reservar y asignar códigos; validar pagos, resultados y ganadores.</li>
+      <li>Enviar por WhatsApp comunicaciones operativas autorizadas.</li>
+      <li>Verificar identidad, prevenir fraude y proteger la seguridad de la plataforma.</li>
+      <li>Atender consultas, reclamos, devoluciones, retractos y reversión de pagos.</li>
+      <li>Cumplir obligaciones legales, contables, contractuales y de auditoría.</li>
+    </ul>
+    <p>Los datos no se utilizarán para publicidad sin una autorización previa, separada, expresa e informada.</p>
 
-    <h2>3. Datos financieros</h2>
-    <p>
-      CampaClick no almacena datos sensibles de tarjetas, claves bancarias ni credenciales financieras. Los pagos son gestionados por proveedores externos de pago.
-    </p>
+    <h2>4. Autorización y evidencia</h2>
+    <p>La autorización se solicita mediante casillas no premarcadas antes de registrar los datos. CampaClick conserva fecha, versión de los documentos aceptados, finalidad, dirección IP, navegador y referencia de cuenta u orden para que la autorización pueda consultarse posteriormente.</p>
+    <p>Cuando un organizador registra una venta solicitada directamente por un comprador, debe confirmar que cuenta con autorización verificable para suministrar los datos y utilizar WhatsApp como canal operativo.</p>
 
-    <h2>4. WhatsApp y comunicaciones</h2>
-    <p>
-      Al participar o registrarse, el usuario autoriza recibir mensajes relacionados con su orden, códigos promocionales, estado de campaña, resultados, verificación o soporte operativo.
-    </p>
+    <h2>5. WhatsApp</h2>
+    <p>La autorización de mensajes operativos cubre confirmaciones de orden, enlaces de pago, códigos, cuotas, vencimientos, resultados y soporte relacionado. No cubre campañas publicitarias. El titular puede solicitar el cambio de canal o la suspensión de mensajes que no sean indispensables para una obligación vigente.</p>
 
-    <p>
-      Si el comprador solicita al organizador una venta a crédito, el organizador registrará la confirmación de esa autorización y podrá suministrar a CampaClick el nombre, teléfono, correo opcional, códigos escogidos y condiciones de pago necesarios para crear y administrar la orden.
-    </p>
+    <h2>6. Encargados y proveedores</h2>
+    <p>Para prestar el servicio intervienen Supabase (base de datos y almacenamiento), Railway (alojamiento), Wompi (procesamiento de pagos) y Meta/WhatsApp Cloud API (mensajería). Cada proveedor trata la información necesaria para su función conforme a sus condiciones y medidas de seguridad. Algunos tratamientos pueden involucrar infraestructura ubicada fuera de Colombia, sujeta a las reglas aplicables de transmisión o transferencia de datos.</p>
 
-    <h2>5. Conservación de la información</h2>
-    <p>
-      La información podrá conservarse durante el tiempo necesario para cumplir finalidades operativas, legales, contables, de seguridad, auditoría y atención de reclamaciones.
-    </p>
+    <h2>7. Datos financieros y documentos</h2>
+    <p>CampaClick no recibe ni almacena números completos de tarjeta, claves bancarias o códigos de autenticación financiera. Los documentos de verificación del organizador se guardan en almacenamiento privado y sus enlaces temporales expiran.</p>
 
-    <h2>6. Seguridad</h2>
-    <p>
-      CampaClick aplica medidas técnicas y administrativas para proteger la información. Sin embargo, ningún sistema digital es absolutamente infalible, por lo que también se recomienda al usuario cuidar sus credenciales y dispositivos.
-    </p>
+    <h2>8. Conservación</h2>
+    <p>Los datos se conservan mientras exista una cuenta, campaña, orden, saldo, reclamación u obligación legal o contable vigente. Vencida la finalidad y los plazos obligatorios, se eliminarán, anonimizarán o bloquearán de forma segura. La evidencia de transacciones y autorizaciones podrá conservarse durante el término necesario para atender reclamaciones y demostrar cumplimiento.</p>
 
-    <h2>7. Derechos del titular</h2>
-    <p>
-      El titular de los datos podrá solicitar consulta, actualización, corrección, eliminación o revocatoria de autorización cuando legalmente proceda.
-    </p>
+    <h2>9. Derechos del titular</h2>
+    <p>El titular puede conocer, actualizar y rectificar sus datos; solicitar prueba de la autorización; conocer el uso dado; presentar quejas ante la Superintendencia de Industria y Comercio después de agotar el trámite directo cuando corresponda; y solicitar revocatoria o supresión cuando legalmente proceda.</p>
 
-    <h2>8. Encargados y terceros</h2>
-    <p>
-      Para operar la plataforma pueden intervenir proveedores tecnológicos, pasarelas de pago, servicios de almacenamiento, mensajería, hosting y herramientas de seguridad.
-    </p>
+    <h2>10. Consultas y reclamos</h2>
+    <p>La solicitud debe enviarse a los canales indicados en la sección 1 e incluir nombre, identificación suficiente, descripción de los hechos, petición, medio de respuesta y soportes. Las consultas se responderán dentro de diez días hábiles y los reclamos dentro de quince días hábiles, con las ampliaciones legalmente permitidas cuando sea necesario.</p>
 
-    <h2>9. Autorización</h2>
-    <p>
-      Al usar CampaClick, crear una cuenta, registrar una orden o participar en una campaña, el usuario autoriza el tratamiento de sus datos personales conforme a esta política.
-    </p>
+    <h2>11. Seguridad e incidentes</h2>
+    <p>Se aplican controles de acceso, sesiones protegidas, cifrado en tránsito, limitación de solicitudes, protección CSRF, validación de webhooks y almacenamiento privado. Ningún sistema elimina totalmente el riesgo; los incidentes se investigarán, documentarán y reportarán cuando la normativa lo exija.</p>
 
-    <h2>10. Contacto</h2>
-    <p>
-      Las solicitudes relacionadas con datos personales podrán presentarse a través de los canales oficiales publicados por CampaClick.
-    </p>
+    <h2>12. Cookies</h2>
+    <p>CampaClick utiliza una cookie estrictamente necesaria para mantener la sesión segura. No se detectaron cookies publicitarias ni de analítica en esta versión. Consulta los detalles en la <a href="/politica-cookies">política de cookies</a>.</p>
+
+    <h2>13. Cambios</h2>
+    <p>Las modificaciones se publicarán identificando versión y fecha. Si una nueva finalidad requiere autorización, se solicitará antes de iniciar ese tratamiento.</p>
 
     <div style="margin-top:26px;">
       <a href="/" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">
         Volver al inicio
       </a>
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
+app.get("/politica-cookies", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  return res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Política de cookies - CampaClick</title>
+</head>
+<body style="font-family:Arial;background:#f3f6fb;color:#111827;padding:30px;line-height:1.6;">
+  <div style="max-width:900px;margin:auto;background:white;padding:32px;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+    <h1>Política de cookies</h1>
+    <p><b>Vigencia:</b> ${escapeHtml(LEGAL_DOCUMENTS_EFFECTIVE_DATE)}</p>
+
+    <h2>¿Qué utiliza CampaClick?</h2>
+    <p>La aplicación utiliza una cookie estrictamente necesaria denominada <b>${escapeHtml(SESSION_COOKIE_NAME)}</b>. Su finalidad es mantener autenticada y protegida la sesión del administrador u organizador y conservar temporalmente controles de seguridad como el token CSRF.</p>
+
+    <h2>Duración y seguridad</h2>
+    <p>La cookie tiene una duración máxima de cuatro horas, es de acceso HTTP únicamente, utiliza SameSite=Lax y en producción solo se transmite mediante HTTPS. No contiene la contraseña del usuario.</p>
+
+    <h2>Analítica y publicidad</h2>
+    <p>Esta versión no instala Google Analytics, Meta Pixel ni cookies de publicidad o perfilamiento. Por esa razón no se solicita consentimiento para categorías no esenciales. Si se incorporan en el futuro, se implementará una elección previa y se actualizará esta política antes de activarlas.</p>
+
+    <h2>Cómo controlarla</h2>
+    <p>El usuario puede eliminar o bloquear la cookie desde su navegador, pero hacerlo cerrará la sesión o impedirá el acceso a funciones autenticadas.</p>
+
+    <div style="margin-top:26px;">
+      <a href="/politica-privacidad" style="display:inline-block;padding:13px 18px;background:#2563eb;color:white;text-decoration:none;border-radius:12px;font-weight:bold;">Ver política de privacidad</a>
     </div>
   </div>
 </body>
@@ -16192,50 +16501,55 @@ app.get("/politica-campanas", (req, res) => {
 
     <h2>1. Revisión previa</h2>
     <p>
-      Toda campaña creada por un organizador podrá ser revisada por CampaClick antes de quedar activa o pública.
+      Toda campaña creada por un organizador será revisada por CampaClick antes de quedar activa o pública. Esta revisión técnica y documental no reemplaza la autorización de la autoridad competente.
     </p>
 
-    <h2>2. Transparencia</h2>
+    <h2>2. Permisos y legalidad</h2>
+    <p>
+      El organizador debe identificar la autoridad competente y acreditar, antes de la publicación, los permisos, autorizaciones, derechos de explotación, impuestos y condiciones aplicables. CampaClick podrá rechazar, suspender o retirar una campaña que no cuente con soporte suficiente.
+    </p>
+
+    <h2>3. Transparencia</h2>
     <p>
       Cada campaña debe informar premio, valor por código promocional, fecha del resultado, modalidad, reglas de asignación y condiciones de participación.
     </p>
 
-    <h2>3. Códigos promocionales</h2>
+    <h2>4. Códigos promocionales</h2>
     <p>
       Los códigos promocionales son la unidad de participación dentro de la campaña. Su asignación queda registrada en la plataforma y puede ser consultada por el participante.
     </p>
 
-    <h2>4. Campañas Baloto</h2>
+    <h2>5. Campañas Baloto</h2>
     <p>
       En campañas con Baloto, se toman únicamente las balotas principales del resultado oficial, sin incluir la súper balota. El sistema organiza las balotas de menor a mayor y valida la modalidad definida.
     </p>
 
-    <h2>5. Campañas de lotería</h2>
+    <h2>6. Campañas de lotería</h2>
     <p>
       En campañas de lotería, el participante podrá escoger números disponibles cuando la campaña permita selección manual. Los números vendidos o reservados temporalmente no estarán disponibles para otros usuarios.
     </p>
 
-    <h2>6. Referidos</h2>
+    <h2>7. Referidos</h2>
     <p>
       El programa de referidos, cuando esté activo, entregará códigos de cortesía únicamente cuando se cumpla la meta de compras aprobadas. Las cortesías no son dinero, no son comisión y no son canjeables.
     </p>
 
-    <h2>7. Cierre de campaña</h2>
+    <h2>8. Cierre de campaña</h2>
     <p>
       Una campaña se cierra cuando se registra el resultado oficial o cuando CampaClick determine su cancelación por razones operativas, técnicas o de seguridad.
     </p>
 
-    <h2>8. Entrega del premio</h2>
+    <h2>9. Entrega del premio</h2>
     <p>
       La entrega del premio corresponde al organizador. CampaClick podrá solicitar evidencias de entrega antes de liquidar valores al organizador.
     </p>
 
-    <h2>9. Prevención de fraude</h2>
+    <h2>10. Prevención de fraude</h2>
     <p>
       CampaClick podrá revisar órdenes, pagos, referidos, códigos y resultados cuando detecte conductas irregulares o intentos de manipulación.
     </p>
 
-    <h2 id="pagos-cuotas">10. Pagos a cuotas</h2>
+    <h2 id="pagos-cuotas">11. Pagos a cuotas</h2>
     <p>
       El organizador puede habilitar o deshabilitar esta opción para cada campaña. Solo estará disponible cuando el código promocional tenga un valor mínimo de $20.000 y exista tiempo suficiente para completar el plan.
     </p>
