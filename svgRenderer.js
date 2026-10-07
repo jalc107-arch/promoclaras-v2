@@ -74,6 +74,76 @@ function cellPalette(status) {
   return { fill: "#ffe4e6", stroke: "#fb7185", text: "#9f1239", marker: "X" };
 }
 
+function stylePresentation(theme) {
+  const style = ["premium", "classic", "minimal"].includes(theme.style)
+    ? theme.style
+    : "premium";
+
+  if (style === "classic") {
+    return {
+      id: style,
+      backgroundFill: theme.background,
+      decoration: `
+        <rect x="24" y="24" width="1032" height="1872" fill="none" stroke="${theme.accent}" stroke-width="3" opacity="0.72"/>
+        <line x1="320" y1="294" x2="760" y2="294" stroke="${theme.accent}" stroke-width="3" opacity="0.85"/>
+      `,
+      titleColor: theme.text,
+      sectionColor: theme.text,
+      footerColor: theme.text,
+      cardRadius: 8,
+      cellRadius: 4,
+      legendRadius: 8,
+      qrRadius: 6,
+      cardEffect: "",
+      cardStroke: `stroke="${theme.accent}" stroke-width="3"`,
+      cardOpacity: "1",
+      legendStroke: `stroke="${theme.accent}" stroke-width="2"`
+    };
+  }
+
+  if (style === "minimal") {
+    return {
+      id: style,
+      backgroundFill: "#f8fafc",
+      decoration: `
+        <rect width="1080" height="18" fill="${theme.primary}"/>
+        <rect y="18" width="1080" height="6" fill="${theme.accent}"/>
+      `,
+      titleColor: "#0f172a",
+      sectionColor: "#0f172a",
+      footerColor: "#0f172a",
+      cardRadius: 4,
+      cellRadius: 6,
+      legendRadius: 4,
+      qrRadius: 4,
+      cardEffect: "",
+      cardStroke: `stroke="#cbd5e1" stroke-width="2"`,
+      cardOpacity: "1",
+      legendStroke: `stroke="#cbd5e1" stroke-width="2"`
+    };
+  }
+
+  return {
+    id: "premium",
+    backgroundFill: "url(#bg)",
+    decoration: `
+      <circle cx="950" cy="120" r="250" fill="${theme.primary}" opacity="0.16"/>
+      <circle cx="80" cy="1770" r="240" fill="${theme.accent}" opacity="0.12"/>
+    `,
+    titleColor: theme.text,
+    sectionColor: theme.text,
+    footerColor: theme.text,
+    cardRadius: 28,
+    cellRadius: 10,
+    legendRadius: 20,
+    qrRadius: 16,
+    cardEffect: `filter="url(#shadow)"`,
+    cardStroke: "",
+    cardOpacity: "0.97",
+    legendStroke: ""
+  };
+}
+
 export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUrl = null }) {
   const width = 1080;
   const height = 1920;
@@ -88,6 +158,7 @@ export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUr
   const renderedPrize = prizeText(model);
   const titleFontSize = fitFontSize(renderedTitle, 42, 28, 34);
   const prizeFontSize = fitFontSize(renderedPrize, 68, 34, 24);
+  const presentation = stylePresentation(theme);
 
   const cells = sheet.codes.map((item, position) => {
     const column = position % columns;
@@ -100,7 +171,7 @@ export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUr
       : "";
 
     return `<g>
-      <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" rx="10" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="2"/>
+      <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" rx="${presentation.cellRadius}" fill="${palette.fill}" stroke="${palette.stroke}" stroke-width="2"/>
       <text x="${x + cellWidth / 2}" y="${y + 28}" text-anchor="middle" font-size="23" font-weight="800" fill="${palette.text}">${escapeXml(item.code)}</text>
       ${marker}
     </g>`;
@@ -111,14 +182,14 @@ export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUr
     : "Pago seguro en CampaClick";
 
   const qrBlock = qrDataUrl
-    ? `<rect x="55" y="1715" width="142" height="142" rx="16" fill="#ffffff"/>
+    ? `<rect x="55" y="1715" width="142" height="142" rx="${presentation.qrRadius}" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
        <image x="64" y="1724" width="124" height="124" href="${escapeXml(qrDataUrl)}"/>`
     : "";
   const footerX = qrDataUrl ? 225 : 540;
   const footerAnchor = qrDataUrl ? "start" : "middle";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-style="${presentation.id}">
     <defs>
       <style>
         text { font-family: "DejaVu Sans", sans-serif; }
@@ -129,29 +200,28 @@ export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUr
       </linearGradient>
       <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.25"/></filter>
     </defs>
-    <rect width="1080" height="1920" fill="url(#bg)"/>
-    <circle cx="950" cy="120" r="250" fill="${theme.primary}" opacity="0.16"/>
-    <circle cx="80" cy="1770" r="240" fill="${theme.accent}" opacity="0.12"/>
+    <rect width="1080" height="1920" fill="${presentation.backgroundFill}"/>
+    ${presentation.decoration}
 
-    <text x="540" y="126" text-anchor="middle" font-family="DejaVu Sans" font-size="${titleFontSize}" font-weight="900" fill="${theme.text}">${escapeXml(renderedTitle)}</text>
+    <text x="540" y="126" text-anchor="middle" font-family="DejaVu Sans" font-size="${titleFontSize}" font-weight="900" fill="${presentation.titleColor}">${escapeXml(renderedTitle)}</text>
     <text x="540" y="190" text-anchor="middle" font-family="DejaVu Sans" font-size="28" font-weight="700" fill="${theme.accent}">PREMIO</text>
-    <text x="540" y="270" text-anchor="middle" font-family="DejaVu Sans" font-size="${prizeFontSize}" font-weight="900" fill="${theme.text}">${escapeXml(renderedPrize)}</text>
+    <text x="540" y="270" text-anchor="middle" font-family="DejaVu Sans" font-size="${prizeFontSize}" font-weight="900" fill="${presentation.titleColor}">${escapeXml(renderedPrize)}</text>
 
-    <g filter="url(#shadow)">
-      <rect x="55" y="320" width="970" height="150" rx="28" fill="#ffffff" opacity="0.97"/>
+    <g ${presentation.cardEffect}>
+      <rect x="55" y="320" width="970" height="150" rx="${presentation.cardRadius}" fill="#ffffff" opacity="${presentation.cardOpacity}" ${presentation.cardStroke}/>
     </g>
     <text x="95" y="370" font-family="DejaVu Sans" font-size="24" font-weight="800" fill="#0f172a">${escapeXml(dateInBogota(model.drawDate))}</text>
     <text x="95" y="414" font-family="DejaVu Sans" font-size="22" fill="#334155">${escapeXml(model.lotteryName)} - ${escapeXml(model.drawMechanism)}</text>
     <text x="985" y="370" text-anchor="end" font-family="DejaVu Sans" font-size="30" font-weight="900" fill="${theme.primary}">${escapeXml(moneyCOP(model.codePrice))}</text>
     <text x="985" y="414" text-anchor="end" font-family="DejaVu Sans" font-size="19" fill="#475569">por código</text>
 
-    <text x="55" y="525" font-family="DejaVu Sans" font-size="26" font-weight="900" fill="${theme.text}">NÚMEROS ${escapeXml(sheet.startCode)} - ${escapeXml(sheet.endCode)}</text>
+    <text x="55" y="525" font-family="DejaVu Sans" font-size="26" font-weight="900" fill="${presentation.sectionColor}">NÚMEROS ${escapeXml(sheet.startCode)} - ${escapeXml(sheet.endCode)}</text>
     <text x="1025" y="525" text-anchor="end" font-family="DejaVu Sans" font-size="22" font-weight="700" fill="${theme.accent}">LÁMINA ${sheet.index + 1} DE ${sheetCount}</text>
 
     ${cells}
 
     <g transform="translate(55 1605)">
-      <rect width="970" height="82" rx="20" fill="#ffffff" opacity="0.96"/>
+      <rect width="970" height="82" rx="${presentation.legendRadius}" fill="#ffffff" opacity="0.96" ${presentation.legendStroke}/>
       <circle cx="42" cy="41" r="14" fill="#22c55e"/><text x="68" y="49" font-family="DejaVu Sans" font-size="22" font-weight="800" fill="#14532d">DISPONIBLE</text>
       <circle cx="270" cy="41" r="14" fill="#fb7185"/><text x="296" y="49" font-family="DejaVu Sans" font-size="22" font-weight="800" fill="#9f1239">VENDIDO</text>
       <circle cx="500" cy="41" r="14" fill="#f59e0b"/><text x="526" y="49" font-family="DejaVu Sans" font-size="22" font-weight="800" fill="#92400e">RESERVADO</text>
@@ -160,8 +230,8 @@ export function renderInfographicSvg({ model, sheet, sheetCount, theme, qrDataUr
 
     ${qrBlock}
     <text x="${footerX}" y="1750" text-anchor="${footerAnchor}" font-family="DejaVu Sans" font-size="28" font-weight="900" fill="${theme.accent}">${escapeXml(installmentText)}</text>
-    <text x="${footerX}" y="1800" text-anchor="${footerAnchor}" font-family="DejaVu Sans" font-size="24" font-weight="800" fill="${theme.text}">PARTICIPA AHORA</text>
-    <text x="${footerX}" y="1840" text-anchor="${footerAnchor}" font-family="DejaVu Sans" font-size="18" fill="${theme.text}">${escapeXml(model.publicUrl)}</text>
-    <text x="540" y="1882" text-anchor="middle" font-family="DejaVu Sans" font-size="15" fill="${theme.text}" opacity="0.72">Disponibilidad actualizada: ${escapeXml(updatedAt(model.generatedAt))}</text>
+    <text x="${footerX}" y="1800" text-anchor="${footerAnchor}" font-family="DejaVu Sans" font-size="24" font-weight="800" fill="${presentation.footerColor}">PARTICIPA AHORA</text>
+    <text x="${footerX}" y="1840" text-anchor="${footerAnchor}" font-family="DejaVu Sans" font-size="18" fill="${presentation.footerColor}">${escapeXml(model.publicUrl)}</text>
+    <text x="540" y="1882" text-anchor="middle" font-family="DejaVu Sans" font-size="15" fill="${presentation.footerColor}" opacity="0.72">Disponibilidad actualizada: ${escapeXml(updatedAt(model.generatedAt))}</text>
   </svg>`;
 }
