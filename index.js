@@ -15,6 +15,15 @@ import {
 } from "./services/campaignAvailabilityService.js";
 import { createPromotionalContentService } from "./services/promotionalContentService.js";
 import { registerOrganizerPromotionalContentRoutes } from "./routes/organizerPromotionalContent.js";
+import {
+  PHONE_OTP_MAX_ATTEMPTS,
+  PHONE_OTP_TTL_MINUTES,
+  buildAuthenticationTemplatePayload,
+  generatePhoneOtp,
+  hashPhoneOtp,
+  normalizeColombianMobilePhone,
+  verifyPhoneOtpHash
+} from "./services/phoneVerificationService.js";
 
 const app = express();
 
@@ -182,7 +191,9 @@ const ORGANIZER_PUBLIC_PATHS = new Set([
   "/login",
   "/login/",
   "/register",
-  "/register/"
+  "/register/",
+  "/phone-verification/send",
+  "/phone-verification/verify"
 ]);
 
 app.use("/organizers", (req, res, next) => {
@@ -209,7 +220,7 @@ app.use("/organizers", (req, res, next) => {
 app.use("/organizers/:organizerId", (req, res, next) => {
   const organizerRouteSegment = String(req.params.organizerId || "");
 
-  if (["login", "register", "logout"].includes(organizerRouteSegment)) {
+  if (["login", "register", "logout", "phone-verification"].includes(organizerRouteSegment)) {
     return next();
   }
 
@@ -366,6 +377,28 @@ const organizerRegistrationLimiter = rateLimit({
   message: "Demasiados registros desde esta conexión. Intenta nuevamente más tarde."
 });
 
+const phoneOtpSendLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    message: "Demasiados códigos solicitados. Espera 15 minutos e intenta nuevamente."
+  }
+});
+
+const phoneOtpVerifyLimiter = rateLimit({
+  windowMs: 1000 * 60 * 15,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    message: "Demasiados intentos de verificación. Espera 15 minutos e intenta nuevamente."
+  }
+});
+
 const adminLoginLimiter = rateLimit({
   windowMs: 1000 * 60 * 15,
   limit: 5,
@@ -451,6 +484,18 @@ const WHATSAPP_VERIFY_TOKEN = String(process.env.WHATSAPP_VERIFY_TOKEN || "").tr
 const WHATSAPP_INSTALLMENT_TEMPLATE_NAME = String(
   process.env.WHATSAPP_INSTALLMENT_TEMPLATE_NAME || "recordatorio_cuota"
 ).trim();
+const WHATSAPP_AUTH_TEMPLATE_NAME = String(
+  process.env.WHATSAPP_AUTH_TEMPLATE_NAME || "codigo_verificacion"
+).trim();
+const WHATSAPP_AUTH_TEMPLATE_LANGUAGE = String(
+  process.env.WHATSAPP_AUTH_TEMPLATE_LANGUAGE || "es_CO"
+).trim();
+const OTP_HASH_SECRET = String(
+  process.env.OTP_HASH_SECRET || SESSION_SECRET
+).trim();
+const PHONE_OTP_PURPOSE = "organizer_registration";
+const PHONE_OTP_RESEND_SECONDS = 60;
+const PHONE_OTP_SESSION_TTL_MS = PHONE_OTP_TTL_MINUTES * 60 * 1000;
 const INSTALLMENT_REMINDER_DAYS = Math.max(
   1,
   Math.min(10, Number(process.env.INSTALLMENT_REMINDER_DAYS || 3))
@@ -483,6 +528,12 @@ const missingConfiguration = Object.entries(REQUIRED_CONFIGURATION)
 if (missingConfiguration.length > 0) {
   throw new Error(
     `Configuración incompleta: faltan ${missingConfiguration.join(", ")}.`
+  );
+}
+
+if (OTP_HASH_SECRET.length < 32) {
+  throw new Error(
+    "OTP_HASH_SECRET debe contener al menos 32 caracteres aleatorios o debe omitirse para utilizar SESSION_SECRET."
   );
 }
 
@@ -1649,6 +1700,63 @@ async function sendWhatsAppMessage(phone, message) {
     };
   } catch (error) {
     console.error("Error enviando WhatsApp Cloud API:", error);
+
+    return {
+      ok: false,
+      reason: error.message
+    };
+  }
+}
+
+async function sendWhatsAppAuthenticationCode(phone, code) {
+  try {
+    if (!WHATSAPP_CLOUD_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      return {
+        ok: false,
+        reason: "WhatsApp Cloud API no configurado"
+      };
+    }
+
+    const normalizedPhone = normalizeColombianMobilePhone(phone);
+
+    if (!normalizedPhone) {
+      return {
+        ok: false,
+        reason: "Teléfono inválido"
+      };
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v25.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_CLOUD_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(
+          buildAuthenticationTemplatePayload({
+            to: normalizedPhone.e164,
+            code,
+            templateName: WHATSAPP_AUTH_TEMPLATE_NAME,
+            languageCode: WHATSAPP_AUTH_TEMPLATE_LANGUAGE
+          })
+        )
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("WhatsApp plantilla de autenticación status:", response.status);
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      messageId: result?.messages?.[0]?.id || null,
+      response: result
+    };
+  } catch (error) {
+    console.error("Error enviando OTP por WhatsApp:", error);
 
     return {
       ok: false,
@@ -3866,6 +3974,264 @@ app.get("/health", async (req, res) => {
   }
 });
 
+app.post(
+  "/organizers/phone-verification/send",
+  phoneOtpSendLimiter,
+  async (req, res) => {
+    try {
+      const normalizedPhone = normalizeColombianMobilePhone(req.body?.phone);
+
+      if (!normalizedPhone) {
+        return res.status(400).json({
+          ok: false,
+          message: "Escribe un celular colombiano válido de 10 dígitos."
+        });
+      }
+
+      const recentWindow = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { count: recentCount, error: recentCountError } = await supabase
+        .from("phone_verification_challenges")
+        .select("id", { count: "exact", head: true })
+        .eq("phone_e164", normalizedPhone.e164)
+        .eq("purpose", PHONE_OTP_PURPOSE)
+        .gte("created_at", recentWindow);
+
+      if (recentCountError) throw recentCountError;
+
+      if (Number(recentCount || 0) >= 5) {
+        return res.status(429).json({
+          ok: false,
+          message: "Se alcanzó el límite de códigos para este número. Espera 15 minutos."
+        });
+      }
+
+      const { data: latestChallenge, error: latestChallengeError } = await supabase
+        .from("phone_verification_challenges")
+        .select("created_at")
+        .eq("phone_e164", normalizedPhone.e164)
+        .eq("purpose", PHONE_OTP_PURPOSE)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestChallengeError) throw latestChallengeError;
+
+      if (latestChallenge?.created_at) {
+        const elapsedSeconds = Math.floor(
+          (Date.now() - new Date(latestChallenge.created_at).getTime()) / 1000
+        );
+
+        if (elapsedSeconds < PHONE_OTP_RESEND_SECONDS) {
+          return res.status(429).json({
+            ok: false,
+            message: `Espera ${PHONE_OTP_RESEND_SECONDS - elapsedSeconds} segundos para solicitar otro código.`
+          });
+        }
+      }
+
+      const challengeId = crypto.randomUUID();
+      const code = generatePhoneOtp();
+      const expiresAt = new Date(
+        Date.now() + PHONE_OTP_TTL_MINUTES * 60 * 1000
+      ).toISOString();
+      const codeHash = hashPhoneOtp({
+        challengeId,
+        phoneE164: normalizedPhone.e164,
+        code,
+        secret: OTP_HASH_SECRET
+      });
+
+      const { error: insertError } = await supabase
+        .from("phone_verification_challenges")
+        .insert({
+          id: challengeId,
+          phone_e164: normalizedPhone.e164,
+          purpose: PHONE_OTP_PURPOSE,
+          code_hash: codeHash,
+          expires_at: expiresAt
+        });
+
+      if (insertError) throw insertError;
+
+      const sendResult = await sendWhatsAppAuthenticationCode(
+        normalizedPhone.national,
+        code
+      );
+
+      if (!sendResult.ok) {
+        await supabase
+          .from("phone_verification_challenges")
+          .update({ consumed_at: new Date().toISOString() })
+          .eq("id", challengeId);
+
+        console.error(
+          "No fue posible entregar el OTP mediante la plantilla de WhatsApp:",
+          sendResult.status || sendResult.reason || "respuesta desconocida"
+        );
+
+        return res.status(502).json({
+          ok: false,
+          message: "No fue posible enviar el código por WhatsApp. Intenta nuevamente más tarde."
+        });
+      }
+
+      const { error: deliveryUpdateError } = await supabase
+        .from("phone_verification_challenges")
+        .update({ delivery_message_id: sendResult.messageId })
+        .eq("id", challengeId);
+
+      if (deliveryUpdateError) {
+        console.error("No fue posible guardar el identificador de entrega del OTP:", deliveryUpdateError);
+      }
+
+      req.session.phoneVerificationChallengeId = challengeId;
+      req.session.phoneVerificationPhone = normalizedPhone.e164;
+      delete req.session.verifiedOrganizerPhone;
+      delete req.session.verifiedOrganizerPhoneAt;
+
+      return res.json({
+        ok: true,
+        phone: normalizedPhone.display,
+        expiresInMinutes: PHONE_OTP_TTL_MINUTES
+      });
+    } catch (error) {
+      const incidentId = crypto.randomBytes(6).toString("hex");
+      console.error(`[${incidentId}] Error enviando verificación de teléfono:`, error);
+      return res.status(500).json({
+        ok: false,
+        message: `No fue posible iniciar la verificación. Código: ${incidentId}`
+      });
+    }
+  }
+);
+
+app.post(
+  "/organizers/phone-verification/verify",
+  phoneOtpVerifyLimiter,
+  async (req, res) => {
+    try {
+      const normalizedPhone = normalizeColombianMobilePhone(req.body?.phone);
+      const code = String(req.body?.code || "").replace(/\D/g, "");
+      const challengeId = String(
+        req.session?.phoneVerificationChallengeId || ""
+      );
+
+      if (!normalizedPhone || !/^\d{6}$/.test(code) || !challengeId) {
+        return res.status(400).json({
+          ok: false,
+          message: "El código o el teléfono no son válidos. Solicita un código nuevo."
+        });
+      }
+
+      if (req.session.phoneVerificationPhone !== normalizedPhone.e164) {
+        return res.status(400).json({
+          ok: false,
+          message: "El código fue solicitado para un teléfono diferente."
+        });
+      }
+
+      const { data: challenge, error: challengeError } = await supabase
+        .from("phone_verification_challenges")
+        .select("*")
+        .eq("id", challengeId)
+        .eq("phone_e164", normalizedPhone.e164)
+        .eq("purpose", PHONE_OTP_PURPOSE)
+        .maybeSingle();
+
+      if (challengeError) throw challengeError;
+
+      if (!challenge || challenge.consumed_at) {
+        return res.status(400).json({
+          ok: false,
+          message: "Este código ya no está disponible. Solicita uno nuevo."
+        });
+      }
+
+      if (new Date(challenge.expires_at).getTime() <= Date.now()) {
+        await supabase
+          .from("phone_verification_challenges")
+          .update({ consumed_at: new Date().toISOString() })
+          .eq("id", challenge.id);
+
+        return res.status(400).json({
+          ok: false,
+          message: "El código venció. Solicita uno nuevo."
+        });
+      }
+
+      const nextAttempts = Number(challenge.attempts || 0) + 1;
+
+      if (nextAttempts > PHONE_OTP_MAX_ATTEMPTS) {
+        return res.status(429).json({
+          ok: false,
+          message: "Se agotaron los intentos permitidos. Solicita un código nuevo."
+        });
+      }
+
+      const matches = verifyPhoneOtpHash({
+        challengeId: challenge.id,
+        phoneE164: challenge.phone_e164,
+        code,
+        secret: OTP_HASH_SECRET,
+        expectedHash: challenge.code_hash
+      });
+
+      const challengeUpdate = {
+        attempts: nextAttempts
+      };
+
+      if (matches || nextAttempts >= PHONE_OTP_MAX_ATTEMPTS) {
+        challengeUpdate.consumed_at = new Date().toISOString();
+      }
+
+      const { data: updatedChallenge, error: updateError } = await supabase
+        .from("phone_verification_challenges")
+        .update(challengeUpdate)
+        .eq("id", challenge.id)
+        .eq("attempts", challenge.attempts)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) throw updateError;
+
+      if (!updatedChallenge) {
+        return res.status(409).json({
+          ok: false,
+          message: "La verificación cambió mientras se procesaba. Intenta nuevamente."
+        });
+      }
+
+      if (!matches) {
+        const remaining = PHONE_OTP_MAX_ATTEMPTS - nextAttempts;
+        return res.status(400).json({
+          ok: false,
+          message: remaining > 0
+            ? `Código incorrecto. Quedan ${remaining} intentos.`
+            : "Código incorrecto. Solicita un código nuevo."
+        });
+      }
+
+      req.session.verifiedOrganizerPhone = normalizedPhone.e164;
+      req.session.verifiedOrganizerPhoneAt = Date.now();
+      delete req.session.phoneVerificationChallengeId;
+      delete req.session.phoneVerificationPhone;
+
+      return res.json({
+        ok: true,
+        phoneNational: normalizedPhone.national,
+        message: "Teléfono verificado correctamente."
+      });
+    } catch (error) {
+      const incidentId = crypto.randomBytes(6).toString("hex");
+      console.error(`[${incidentId}] Error validando el teléfono:`, error);
+      return res.status(500).json({
+        ok: false,
+        message: `No fue posible validar el código. Código: ${incidentId}`
+      });
+    }
+  }
+);
+
 app.get("/organizers/register", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
 
@@ -4104,10 +4470,33 @@ app.get("/organizers/register", (req, res) => {
           <div class="field">
             <label>Teléfono</label>
             <input
-              type="text"
+              type="tel"
+              id="organizerPhone"
               name="phone"
+              required
+              inputmode="numeric"
+              autocomplete="tel"
+              maxlength="16"
               placeholder="Ej: 3001234567"
             >
+            <button type="button" id="sendPhoneCode" style="margin-top:10px;background:linear-gradient(135deg,#059669,#2563eb);">
+              Enviar código por WhatsApp
+            </button>
+            <div id="phoneVerificationPanel" style="display:none;margin-top:12px;padding:14px;border:1px solid rgba(255,255,255,.24);border-radius:16px;background:rgba(255,255,255,.08);">
+              <label for="phoneVerificationCode">Código de 6 dígitos</label>
+              <input
+                type="text"
+                id="phoneVerificationCode"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                placeholder="123456"
+              >
+              <button type="button" id="verifyPhoneCode" style="margin-top:10px;background:linear-gradient(135deg,#7c3aed,#2563eb);">
+                Verificar teléfono
+              </button>
+            </div>
+            <div id="phoneVerificationStatus" aria-live="polite" style="display:none;margin-top:10px;padding:11px 12px;border-radius:12px;font-size:14px;font-weight:800;line-height:1.4;"></div>
           </div>
 
           <div class="field">
@@ -4139,7 +4528,7 @@ app.get("/organizers/register", (req, res) => {
             </label>
           </div>
 
-          <button type="submit">
+          <button type="submit" id="createOrganizerAccount" disabled style="opacity:.55;cursor:not-allowed;">
             Crear cuenta
           </button>
         </form>
@@ -4152,6 +4541,139 @@ app.get("/organizers/register", (req, res) => {
           <a href="/">Volver al inicio</a>
         </div>
       </main>
+      <script>
+        (() => {
+          const form = document.querySelector('form[action="/organizers/register"]');
+          const phoneInput = document.getElementById("organizerPhone");
+          const sendButton = document.getElementById("sendPhoneCode");
+          const verificationPanel = document.getElementById("phoneVerificationPanel");
+          const codeInput = document.getElementById("phoneVerificationCode");
+          const verifyButton = document.getElementById("verifyPhoneCode");
+          const statusBox = document.getElementById("phoneVerificationStatus");
+          const submitButton = document.getElementById("createOrganizerAccount");
+          let verifiedPhone = "";
+
+          const csrfToken = () => String(
+            form?.querySelector('input[name="_csrf"]')?.value || ""
+          );
+
+          const nationalPhone = value => {
+            let digits = String(value || "").replace(/\\D/g, "");
+            if (digits.length === 12 && digits.startsWith("57")) digits = digits.slice(2);
+            return digits;
+          };
+
+          const showStatus = (message, success = false) => {
+            statusBox.textContent = message;
+            statusBox.style.display = "block";
+            statusBox.style.background = success
+              ? "rgba(34,197,94,.18)"
+              : "rgba(239,68,68,.18)";
+            statusBox.style.border = success
+              ? "1px solid rgba(134,239,172,.42)"
+              : "1px solid rgba(252,165,165,.42)";
+            statusBox.style.color = success ? "#dcfce7" : "#fee2e2";
+          };
+
+          const setVerified = phone => {
+            verifiedPhone = phone;
+            phoneInput.value = phone;
+            submitButton.disabled = false;
+            submitButton.style.opacity = "1";
+            submitButton.style.cursor = "pointer";
+            sendButton.textContent = "Enviar un código nuevo";
+            showStatus("Teléfono verificado. Ya puedes crear la cuenta.", true);
+          };
+
+          phoneInput.addEventListener("input", () => {
+            if (verifiedPhone && nationalPhone(phoneInput.value) !== verifiedPhone) {
+              verifiedPhone = "";
+              submitButton.disabled = true;
+              submitButton.style.opacity = ".55";
+              submitButton.style.cursor = "not-allowed";
+              showStatus("El número cambió. Debes verificarlo nuevamente.");
+            }
+          });
+
+          sendButton.addEventListener("click", async () => {
+            sendButton.disabled = true;
+            const originalText = sendButton.textContent;
+            sendButton.textContent = "Enviando…";
+
+            try {
+              const response = await fetch("/organizers/phone-verification/send", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-csrf-token": csrfToken()
+                },
+                body: JSON.stringify({ phone: phoneInput.value })
+              });
+              const result = await response.json();
+
+              if (!response.ok || !result.ok) {
+                throw new Error(result.message || "No fue posible enviar el código.");
+              }
+
+              verifiedPhone = "";
+              submitButton.disabled = true;
+              submitButton.style.opacity = ".55";
+              verificationPanel.style.display = "block";
+              codeInput.value = "";
+              codeInput.focus();
+              showStatus(
+                "Código enviado a " + result.phone + ". Vence en " + result.expiresInMinutes + " minutos.",
+                true
+              );
+            } catch (error) {
+              showStatus(error.message || "No fue posible enviar el código.");
+            } finally {
+              sendButton.disabled = false;
+              sendButton.textContent = originalText;
+            }
+          });
+
+          verifyButton.addEventListener("click", async () => {
+            verifyButton.disabled = true;
+            const originalText = verifyButton.textContent;
+            verifyButton.textContent = "Verificando…";
+
+            try {
+              const response = await fetch("/organizers/phone-verification/verify", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-csrf-token": csrfToken()
+                },
+                body: JSON.stringify({
+                  phone: phoneInput.value,
+                  code: codeInput.value
+                })
+              });
+              const result = await response.json();
+
+              if (!response.ok || !result.ok) {
+                throw new Error(result.message || "Código incorrecto.");
+              }
+
+              setVerified(result.phoneNational);
+              verificationPanel.style.display = "none";
+            } catch (error) {
+              showStatus(error.message || "No fue posible verificar el código.");
+            } finally {
+              verifyButton.disabled = false;
+              verifyButton.textContent = originalText;
+            }
+          });
+
+          form.addEventListener("submit", event => {
+            if (!verifiedPhone || nationalPhone(phoneInput.value) !== verifiedPhone) {
+              event.preventDefault();
+              showStatus("Verifica primero el teléfono por WhatsApp.");
+            }
+          });
+        })();
+      </script>
     </body>
     </html>
   `);
@@ -4162,12 +4684,31 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
     const fullName = String(req.body.full_name || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
     const phone = String(req.body.phone || "").trim();
+    const normalizedPhone = normalizeColombianMobilePhone(phone);
     const password = String(req.body.password || "").trim();
     const privacyAuthorizationAccepted =
       req.body.privacy_authorization_accepted === "true";
 
-    if (!fullName || !email || !password) {
+    if (!fullName || !email || !phone || !password) {
       return res.status(400).send("Faltan campos obligatorios");
+    }
+
+    if (!normalizedPhone) {
+      return res.status(400).send(
+        "El teléfono debe ser un celular colombiano válido de 10 dígitos."
+      );
+    }
+
+    const verifiedPhoneAt = Number(req.session?.verifiedOrganizerPhoneAt || 0);
+    const validPhoneVerification =
+      req.session?.verifiedOrganizerPhone === normalizedPhone.e164 &&
+      verifiedPhoneAt > 0 &&
+      Date.now() - verifiedPhoneAt <= PHONE_OTP_SESSION_TTL_MS;
+
+    if (!validPhoneVerification) {
+      return res.status(400).send(
+        "Debes verificar este teléfono mediante el código enviado por WhatsApp antes de crear la cuenta."
+      );
     }
 
     if (!privacyAuthorizationAccepted) {
@@ -4219,7 +4760,8 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
         profile_id: profile.id,
         full_name: fullName,
         email,
-        phone: phone || null,
+        phone: normalizedPhone.national,
+        phone_verified_at: new Date(verifiedPhoneAt).toISOString(),
         password: passwordHash,
         verification_status: "pending"
       })
@@ -4240,6 +4782,9 @@ app.post("/organizers/register", organizerRegistrationLimiter, async (req, res) 
         "seguridad_y_prevencion_de_fraude"
       ]
     });
+
+    delete req.session.verifiedOrganizerPhone;
+    delete req.session.verifiedOrganizerPhoneAt;
 
     return res.redirect(`/organizers/login?registered=1&email=${encodeURIComponent(organizer.email)}`);
   } catch (error) {
@@ -10140,11 +10685,11 @@ app.get("/consultar", publicLookupLimiter, async (req, res) => {
     const orderIdMatch = orderReference.match(
       /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i
     );
-    const requestedOrderId = orderIdMatch ? orderIdMatch[0] : "";
+    const referenceId = orderIdMatch ? orderIdMatch[0] : "";
 
     let orders = [];
 
-    if (phone && requestedOrderId) {
+    if (phone && referenceId) {
       const cleanPhone = phone.replace(/\D/g, "");
 
       const { data: buyer, error: buyerError } = await supabase
@@ -10156,7 +10701,7 @@ app.get("/consultar", publicLookupLimiter, async (req, res) => {
       if (buyerError) throw buyerError;
 
       if (buyer) {
-        const { data: ordersData, error: ordersError } = await supabase
+        let { data: ordersData, error: ordersError } = await supabase
           .from("orders")
           .select(`
             *,
@@ -10165,10 +10710,40 @@ app.get("/consultar", publicLookupLimiter, async (req, res) => {
             installment_plans(*)
           `)
           .eq("buyer_id", buyer.id)
-          .eq("id", requestedOrderId)
+          .eq("id", referenceId)
           .maybeSingle();
 
         if (ordersError) throw ordersError;
+
+        // Los enlaces de pago por cuotas contienen el public_token del plan,
+        // no el id de la orden. Si la referencia no identifica una orden,
+        // resolvemos el plan y volvemos a validar que pertenezca al comprador.
+        if (!ordersData) {
+          const { data: installmentPlan, error: installmentPlanError } = await supabase
+            .from("installment_plans")
+            .select("order_id")
+            .eq("public_token", referenceId)
+            .maybeSingle();
+
+          if (installmentPlanError) throw installmentPlanError;
+
+          if (installmentPlan?.order_id) {
+            const orderLookup = await supabase
+              .from("orders")
+              .select(`
+                *,
+                rifas(*),
+                tickets(*),
+                installment_plans(*)
+              `)
+              .eq("buyer_id", buyer.id)
+              .eq("id", installmentPlan.order_id)
+              .maybeSingle();
+
+            if (orderLookup.error) throw orderLookup.error;
+            ordersData = orderLookup.data;
+          }
+        }
 
         orders = ordersData ? [ordersData] : [];
       }
@@ -10477,8 +11052,8 @@ app.get("/consultar", publicLookupLimiter, async (req, res) => {
             <h1>Consultar mis códigos</h1>
 
             <p class="subtitle">
-              Por seguridad, ingresa el teléfono usado en la compra y la referencia
-              de la orden que recibiste en el enlace de WhatsApp.
+              Por seguridad, ingresa el teléfono usado en la compra y pega el enlace
+              de la orden o del plan de cuotas que recibiste por WhatsApp.
             </p>
 
             <form method="GET" action="/consultar">
@@ -10492,7 +11067,7 @@ app.get("/consultar", publicLookupLimiter, async (req, res) => {
                 required
               />
 
-              <label style="margin-top:14px;">Referencia o enlace de la orden</label>
+              <label style="margin-top:14px;">Enlace de la orden o de cuotas</label>
 
               <input
                 type="text"
@@ -16615,6 +17190,16 @@ async function archiveStalePendingOrders() {
   }
 }
 
+async function cleanupPhoneVerificationChallenges() {
+  const retentionCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from("phone_verification_challenges")
+    .delete()
+    .lt("created_at", retentionCutoff);
+
+  if (error) throw error;
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
@@ -16652,3 +17237,23 @@ setTimeout(() => {
     );
   });
 }, 1000 * 60 * 2).unref();
+
+const phoneVerificationCleanupInterval = setInterval(() => {
+  cleanupPhoneVerificationChallenges().catch(error => {
+    console.error(
+      "Error eliminando desafíos OTP vencidos:",
+      error.message
+    );
+  });
+}, 1000 * 60 * 60 * 6);
+
+phoneVerificationCleanupInterval.unref();
+
+setTimeout(() => {
+  cleanupPhoneVerificationChallenges().catch(error => {
+    console.error(
+      "Error en limpieza inicial de desafíos OTP:",
+      error.message
+    );
+  });
+}, 1000 * 60 * 3).unref();
