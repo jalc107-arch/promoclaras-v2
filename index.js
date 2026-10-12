@@ -24,6 +24,10 @@ import {
   normalizeColombianMobilePhone,
   verifyPhoneOtpHash
 } from "./services/phoneVerificationService.js";
+import {
+  buildInstallmentReversalState,
+  matchesApprovedWompiTransaction
+} from "./services/wompiPaymentStateService.js";
 
 const app = express();
 
@@ -13249,6 +13253,228 @@ if (activeTicketsCount === 0) {
   };
 }
 
+async function removeReferralCreditForVoidedOrder(orderId) {
+  const { error } = await supabase
+    .from("campaign_referrals")
+    .delete()
+    .eq("order_id", orderId);
+
+  if (error) throw error;
+}
+
+async function reverseVoidedFullPayment({ payment, transactionId }) {
+  const approvedTransactionId = String(payment.provider_transaction_id || "");
+
+  if (!matchesApprovedWompiTransaction({
+    approvedTransactionId,
+    incomingTransactionId: transactionId
+  })) {
+    console.log("VOIDED ignorado porque no corresponde a la transaccion aprobada", {
+      paymentId: payment.id,
+      approvedTransactionId,
+      receivedTransactionId: transactionId
+    });
+
+    return { ok: true, skipped: true, reason: "transaction_id_mismatch" };
+  }
+
+  const order = payment.orders || null;
+  const orderId = payment.order_id;
+  const nowIso = new Date().toISOString();
+
+  if (!orderId) {
+    throw new Error("El pago anulado no tiene una orden asociada.");
+  }
+
+  const { error: paymentUpdateError } = await supabase
+    .from("payments")
+    .update({
+      status: "failed",
+      provider: "wompi",
+      provider_transaction_id: transactionId,
+      platform_fee: 0
+    })
+    .eq("id", payment.id)
+    .eq("provider_transaction_id", transactionId);
+
+  if (paymentUpdateError) throw paymentUpdateError;
+
+  const { error: ticketUpdateError } = await supabase
+    .from("tickets")
+    .update({ status: "released" })
+    .eq("order_id", orderId)
+    .in("status", ["active", "reserved_installment"]);
+
+  if (ticketUpdateError) throw ticketUpdateError;
+
+  await releaseLotteryReservationsForOrder(orderId);
+
+  const subtotal = Number(order?.subtotal || payment.amount || 0);
+  const { error: orderUpdateError } = await supabase
+    .from("orders")
+    .update({
+      payment_status: "failed",
+      total_paid: 0,
+      amount_paid: 0,
+      balance_due: subtotal,
+      commission: 0,
+      archived_at: nowIso,
+      archive_reason: "wompi_voided"
+    })
+    .eq("id", orderId);
+
+  if (orderUpdateError) throw orderUpdateError;
+
+  await removeReferralCreditForVoidedOrder(orderId);
+
+  if (order?.rifa_id) {
+    await reconcileCampaignCounters(order.rifa_id);
+  }
+
+  return { ok: true, reversed: true };
+}
+
+async function reverseVoidedInstallmentPayment({ payment, transactionId }) {
+  const approvedTransactionId = String(payment.provider_transaction_id || "");
+
+  if (!matchesApprovedWompiTransaction({
+    approvedTransactionId,
+    incomingTransactionId: transactionId
+  })) {
+    console.log("VOIDED de cuota ignorado porque no corresponde a la transaccion aprobada", {
+      paymentId: payment.id,
+      approvedTransactionId,
+      receivedTransactionId: transactionId
+    });
+
+    return { ok: true, skipped: true, reason: "transaction_id_mismatch" };
+  }
+
+  const { data: installment, error: installmentError } = await supabase
+    .from("installment_schedules")
+    .select("*")
+    .eq("id", payment.installment_id)
+    .single();
+
+  if (installmentError) throw installmentError;
+
+  const { data: plan, error: planError } = await supabase
+    .from("installment_plans")
+    .select("*")
+    .eq("id", installment.plan_id)
+    .single();
+
+  if (planError) throw planError;
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("id", plan.order_id)
+    .single();
+
+  if (orderError) throw orderError;
+
+  const nowIso = new Date().toISOString();
+
+  const { error: paymentUpdateError } = await supabase
+    .from("payments")
+    .update({
+      status: "failed",
+      provider: "wompi",
+      provider_transaction_id: transactionId,
+      platform_fee: 0
+    })
+    .eq("id", payment.id)
+    .eq("provider_transaction_id", transactionId);
+
+  if (paymentUpdateError) throw paymentUpdateError;
+
+  const { error: installmentUpdateError } = await supabase
+    .from("installment_schedules")
+    .update({
+      status: "pending",
+      paid_at: null,
+      updated_at: nowIso
+    })
+    .eq("id", installment.id);
+
+  if (installmentUpdateError) throw installmentUpdateError;
+
+  const { data: schedules, error: schedulesError } = await supabase
+    .from("installment_schedules")
+    .select("*")
+    .eq("plan_id", plan.id)
+    .order("installment_number", { ascending: true });
+
+  if (schedulesError) throw schedulesError;
+
+  const reversalState = buildInstallmentReversalState({
+    schedules,
+    totalAmount: plan.total_amount
+  });
+  const {
+    approvedInstallments,
+    amountPaid,
+    balanceDue,
+    hasApprovedInstallments,
+    planStatus,
+    orderStatus
+  } = reversalState;
+
+  const { error: planUpdateError } = await supabase
+    .from("installment_plans")
+    .update({
+      status: planStatus,
+      paid_installments: approvedInstallments,
+      amount_paid: amountPaid,
+      balance_due: balanceDue,
+      completed_at: null,
+      updated_at: nowIso
+    })
+    .eq("id", plan.id);
+
+  if (planUpdateError) throw planUpdateError;
+
+  const { error: orderUpdateError } = await supabase
+    .from("orders")
+    .update({
+      payment_status: orderStatus,
+      total_paid: amountPaid,
+      amount_paid: amountPaid,
+      balance_due: balanceDue,
+      commission: Math.round(amountPaid * 0.05),
+      archived_at: null,
+      archive_reason: hasApprovedInstallments ? "wompi_installment_voided" : null
+    })
+    .eq("id", plan.order_id);
+
+  if (orderUpdateError) throw orderUpdateError;
+
+  if (hasApprovedInstallments) {
+    const { error: ticketReserveError } = await supabase
+      .from("tickets")
+      .update({ status: "reserved_installment" })
+      .eq("order_id", plan.order_id)
+      .eq("status", "active");
+
+    if (ticketReserveError) throw ticketReserveError;
+  } else {
+    const { error: ticketReleaseError } = await supabase
+      .from("tickets")
+      .update({ status: "released" })
+      .eq("order_id", plan.order_id)
+      .in("status", ["active", "reserved_installment"]);
+
+    if (ticketReleaseError) throw ticketReleaseError;
+    await releaseLotteryReservationsForOrder(plan.order_id);
+  }
+
+  await removeReferralCreditForVoidedOrder(plan.order_id);
+  await reconcileCampaignCounters(order.rifa_id);
+
+  return { ok: true, reversed: true, approvedInstallments };
+}
+
 app.get("/cuotas/:publicToken", async (req, res) => {
   try {
     const publicToken = String(req.params.publicToken || "").trim();
@@ -13332,6 +13558,15 @@ app.get("/cuotas/:publicToken", async (req, res) => {
       }
 
       const transactionStatus = String(transaction?.status || "");
+
+      if (transactionStatus === "VOIDED" && payment.status === "approved") {
+        await reverseVoidedInstallmentPayment({
+          payment,
+          transactionId: wompiTransactionId
+        });
+
+        return res.redirect(`/cuotas/${encodeURIComponent(publicToken)}`);
+      }
 
       if (transactionStatus === "APPROVED") {
         await supabase
@@ -13559,7 +13794,7 @@ app.get("/orden/:orderId", publicLookupLimiter, async (req, res) => {
 
     const wompiTransactionId = String(req.query.id || "").trim();
 
-if (wompiTransactionId && payment.status !== "approved") {
+if (wompiTransactionId) {
   if (!WOMPI_PRIVATE_KEY) {
     return res.status(500).send("Falta WOMPI_PRIVATE_KEY");
   }
@@ -13660,6 +13895,18 @@ if (transactionCurrency !== "COP") {
 
   await sendOrderCouponsWhatsApp(orderId);
   await processReferralReward(orderId);
+
+  return res.redirect(buildPublicOrderPath(orderId));
+}
+
+if (transactionStatus === "VOIDED" && payment.status === "approved") {
+  await reverseVoidedFullPayment({
+    payment: {
+      ...payment,
+      orders: order
+    },
+    transactionId: wompiTransactionId
+  });
 
   return res.redirect(buildPublicOrderPath(orderId));
 }
@@ -14002,6 +14249,19 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
     }
 
     if (payment.installment_id) {
+      if (transactionStatus === "VOIDED" && payment.status === "approved") {
+        const reversal = await reverseVoidedInstallmentPayment({
+          payment,
+          transactionId
+        });
+
+        return res.status(200).send(
+          reversal.skipped
+            ? "Anulacion ignorada: corresponde a otra transaccion"
+            : "Cuota anulada y saldos actualizados"
+        );
+      }
+
       if (payment.status === "approved") {
         await processApprovedInstallmentPayment(payment);
         return res.status(200).send("Cuota ya aprobada");
@@ -14059,6 +14319,19 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
         .eq("id", payment.id);
 
       return res.status(200).send("Cuota pendiente");
+    }
+
+    if (
+      transactionStatus === "VOIDED" &&
+      (payment.status === "approved" || payment.orders?.payment_status === "paid")
+    ) {
+      const reversal = await reverseVoidedFullPayment({ payment, transactionId });
+
+      return res.status(200).send(
+        reversal.skipped
+          ? "Anulacion ignorada: corresponde a otra transaccion"
+          : "Pago anulado y codigos liberados"
+      );
     }
 
     if (payment.status === "approved" || payment.orders?.payment_status === "paid") {
