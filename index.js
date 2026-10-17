@@ -6517,12 +6517,19 @@ td a[style*="background:#7c3aed"] {
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <a
-        href="/organizers/${organizer.id}/campanas/nueva"
-        style="background:#16a34a;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
-      >
-        Nueva campaña
-      </a>
+      ${organizer.verification_status === "verified" ? `
+        <a
+          href="/organizers/${encodeURIComponent(organizer.id)}/campanas/nueva"
+          style="background:#16a34a;color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:bold;"
+        >
+          Nueva campaña
+        </a>
+      ` : `
+        <div role="status" style="border:1px solid rgba(251,191,36,.55);background:rgba(251,191,36,.12);color:#fef3c7;padding:10px 14px;border-radius:12px;line-height:1.4;font-weight:700;">
+          Nueva campaña · Bloqueada
+          <small style="display:block;color:#e2e8f0;font-weight:400;">Disponible después de la aprobación.</small>
+        </div>
+      `}
 
       <a
         href="/organizers/${organizer.id}/verificacion"
@@ -9196,7 +9203,100 @@ app.get("/organizers/:organizerId/campanas/nueva", async (req, res) => {
     }
 
     if (organizer.verification_status !== "verified") {
-      return res.status(403).send("Tu cuenta aún no ha sido aprobada por el administrador.");
+      const rejected = organizer.verification_status === "rejected";
+      const title = rejected
+        ? "Tu verificación necesita correcciones"
+        : "Tu cuenta está pendiente de aprobación";
+      const explanation = rejected
+        ? "El equipo administrador ha solicitado correcciones en tu verificación. Revisa el motivo y actualiza los documentos necesarios."
+        : "Tu cuenta ya fue creada, pero necesitas la aprobación del administrador para crear campañas. Puedes consultar o completar tu verificación mientras esperas.";
+      const organizerPath = `/organizers/${encodeURIComponent(String(organizer.id))}`;
+      const reasonHtml = rejected && organizer.rejection_reason
+        ? `<div class="reason"><strong>Motivo de revisión</strong><p>${escapeHtml(organizer.rejection_reason)}</p></div>`
+        : "";
+
+      return res.status(403).type("html").send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>${escapeHtml(title)} | CampaClick</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              min-height: 100vh;
+              padding: 24px;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #f8fafc;
+              background: radial-gradient(circle at 15% 12%,rgba(59,130,246,.34),transparent 38%),
+                          radial-gradient(circle at 83% 85%,rgba(34,197,94,.14),transparent 36%),
+                          linear-gradient(145deg,#020617,#0f172a 55%,#1e3a8a);
+            }
+            .card {
+              width: 100%;
+              max-width: 620px;
+              padding: 38px;
+              border-radius: 26px;
+              background: rgba(255,255,255,.09);
+              border: 1px solid rgba(255,255,255,.22);
+              box-shadow: 0 24px 70px rgba(0,0,0,.34);
+            }
+            .brand { font-weight: 800; letter-spacing: .08em; color: #bfdbfe; }
+            .icon {
+              display: grid;
+              place-items: center;
+              width: 62px; height: 62px; margin: 22px 0 16px;
+              border-radius: 18px; font-size: 28px;
+              background: rgba(251,191,36,.17);
+              border: 1px solid rgba(251,191,36,.36);
+            }
+            h1 { margin: 0 0 15px; font-size: clamp(27px,5vw,36px); line-height: 1.2; }
+            p { margin: 0; color: #cbd5e1; line-height: 1.65; }
+            .notice, .reason {
+              margin-top: 22px; padding: 15px 17px;
+              border-radius: 14px; line-height: 1.5;
+            }
+            .notice { background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35); color: #fef3c7; }
+            .reason { background: rgba(239,68,68,.13); border: 1px solid rgba(248,113,113,.35); }
+            .reason strong { color: #fecaca; }
+            .reason p { margin-top: 8px; color: #fee2e2; overflow-wrap: anywhere; }
+            .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+            a {
+              display: inline-block; padding: 13px 18px; border-radius: 12px;
+              background: #2563eb; color: white; text-decoration: none; font-weight: 800;
+              text-align: center;
+            }
+            a.secondary { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.24); }
+            a:focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px; }
+            @media (max-width: 540px) {
+              body { padding: 14px; align-items: flex-start; }
+              .card { padding: 27px 22px; }
+              .actions { flex-direction: column; }
+              .actions a { width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="card">
+            <div class="brand">CAMPACLICK · ORGANIZADORES</div>
+            <div class="icon" aria-hidden="true">⏳</div>
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(explanation)}</p>
+            ${reasonHtml}
+            <div class="notice" role="status">La opción de crear campañas estará disponible únicamente después de la aprobación de tu cuenta.</div>
+            <nav class="actions" aria-label="Opciones de tu cuenta">
+              <a href="${organizerPath}/verificacion">Mi verificación</a>
+              <a class="secondary" href="${organizerPath}/panel">Volver al panel</a>
+            </nav>
+          </main>
+        </body>
+        </html>
+      `);
     }
 
    
