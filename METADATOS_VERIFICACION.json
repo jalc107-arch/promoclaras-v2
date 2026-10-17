@@ -1,0 +1,9 @@
+{
+  "base_commit": "b87af4590ab80afc12287150f4a9d03cdd3b95e0",
+  "base_index_sha256": "34706a5a1a36cf86dbe27e56506747578e45cfe9fce79e1596fb8bc05465f4c3",
+  "patched_index_sha256": "066700dcc5157c2fb19336818353d75b7d2fbb6a35e28689fe19c95374805133",
+  "index_patch_lines": 22,
+  "test_count": 59,
+  "applied_to_github": false,
+  "production_untouched": true
+}
