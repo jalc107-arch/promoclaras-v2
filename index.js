@@ -1029,7 +1029,7 @@ function getMinimumQtyByPrice(pricePerTicket) {
   const price = Number(pricePerTicket || 0);
 
   if (price === 1000) return 10;
-  if (price === 2000) return 3;
+  if (price >= 2000 && price < 3000) return 5;
   if (price === 3000) return 2;
   if (price === 4000) return 2;
   if (price >= 5000) return 1;
@@ -7487,6 +7487,7 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
       return res.status(400).send("Solo puedes crear ventas a crédito en campañas activas.");
     }
 
+    const minimumCreditQty = getMinimumQtyByPrice(campaign.price_per_ticket);
     const today = getTodayInBogota();
     const cutoffDate = getInstallmentCutoffDate(campaign.draw_date);
 
@@ -7575,7 +7576,8 @@ app.get("/organizers/:organizerId/campanas/:rifaId/venta-credito", async (req, r
                 </div>
                 <div class="field">
                   <label>Cantidad de códigos</label>
-                  <input type="number" name="qty" min="1" max="20" value="1" required>
+                  <input type="number" name="qty" min="${minimumCreditQty}" max="20" value="${minimumCreditQty}" required>
+                  <small>Compra mínima para esta campaña: ${minimumCreditQty} códigos.</small>
                 </div>
 
                 ${isLotteryCampaign(campaign) ? `
@@ -8021,6 +8023,12 @@ app.post(
 
       if (campaign.status !== "active") {
         return res.status(400).send("Solo puedes crear ventas a crédito en campañas activas.");
+      }
+
+      const minimumCreditQty = getMinimumQtyByPrice(campaign.price_per_ticket);
+
+      if (qty < minimumCreditQty) {
+        return res.status(400).send(`Para esta campaña debes vender mínimo ${minimumCreditQty} códigos promocionales por orden.`);
       }
 
       if (qty > Number(campaign.available_tickets || 0)) {
