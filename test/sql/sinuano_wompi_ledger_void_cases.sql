@@ -31,6 +31,24 @@ END $cases$;
 SELECT * FROM public.system_daily_record_verified_wompi_event(
  '55555555-5555-4555-8555-555555555555','sandbox_test_payment_001',
  'VOIDED',repeat('e',64),'test',1792300400);
+-- Simulate the narrow gap after the signed VOIDED receipt but before
+-- the atomic reversal completes. The result update MUST fail closed.
+DO $gap$
+DECLARE rejected boolean:=false;
+BEGIN
+ BEGIN
+  UPDATE public.campaign_daily_draws SET status='completed'
+  WHERE id='22222222-2222-4222-8222-222222222222';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM LIKE '%VOIDED verificado pendiente de conciliación%' THEN
+    rejected:=true;
+  ELSE RAISE; END IF;
+ END;
+ IF NOT rejected THEN
+   RAISE EXCEPTION 'VOIDED ledger was ignored before reversal';
+ END IF;
+ RAISE NOTICE 'PASS: VOIDED signed receipt prevents result while reversal pending';
+END $gap$;
 DO $void$
 DECLARE r record; status_fail boolean:=false; reapproval_rejected boolean:=false;
 BEGIN
