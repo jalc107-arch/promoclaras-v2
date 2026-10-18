@@ -27,3 +27,36 @@ jobs:
           node --check services/sinuanoAccess.mjs
       - name: Pruebas locales sin acceso a Supabase ni Wompi
         run: node --test test/*.mjs test/*.cjs
+  postgres-reconciliation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ephemeral_ci_only
+          POSTGRES_DB: sinuano_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sinuano_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ephemeral_ci_only
+      PGDATABASE: sinuano_integration
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cliente PostgreSQL
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      - name: Esquema minimo completamente ficticio
+        run: psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_reconciliation_schema.sql
+      - name: Ejecutar la migracion real
+        run: psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_reversal_reconciliation_guard.sql
+      - name: Casos de aprobacion, reversion y alcance
+        run: psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_reconciliation_cases.sql
