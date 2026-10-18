@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { registerDailyDrawFailClosedGuards } from "./services/sinuanoAccess.mjs";
+import { registerDailyDrawFailClosedGuards, isDailyCampaign } from "./services/sinuanoAccess.mjs";
 import { finalizeDailyPaidOrderIfEnabled } from "./services/dailyDrawPaymentFinalizer.mjs";
 import { handleSignedDailyWompiEvent } from "./services/dailyWompiWebhookLedger.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
@@ -13920,6 +13920,14 @@ app.get("/orden/:orderId", publicLookupLimiter, async (req, res) => {
     }
 
     const wompiTransactionId = String(req.query.id || "").trim();
+
+    // Daily Wompi confirmations and reversals must be authenticated and
+    // committed through the signed webhook ledger, never through a GET
+    // order-return URL. Traditional campaigns retain their established flow.
+    if (wompiTransactionId && isDailyCampaign(order.rifas)) {
+      res.set("Cache-Control","no-store");
+      return res.status(202).send("Pago de campaña diaria en verificación. Consulta tu orden cuando Wompi confirme el evento firmado.");
+    }
 
 if (wompiTransactionId) {
   if (!WOMPI_PRIVATE_KEY) {
