@@ -65,7 +65,7 @@ jobs:
       - name: Preparar esquema sintético y funciones originales de adjudicación
         run: |
           export PGDATABASE=sinuano_daily_results
-          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_reconciliation_schema.sql
+          sed '/^CREATE ROLE /d' test/sql/sinuano_reconciliation_schema.sql | psql -X -v ON_ERROR_STOP=1
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_results_schema.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261017_staging_daily_result_atomic.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_missing_activation_fail_closed_20261017.sql
