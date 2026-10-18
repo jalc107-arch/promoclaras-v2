@@ -18,7 +18,7 @@ test('Febrero bisiesto muestra 29 días, solo día 29 mayor y sin publicar',asyn
  const r=await hit();assert.equal(r.code,200);
  assert.equal((r.text.match(/<b>Premio mayor único<\/b>/g)||[]).length,1);
  assert.match(r.text,/2028-02-29/);assert.match(r.text,/29 jornadas/);
- assert.match(r.text,/no se guarda ni se modifica/);
+ assert.match(r.text,/calendario operativo existente NO cambia/);
  assert.equal(r.headers['Cache-Control'],'no-store');
 });
 test('Febrero común y abril respetan 28/30 días',async()=>{
