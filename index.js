@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { registerDailyDrawFailClosedGuards } from "./services/sinuanoAccess.mjs";
 import { finalizeDailyPaidOrderIfEnabled } from "./services/dailyDrawPaymentFinalizer.mjs";
+import { handleSignedDailyWompiEvent } from "./services/dailyWompiWebhookLedger.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
 import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mjs";
 import session from "express-session";
@@ -14372,6 +14373,21 @@ app.post("/webhooks/wompi", webhookLimiter, async (req, res) => {
       });
 
       return res.status(400).send("Moneda no válida");
+    }
+
+    // Only Wompi-signed and amount-matched callbacks reach this stage.
+    // Legacy campaigns retain their original processing logic.
+    const dailyEvent = await handleSignedDailyWompiEvent({
+      supabase, payment, status:transactionStatus, transactionId,
+      checksum:expectedChecksum, environment:eventEnvironment,
+      timestamp:Number(timestamp)
+    });
+    if (dailyEvent?.handled) {
+      if (dailyEvent.denied) return res.status(403).send("Venta diaria no habilitada");
+      if (dailyEvent.voided) return res.status(200).send("Anulación diaria conciliada");
+      if (dailyEvent.ignored) return res.status(200).send("Evento diario no aplicable");
+      // APPROVED is recorded. Normal webhook finalization now invokes the
+      // daily-only atomic RPC when the two commerce controls are enabled.
     }
 
     if (payment.installment_id) {
