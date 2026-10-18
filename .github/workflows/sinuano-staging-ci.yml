@@ -26,6 +26,7 @@ jobs:
           node --check services/dailyDrawAdmin.mjs
           node --check services/dailyDrawPreparation.mjs
           node --check services/dailyMonthlyPreview.mjs
+          node --check services/dailyMonthlyDraft.mjs
           node --check services/sinuanoAccess.mjs
       - name: Pruebas locales sin acceso a Supabase ni Wompi
         run: node --test test/*.mjs test/*.cjs
@@ -118,6 +119,12 @@ jobs:
           sed '/^CREATE ROLE /d' test/sql/sinuano_documentary_fixture.sql | psql -X -v ON_ERROR_STOP=1
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_documentary_approval_guard.sql
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_documentary_block_cases.sql
+      - name: Esquema sintético del plan mensual exclusivo
+        run: |
+          export PGDATABASE=sinuano_documentary
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_monthly_plan_fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_monthly_plan_drafts.sql
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_monthly_plan_drafts_cases.sql
 
 
 

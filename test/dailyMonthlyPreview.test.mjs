@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {registerDailyMonthlyPreviewRoutes} from '../services/dailyMonthlyPreview.mjs';
 const routes={};const app={get(p,...h){routes[p]=h}};
-const db={calls:0,from(){this.calls++;return this},select(){return this},eq(){return this},
+const db={calls:0,from(table){this.calls++;this.table=table;return this},select(){return this},eq(){return this},order(){return this},async limit(){return {data:[],error:null}},
  async maybeSingle(){return {data:{id:'39377190-4ee3-40da-9671-f36a1305e106',title:'Sinuano de prueba',draw_provider:'loteria_sinuano_noche',draw_mode:'loteria_4_pleno',status:'pending',is_public:false},error:null}}};
 registerDailyMonthlyPreviewRoutes(app,{supabase:db,escapeHtml:String});
 const route='/admin/sorteos-diarios/:campaignId/preparacion/mes';
