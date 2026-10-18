@@ -5,6 +5,7 @@ import { finalizeDailyPaidOrderIfEnabled } from "./services/dailyDrawPaymentFina
 import { handleSignedDailyWompiEvent } from "./services/dailyWompiWebhookLedger.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
 import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mjs";
+import { registerDailyDrawPreparationRoutes } from "./services/dailyDrawPreparation.mjs";
 import session from "express-session";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -585,6 +586,7 @@ registerDailyDrawFailClosedGuards(app, { supabase });
 // Panel excepcional solo para sesión administrativa y protegido por CSRF global.
 registerDailyDrawAdminRoutes(app, { supabase, escapeHtml });
 registerDailyDrawCalendarRoutes(app, { supabase, escapeHtml });
+registerDailyDrawPreparationRoutes(app, { supabase, escapeHtml });
 
 const campaignAvailabilityService = createCampaignAvailabilityService({
   supabase
