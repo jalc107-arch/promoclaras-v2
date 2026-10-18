@@ -35,3 +35,9 @@ Los archivos de migración en GitHub son las fuentes para nuevas instalaciones. 
 - Completar pruebas HTTP autenticadas, CSRF, concurrencia, 31 jornadas consecutivas y regresión de campañas tradicionales.
 - GitHub Actions de esta rama ejecuta pruebas de código sin secretos; **un resultado CI exitoso no autoriza ventas**.
 - No cambiar Wompi de producción ni fusionar main sin autorización del usuario.
+
+## Pruebas de regresión adicionales — 17 oct 2026
+- La simulación transaccional reprodujo un fallo: pago Wompi ficticio revocado/fallido tras crear activaciones; la función de adjudicación podía devolver `no_winner` sin exigir conciliación.
+- Se incorporó la migración aditiva `20261018_staging_daily_reversal_reconciliation_guard.sql` para bloquear resultados diarios mientras existan activaciones pre-corte con pago revertido o códigos de una orden marcada pagada cuyo importe vigente ya no concilia.
+- Esta comprobación es defensiva, **no demuestra el evento de pago inmutable**; mantener bloqueo comercial, prohibición de aprobación automática y no declarar apta la modalidad sin pruebas del webhook real Sandbox y de concurrencia.
+- No tocar el motor de campañas tradicionales. FuerzaMarket debe seguir INACTIVE.
