@@ -13,7 +13,7 @@ Ambas puertas de comercialización siguen **DESACTIVADAS**: `IS_DAILY_COMMERCIAL
 
 ## Repositorio y ambientes confirmados
 - Desarrollo GitHub: `jalc107-arch/promoclaras-v2`, rama `feature/sinuano-admin-staging-20261017`.
-- Commit de aplicación **desplegado** en Railway staging: `9dc4dfeeaa0ba44e0e17a5f832541a6c9487553d`. Deployment `2367ec37-cf94-47d7-8ca3-a72f4431f135`, resultado `SUCCESS`, servicio online (verificación 18-oct-2026). Actualizar esta referencia si se despliega otro commit; un commit solo documental puede dejar HEAD más reciente que el desplegado.
+- Commit de aplicación **desplegado** en Railway staging: `5f11e0121f02fdb4e0120a9d2e4bef8dc84b01c9`. Deployment `edc2a6e3-bcbe-4256-a99e-8563a82b2a2e`, resultado `SUCCESS`, servicio online (verificación 18-oct-2026). Actualizar esta referencia si se despliega otro commit; un commit solo documental puede dejar HEAD más reciente que el desplegado.
 - Supabase staging `xooxbkawxrdvlvbvkvjy` ACTIVE_HEALTHY.
 - Supabase CampaClick producción `vrmctjgxvjyxepaefxzu` ACTIVE_HEALTHY, **sin modificar**.
 - Supabase FuerzaMarket `suponlvqoouzmmxbgcxf` **INACTIVE** por instrucción expresa. **NO ACTIVAR**.
