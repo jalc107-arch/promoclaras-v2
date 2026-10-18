@@ -141,5 +141,13 @@ export function validateMonthlySchedule(rows,{year,month}={}) {
 }
 /** Compatibility for existing December fixtures; new routes use monthly version. */
 export function validateDecemberSchedule(rows,year=2026){
-  return validateMonthlySchedule(rows,{year,month:12});
+  if(!Array.isArray(rows)||rows.length!==31)
+    throw new Error('La campaña debe tener 31 sorteos');
+  try{
+    return validateMonthlySchedule(rows,{year,month:12});
+  }catch(err){
+    if(/premio mayor es único/.test(String(err.message)))
+      throw new Error('Solo el 31 tendrá el premio mayor');
+    throw err;
+  }
 }
