@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { registerDailyDrawFailClosedGuards } from "./services/sinuanoAccess.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
+import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mjs";
 import session from "express-session";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -581,6 +582,7 @@ const supabase = createClient(
 registerDailyDrawFailClosedGuards(app, { supabase });
 // Panel excepcional solo para sesión administrativa y protegido por CSRF global.
 registerDailyDrawAdminRoutes(app, { supabase, escapeHtml });
+registerDailyDrawCalendarRoutes(app, { supabase, escapeHtml });
 
 const campaignAvailabilityService = createCampaignAvailabilityService({
   supabase
