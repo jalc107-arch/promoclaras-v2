@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import { registerDailyDrawFailClosedGuards } from "./services/sinuanoAccess.mjs";
+import { finalizeDailyPaidOrderIfEnabled } from "./services/dailyDrawPaymentFinalizer.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
 import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mjs";
 import session from "express-session";
@@ -13315,6 +13316,14 @@ async function finalizePaidOrder(orderId) {
 
   if (orderError) throw orderError;
   if (!orderData) throw new Error("Orden no encontrada para finalizar pago.");
+
+  // Only the exceptional daily provider uses the atomic Wompi/ticket/activation
+  // finalizer. The feature remains OFF; traditional campaigns keep this path.
+  const dailySettlement = await finalizeDailyPaidOrderIfEnabled({
+    order: orderData,
+    supabase
+  });
+  if (dailySettlement) return dailySettlement;
 
   const expectedTicketsCount = Number(orderData.qty || 0);
 
