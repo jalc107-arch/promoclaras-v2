@@ -1,6 +1,6 @@
 -- No production Supabase objects or live transaction data used.
 DO $tests$
-DECLARE a record;b record;c record;invalid boolean:=false;bad_campaign boolean:=false;not_editable boolean:=false;
+DECLARE a record;b record;c record;invalid boolean:=false;bad_campaign boolean:=false;not_editable boolean:=false; missing_description boolean:=false; null_kind_with_money boolean:=false;
 BEGIN
  SELECT * INTO a FROM public.admin_daily_save_month_plan_draft(
  '11111111-1111-4111-8111-111111111111',2028,2,
@@ -24,6 +24,20 @@ BEGIN
  END;
  BEGIN
  PERFORM 1 FROM public.admin_daily_save_month_plan_draft(
+ '11111111-1111-4111-8111-111111111111',2027,11,
+ 'money',NULL,5000,NULL,repeat('a',64));
+ EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM LIKE '%un único premio mayor%' THEN missing_description:=true; ELSE RAISE; END IF;
+ END;
+ BEGIN
+ PERFORM 1 FROM public.admin_daily_save_month_plan_draft(
+ '11111111-1111-4111-8111-111111111111',2027,11,
+ NULL,NULL,5000,NULL,repeat('a',64));
+ EXCEPTION WHEN raise_exception THEN
+ IF SQLERRM LIKE '%un único premio mayor%' THEN null_kind_with_money:=true; ELSE RAISE; END IF;
+ END;
+ BEGIN
+ PERFORM 1 FROM public.admin_daily_save_month_plan_draft(
  '22222222-2222-4222-8222-222222222222',2027,4,
  NULL,NULL,NULL,NULL,repeat('a',64));
  EXCEPTION WHEN raise_exception THEN
@@ -35,8 +49,8 @@ BEGIN
  EXCEPTION WHEN raise_exception THEN
  IF SQLERRM LIKE '%inmutables%' THEN not_editable:=true; ELSE RAISE; END IF;
  END;
- IF NOT(invalid AND bad_campaign AND not_editable) THEN
- RAISE EXCEPTION 'Major prize, legacy isolation or audit mutation guard failed';
+ IF NOT(invalid AND bad_campaign AND not_editable AND missing_description AND null_kind_with_money) THEN
+ RAISE EXCEPTION 'Major prize/null handling, legacy isolation or audit mutation guard failed';
  END IF;
  IF (SELECT count(*) FROM public.campaign_daily_monthly_plan_drafts)<>3 THEN
  RAISE EXCEPTION 'Unexpected draft count'; END IF;
