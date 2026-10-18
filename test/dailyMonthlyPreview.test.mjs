@@ -9,7 +9,7 @@ const route='/admin/sorteos-diarios/:campaignId/preparacion/mes';
 const response=()=>({code:200,text:'',headers:{},status(n){this.code=n;return this},send(t){this.text=t;return this},set(k,v){this.headers[k]=v;return this}});
 async function hit({year='2028',month='2',admin=true}={}){
  const req={session:admin?{isAdmin:true}:null,params:{campaignId:'39377190-4ee3-40da-9671-f36a1305e106'},query:{year,month}};
- const res=response();await routes[route][0](req,res,()=>{});return res;
+ const res=response();let allowed=false;await routes[route][0](req,res,()=>{allowed=true});if(allowed)await routes[route][1](req,res);return res;
 }
 test('Vista mensual no accesible sin ser administrador ni consulta BD',async()=>{
  const old=db.calls;const r=await hit({admin:false});assert.equal(r.code,403);assert.equal(db.calls,old);
