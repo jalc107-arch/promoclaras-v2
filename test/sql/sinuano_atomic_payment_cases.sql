@@ -14,6 +14,10 @@ INSERT INTO public.orders(id,rifa_id,payment_status,subtotal,total_paid,balance_
 INSERT INTO public.payments(id,order_id,provider,status,provider_transaction_id,amount)
  VALUES('55555555-5555-4555-8555-555555555555','33333333-3333-4333-8333-333333333333',
  'wompi','approved','sandbox_test_payment_001',12500);
+-- A checksum-validated event is required before any ticket assignment.
+SELECT * FROM public.system_daily_record_verified_wompi_event(
+ '55555555-5555-4555-8555-555555555555','sandbox_test_payment_001',
+ 'APPROVED',repeat('a',64),'test',1792300000);
 -- The new database-level control is OFF by default, independent of UI.
 DO $gate_test$
 DECLARE blocked boolean:=false;

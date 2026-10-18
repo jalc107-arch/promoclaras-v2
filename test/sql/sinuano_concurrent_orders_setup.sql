@@ -7,3 +7,10 @@ INSERT INTO public.payments(id,order_id,provider,status,provider_transaction_id,
 VALUES
 ('30303030-3030-4030-8030-303030303030','10101010-1010-4010-8010-101010101010','wompi','approved','sandbox_concurrent_A_1010',12500),
 ('40404040-4040-4040-8040-404040404040','20202020-2020-4020-8020-202020202020','wompi','approved','sandbox_concurrent_B_2020',12500);
+
+SELECT * FROM public.system_daily_record_verified_wompi_event(
+ '30303030-3030-4030-8030-303030303030',
+ 'sandbox_concurrent_A_1010','APPROVED',repeat('b',64),'test',1792300100);
+SELECT * FROM public.system_daily_record_verified_wompi_event(
+ '40404040-4040-4040-8040-404040404040',
+ 'sandbox_concurrent_B_2020','APPROVED',repeat('c',64),'test',1792300101);
