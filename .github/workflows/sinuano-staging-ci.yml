@@ -84,6 +84,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_commerce_gate.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_wompi_verified_events.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_wompi_void_atomic.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_verified_void_single_transaction.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_verified_void_draw_gate.sql
       - name: Pago completo, idempotencia y proteccion de campañas tradicionales
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_cases.sql
@@ -102,5 +103,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_concurrent_orders_assert.sql
       - name: Ledger Wompi, VOIDED atómico y resistencia a reproducciones
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_wompi_ledger_void_cases.sql
+      - name: Verificar transacción indivisible del evento VOIDED
+        run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_wompi_atomic_signed_void_cases.sql
 
 

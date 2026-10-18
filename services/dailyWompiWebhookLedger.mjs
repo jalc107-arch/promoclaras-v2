@@ -21,19 +21,23 @@ export async function handleSignedDailyWompiEvent({
       !/^[a-f0-9]{64}$/.test(String(checksum||'')) ||
       environment!=='test' || !Number.isSafeInteger(timestamp) || timestamp<=0)
     throw new Error('Evidencia Wompi firmada incompleta');
+  if(status==='VOIDED') {
+    // A single database transaction records the verified event and reverses
+    // the payment; failures cannot leave a partially reconciled webhook.
+    const reversal=await supabase.rpc('system_daily_apply_verified_void_atomic',{
+      p_payment_id:payment.id,p_transaction_id:transactionId,
+      p_checksum:checksum,p_environment:environment,
+      p_event_timestamp:timestamp
+    });
+    if(reversal.error) throw reversal.error;
+    return {handled:true,voided:true};
+  }
   const record=await supabase.rpc('system_daily_record_verified_wompi_event',{
     p_payment_id:payment.id,p_transaction_id:transactionId,
     p_status:status,p_checksum:checksum,p_environment:environment,
     p_event_timestamp:timestamp
   });
   if(record.error) throw record.error;
-  if(status==='VOIDED') {
-    const reversal=await supabase.rpc('system_daily_void_full_payment_atomic',{
-      p_order_id:payment.order_id,p_provider_transaction_id:transactionId
-    });
-    if(reversal.error) throw reversal.error;
-    return {handled:true,voided:true};
-  }
   // Existing payment webhook will finalize the paid order; its exceptional
   // finalizer requires this receipt and the independent DB commerce gate.
   return {handled:true,recorded:true};

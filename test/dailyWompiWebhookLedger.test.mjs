@@ -28,10 +28,10 @@ test('Verified daily APPROVED writes one event through service-only RPC',async()
  assert.equal(r.recorded,true);
  assert.deepEqual(names(conn),['system_daily_record_verified_wompi_event']);
 });
-test('VOIDED records signed event before atomic ticket revocation',async()=>{
+test('VOIDED uses one indivisible RPC for receipt, reversal and audit',async()=>{
  const conn=db();let r=await handleSignedDailyWompiEvent({supabase:conn,...event,status:'VOIDED'});
  assert.equal(r.voided,true);
- assert.deepEqual(names(conn),['system_daily_record_verified_wompi_event','system_daily_void_full_payment_atomic']);
+ assert.deepEqual(names(conn),['system_daily_apply_verified_void_atomic']);
 });
 test('No RPC for malformed checksum or environment',async()=>{
  const conn=db();
