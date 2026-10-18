@@ -106,5 +106,13 @@ jobs:
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_wompi_ledger_void_cases.sql
       - name: Verificar transacción indivisible del evento VOIDED
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_wompi_atomic_signed_void_cases.sql
+      - name: Validar doble bloqueo documental en una cuarta base temporal
+        run: |
+          createdb sinuano_documentary
+          export PGDATABASE=sinuano_documentary
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_documentary_fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_documentary_approval_guard.sql
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_documentary_block_cases.sql
+
 
 
