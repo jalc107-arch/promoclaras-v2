@@ -2,6 +2,8 @@
 
 **Revisión técnica: 18 de octubre de 2026.** Fuente única para continuar trabajos de la modalidad excepcional sin resucitar estados o commits antiguos.
 
+**La regla de programación excepcional vigente**: cada campaña hipotética tiene una cantidad de jornadas igual al número de días del **mes y año seleccionados** (28/29/30/31); días previos al último: un premio diario por fecha; último día: **un solo premio mayor**, seleccionado posteriormente **en dinero O en especie, nunca ambos**. Los premios siguen en borrador y la elección final todavía NO se ha realizado. Esta decisión sustituye la interpretación antigua que fijaba siempre 31 jornadas de diciembre. La campaña de diciembre de 2026 permanece únicamente como fixture de staging. Véase [regla mensual](docs/SINUANO_REGLA_MENSUAL_PREMIO_UNICO_20261018.md).
+
 ## BLOQUEO REGULATORIO Y COMERCIAL — NO LEVANTAR
 La modalidad propuesta contempla códigos vendidos a $2.500 COP (compra mínima cinco), 31 jornadas durante diciembre de 2026, resultados de cuatro cifras 0000–9999, premio diario aún no definido, un premio mayor propuesto al día 31 ($12.500.000 COP **o** dos motocicletas, decisión pendiente), y una regla «sin ganador» que está sometida a revisión jurídica.
 
