@@ -1,20 +1,37 @@
-# CampaClick — fuente de verdad actual: Sinuano Noche, 17 octubre 2026
+# CampaClick — fuente de verdad vigente: Sinuano Noche
 
-> **BLOQUEO REGULATORIO CRÍTICO (verificado 18-oct-2026):** el Decreto colombiano 1486 de 2024, art. 2 (sustituye art. 2.7.3.2 del Decreto 1068 de 2015), prohíbe los premios en dinero para la modalidad rifa y califica como permanente la operación en más de dos fechas al mes. Según Coljuegos, un juego promocional no exige pago directo por participar. Una campaña de 31 sorteos, códigos pagados y premios en efectivo NO debe declararse autorizada por su nombre comercial ni por el éxito de las pruebas. Sin dictamen jurídico y autorizaciones verificables, PROHIBIDO levantar bloqueos o aceptar cobros. Detalle: [docs/SINUANO_BLOQUEO_REGULATORIO_20261018.md](docs/SINUANO_BLOQUEO_REGULATORIO_20261018.md).
+**Revisión técnica: 18 de octubre de 2026.** Fuente única para continuar trabajos de la modalidad excepcional sin resucitar estados o commits antiguos.
 
+## BLOQUEO REGULATORIO Y COMERCIAL — NO LEVANTAR
+La modalidad propuesta contempla códigos vendidos a $2.500 COP (compra mínima cinco), 31 jornadas durante diciembre de 2026, resultados de cuatro cifras 0000–9999, premio diario aún no definido, un premio mayor propuesto al día 31 ($12.500.000 COP **o** dos motocicletas, decisión pendiente), y una regla «sin ganador» que está sometida a revisión jurídica.
 
-**NO ACTIVAR FUERZAMARKET**: Supabase `suponlvqoouzmmxbgcxf` estaba `INACTIVE` en la última verificación. CampaClick producción `vrmctjgxvjyxepaefxzu` no debe modificarse. Rama `main` permanece en `b87af4590ab80afc12287150f4a9d03cdd3b95e0` (verificada en este ciclo).
+El Decreto 1486 de 2024, la regulación de rifas y la clasificación de juegos promocionales presentan objeciones sustantivas a 31 fechas, premios en efectivo y cobros directos. **No declarar autorizable ni comerciable este diseño sin pronunciamiento jurídico y regulatorio específico y aceptación escrita de Wompi.** Véanse [bloqueo normativo](docs/SINUANO_BLOQUEO_REGULATORIO_20261018.md) y [consulta formal preparada, no radicada](docs/SINUANO_CONSULTA_FORMAL_COLJUEGOS_20261018.md). El nombre comercial «campaña» no elimina restricciones legales.
 
-Rama de desarrollo: `feature/sinuano-admin-staging-20261017`. Versión de aplicación en Railway staging: `d4c759b489f922c77a0f8df027f81eebaf730a49`, deployment `23d33641-fc3d-4c14-81ab-6b49e9d9e871` (SUCCESS). Supabase staging `xooxbkawxrdvlvbvkvjy`: ACTIVE_HEALTHY.
+Ambas puertas de comercialización siguen **DESACTIVADAS**: `IS_DAILY_COMMERCIALLY_ENABLED=false` en `services/sinuanoAccess.mjs` y `public.campaign_daily_commerce_controls.sales_enabled=false` en Supabase staging. El expediente está `pending`, privado, sin registros regulatorios o Wompi aprobados, sin compras.
 
-Campaña de prueba interna Sinuano Noche: $2.500 por código, mínimo 5, cuatro cifras `0000-9999`, 31 sorteos en diciembre 2026, un solo premio mayor el 31, premios definitivos pendientes. Campaña privada, autorizaciones regulatorias y Wompi pendientes, no habilitar ventas.
+## Repositorio y ambientes confirmados
+- Desarrollo GitHub: `jalc107-arch/promoclaras-v2`, rama `feature/sinuano-admin-staging-20261017`.
+- Commit de aplicación **desplegado** en Railway staging: `9dc4dfeeaa0ba44e0e17a5f832541a6c9487553d`. Deployment `2367ec37-cf94-47d7-8ca3-a72f4431f135`, resultado `SUCCESS`, servicio online (verificación 18-oct-2026). Actualizar esta referencia si se despliega otro commit; un commit solo documental puede dejar HEAD más reciente que el desplegado.
+- Supabase staging `xooxbkawxrdvlvbvkvjy` ACTIVE_HEALTHY.
+- Supabase CampaClick producción `vrmctjgxvjyxepaefxzu` ACTIVE_HEALTHY, **sin modificar**.
+- Supabase FuerzaMarket `suponlvqoouzmmxbgcxf` **INACTIVE** por instrucción expresa. **NO ACTIVAR**.
+- Rama producción `main` seguía en `b87af4590ab80afc12287150f4a9d03cdd3b95e0`, sin fusión. No tocar producción ni fusionar sin autorización expresa.
 
-**Doble puerta cerrada**: `IS_DAILY_COMMERCIALLY_ENABLED=false` en `services/sinuanoAccess.mjs`, y `campaign_daily_commerce_controls.sales_enabled=false` en staging PostgreSQL. **No alterar estos valores sin documentos y autorización expresa**.
+## Estructura técnica disponible en STAGING, no en explotación real
+1. Campaña excepcional ficticia `prueba-interna-sinuano-noche-2500-4-cifras`, 31 jornadas independientes del 1 al 31 de diciembre 2026, todas `draft`, solamente día 31 señalado como premio mayor. Premios y horarios oficiales aún por definir.
+2. Motor aislado de combinaciones de cuatro cifras; asignación automática únicamente tras pago completo; comprobación de saldos, conciliación del evento de Wompi, cronología e idempotencia.
+3. Historial append-only de eventos de pago verificados y revocaciones atómicas de `VOIDED`, auditoría, resultados diarios independientes y comprobación de no adjudicar sin activación elegible.
+4. **Centro administrativo de preparación** `/admin/sorteos-diarios/:campaignId/preparacion`, accesible solo a sesión administrador bajo CSRF: checklist de once requisitos y notas, registro de alternativas de premios en borrador y auditoría. La base usa `campaign_daily_preflight_notes` y `campaign_daily_prize_proposals`. Dos alternativas no aprobadas del día 31 están cargadas; no modifican `campaign_daily_draws`.
+5. **Candado documental adicional**: `campaign_daily_documentary_controls` con ambos valores `regulatory_review_unlocked=false` y `processor_review_unlocked=false`. Trigger `trg_daily_documentary_approval` rechaza aprobación basada únicamente en una referencia escrita; la tabla no concede escritura al rol `service_role`. Las opciones de aprobación del panel están deshabilitadas, y los POST directos se rechazan.
+6. Todas las migraciones de preparación y bloqueo documental están aplicadas **solo** a staging: `20261018113140_staging_daily_preparation_only_20261018` y `20261018113702_staging_daily_documentary_approval_guard_20261018`. No repetirlas allí sin inventario previo.
 
-Migraciones instaladas exclusivamente en staging: auditoría y revocaciones, motor por jornada, conciliación de activaciones, bloqueo de resultados ante pago revertido, asignación/activación atómica tras pago completo, control comercial independiente en BD. Nuevas instalaciones deben aplicar todas las migraciones en orden; no repetir ciegamente las ya instaladas.
+## Pruebas más recientes
+- GitHub Actions [39123894303](https://github.com/jalc107-arch/promoclaras-v2/actions/runs/39123894303): **136 pruebas locales aprobadas (0 fallos)** y batería PostgreSQL 17 independiente, incluida validación de no aprobación sin evidencia documental externa.
+- Railway staging: servicio online, `/health` saludable, listado de campañas tradicionales visible, ruta de compra Sinuano retorna `403` y nueva ruta de preparación exige login.
+- Base staging comprobada tras migraciones: 31 jornadas `draft`, dos propuestas del premio mayor, cero órdenes y cero activaciones, habilitación comercial `false`, ambos candados documentales `false`.
+- **No** se ha demostrado una venta real end-to-end Wompi Sandbox de esta modalidad; se mantienen bloqueados pagos reales y premios.
 
-Laboratorio PostgreSQL 17 y GitHub Actions `39094591813`: **113/113 pruebas locales, pruebas SQL de 31 jornadas, pagos ficticios, 15 códigos simultáneos únicos y rechazos de reintentos/reversos**. Las pruebas HTTP posteriores al despliegue confirman salud y compra Sinuano bloqueada. Sin transacciones reales de Wompi.
+## Pendiente para autorización futura
+Pronunciamiento regulatorio, modalidad autorizable y jurisdicción, aceptación expresa de Wompi, derechos de uso de resultados, reglas de premio no adjudicado, plan de premios definitivo, impuestos/garantías, horarios oficiales, pruebas externas verificables y revisión final de seguridad. Cualquier sustitución de diseño debe documentarse y contar con decisión expresa.
 
-**No listo para producción.** Pendiente: documentos regulatorios y autorización Wompi, premios, ledger de confirmaciones inmutables, reversión atómica de activaciones por `VOIDED`, pruebas integrales con Wompi Sandbox, verificación oficial de resultados, revisión final de seguridad y autorización expresa para fusionar `main`.
-
-Detalle reproducible y evidencias: [docs/SINUANO_FASE2_VALIDACION_INTEGRAL_20261017.md](docs/SINUANO_FASE2_VALIDACION_INTEGRAL_20261017.md).
+**No reactivar FuerzaMarket, no alterar CampaClick producción, no levantar barreras de seguridad por pruebas ficticias y no fusionar con `main`.**
