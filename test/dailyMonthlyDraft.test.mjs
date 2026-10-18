@@ -37,7 +37,7 @@ test('Seguridad SQL: historia inmutable, exclusiva y sin habilitar ventas',()=>{
  const ddl=readFileSync(new URL('../migrations/20261018_staging_daily_monthly_plan_drafts.sql',import.meta.url),'utf8');
  assert.match(ddl,/major_prize_kind IN \('money','physical'\)/);
  assert.match(ddl,/p_kind='money'[\s\S]*?p_amount>0 AND p_quantity IS NULL/);
- assert.match(ddl,/p_kind='physical'.*p_amount IS NULL AND p_quantity>0/);
+ assert.match(ddl,/p_kind='physical'[\s\S]*?p_amount IS NULL AND p_quantity IS NOT NULL AND p_quantity>0/);
  assert.match(ddl,/BEFORE UPDATE OR DELETE/);
  assert.match(ddl,/sales_enabled=false/);
  assert.doesNotMatch(ddl,/UPDATE public\.(payments|orders|rifas|campaign_daily_draws)/);
