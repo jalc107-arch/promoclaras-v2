@@ -60,3 +60,15 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_reversal_reconciliation_guard.sql
       - name: Casos de aprobacion, reversion y alcance
         run: psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_reconciliation_cases.sql
+      - name: Crear base temporal separada para las 31 jornadas
+        run: createdb sinuano_daily_results
+      - name: Preparar esquema sintético y funciones originales de adjudicación
+        run: |
+          export PGDATABASE=sinuano_daily_results
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_reconciliation_schema.sql
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_results_schema.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261017_staging_daily_result_atomic.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_missing_activation_fail_closed_20261017.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_reversal_reconciliation_guard.sql
+      - name: Probar 31 jornadas sin tocar Supabase
+        run: PGDATABASE=sinuano_daily_results psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_results_cases.sql
