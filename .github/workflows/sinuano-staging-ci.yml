@@ -110,7 +110,7 @@ jobs:
         run: |
           createdb sinuano_documentary
           export PGDATABASE=sinuano_documentary
-          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_documentary_fixture.sql
+          sed '/^CREATE ROLE /d' test/sql/sinuano_documentary_fixture.sql | psql -X -v ON_ERROR_STOP=1
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_documentary_approval_guard.sql
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_documentary_block_cases.sql
 
