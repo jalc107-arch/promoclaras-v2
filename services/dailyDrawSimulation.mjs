@@ -129,7 +129,7 @@ export function validateMonthlySchedule(rows,{year,month}={}) {
       throw new Error('Jornada programada sin fecha-hora de corte y sorteo');
     if(row.status==='completed'&&row.prize_kind==='undetermined')
       throw new Error('Jornada cerrada sin premio definido');
-    if(row.major_prize && row.prize_kind !== 'undetermined'
+    if(row.major_prize && row.prize_kind != null && row.prize_kind !== 'undetermined'
        && !['money','physical'].includes(row.prize_kind))
       throw new Error('El premio mayor debe ser solo dinero O especie');
   }
