@@ -72,3 +72,15 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_reversal_reconciliation_guard.sql
       - name: Probar 31 jornadas sin tocar Supabase
         run: PGDATABASE=sinuano_daily_results psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_results_cases.sql
+      - name: Preparar tercera base temporal para pagos completos
+        run: |
+          createdb sinuano_atomic_payment
+          export PGDATABASE=sinuano_atomic_payment
+          sed '/^CREATE ROLE /d' test/sql/sinuano_reconciliation_schema.sql | psql -X -v ON_ERROR_STOP=1
+          sed '/^CREATE ROLE service_role NOLOGIN;$/d' test/sql/sinuano_daily_results_schema.sql | psql -X -v ON_ERROR_STOP=1
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_schema.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261017_staging_daily_activation_guard.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_atomic_full_payment_activation.sql
+      - name: Pago completo, idempotencia y proteccion de campañas tradicionales
+        run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_cases.sql
+

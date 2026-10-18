@@ -100,7 +100,7 @@ BEGIN
  WHERE id=v_order.id;
  IF v_existing=0 THEN
    WITH free AS MATERIALIZED (
-     SELECT lpad(n::text,4,'0') AS number,encode(gen_random_bytes(8),'hex') AS entropy
+     SELECT lpad(n::text,4,'0') AS number,encode(extensions.gen_random_bytes(8),'hex') AS entropy
      FROM generate_series(0,9999) n
      WHERE NOT EXISTS (
        SELECT 1 FROM public.tickets t WHERE t.rifa_id=v_campaign.id
