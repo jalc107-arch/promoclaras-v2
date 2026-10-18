@@ -3,6 +3,7 @@
 CREATE ROLE service_role NOLOGIN;
 ALTER TABLE public.rifas ADD COLUMN status text DEFAULT 'pending';
 ALTER TABLE public.rifas ADD COLUMN is_public boolean DEFAULT false;
+ALTER TABLE public.orders ADD COLUMN qty integer NOT NULL DEFAULT 5;
 ALTER TABLE public.tickets ADD COLUMN combination text NOT NULL DEFAULT '0000';
 ALTER TABLE public.campaign_daily_ticket_activations ADD COLUMN payment_confirmation_at timestamptz;
 ALTER TABLE public.campaign_daily_draws
