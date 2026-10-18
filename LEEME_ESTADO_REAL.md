@@ -1,36 +1,37 @@
-# CampaClick — desarrollo aislado Sinuano Noche (17-10-2026)
+# CampaClick — estado vigente de Sinuano Noche (17-10-2026 Colombia, 18-10 UTC)
 
-## Estado REAL
-- **NO DESPLEGADO NI FUSIONADO:** el navegador de GitHub no consiguió pegar archivos con exactitud y los permisos de escritura del conector GitHub devolvieron 403. La rama `feature/sinuano-admin-staging-20261017` existe pero debe verificarse antes de cualquier subida. `main`/Railway producción siguen intactos.
-- FuerzaMarket `ACTIVE_HEALTHY`, staging Supabase `INACTIVE`, CampaClick producción `ACTIVE_HEALTHY` (última verificación).
-- En staging ya hay una campaña de prueba PRIVADA y PENDIENTE de $2.500, cuatro cifras, cero órdenes/pagos, autorización especial PENDIENTE y verificaciones regulatoria/Wompi en FALSE.
-- Los archivos en este paquete se prepararon y probaron LOCALMENTE; **no constituyen una integración E2E de pagos ni múltiples sorteos operativos**.
+## Regla de aislamiento
+- GitHub: `jalc107-arch/promoclaras-v2`; rama de trabajo `feature/sinuano-admin-staging-20261017`. **No fusionar con main sin autorización explícita**. main verificado antes de estas pruebas: `b87af4590ab80afc12287150f4a9d03cdd3b95e0`.
+- CampaClick producción en Supabase `vrmctjgxvjyxepaefxzu`: ACTIVE_HEALTHY, sin cambios en base ni pagos.
+- FuerzaMarket Supabase `suponlvqoouzmmxbgcxf`: INACTIVE por solicitud explícita del usuario. **NO REACTIVAR**.
+- Staging Supabase `xooxbkawxrdvlvbvkvjy`: ACTIVE_HEALTHY. Railway staging servicio `09341e73-16df-48cd-8df6-db6eee60b227`: online.
+- Wompi únicamente SANDBOX en staging, sin pagos externos durante las pruebas descritas.
+- No existen pruebas documentales completas de autorización regulatoria ni aprobación específica del procesador de pagos. Mantener `IS_DAILY_COMMERCIALLY_ENABLED=false`.
 
-## Qué implementa este paquete (staging exclusivamente)
-1. `index.js`: importa controles de seguridad y panel de expedientes, registrando middleware ANTES de cualquier ruta de compra, crédito, publicación o aprobación administrativa.
-2. `services/sinuanoAccess.mjs`: toda operación comercial sobre `loteria_sinuano_noche` queda bloqueada en servidor, incluso si estado active/public; activación comercial por defecto false.
-3. `services/dailyDrawAdmin.mjs`: consultas privadas de expedientes y decisiones administrativas con validación de sesión, CSRF global y RPC transaccional. La aprobación del expediente NO activa venta.
-4. `services/dailyDrawRules.cjs`: simulación pura de fecha, resultado de cuatro cifras, ganador o sin ganador y elegibilidad condicionada a pago verificado e íntegro.
-5. `migrations/20261017_staging_daily_draws_admin_guard.sql`: tablas de calendario/resultados/elegibilidad/auditoría y decisión administrativa atómica, SOLO staging.
-6. `migrations/20261017_staging_daily_calendar_fixture.sql`: 31 borradores del 1 al 31 diciembre de 2026, con el 31 exclusivamente premio mayor; premios y horarios por definir, ningún resultado real, no publicados.
-7. `scripts/05_wompi_preflight.mjs`: exige claves de prueba `pub_test_`/`prv_test_`, Supabase staging y URL staging sin exponer secretos.
-8. `test/*.mjs`, `test/*.cjs`: pruebas en memoria. Se ejecutan con `node --test test/*.mjs test/*.cjs`.
+## Campaña interna en staging
+- Slug: `prueba-interna-sinuano-noche-2500-4-cifras`. Valor código $2.500 COP, mínimo cinco por orden, resultados de cuatro cifras `0000`–`9999`.
+- 31 sorteos en borrador del 1 al 31 diciembre 2026, solo el 31 marcado premio mayor. Premios 1–30 y alternativa definitiva del 31 aún sin concretar.
+- Campaña PRIVATE/PENDING, aprobación excepcional PENDING, verificaciones regulatoria y Wompi FALSE. Cero órdenes, códigos, activaciones, adjudicaciones y resultados definitivos tras transacciones de prueba reversibles.
 
-## Bloqueos importantes
-- NO aplicar SQL a producción ni tocar datos históricos.
-- NO habilitar Wompi real ni permitir ventas de campaña diaria sin autorización de autoridad competente y aceptación del procesador de pagos. Falta comprobar variables ocultas de Railway staging.
-- El 31 es el único premio de esa fecha. Valor o elección entre $12.500.000 y dos motos no fue formalizada.
-- Son **31 borradores**; sin horarios reales de cierre, calendario oficial verificado ni fuente de resultados, por seguridad no pueden publicarse.
-- Falta integrar activación automática con webhook Wompi y asignación de códigos (las rutas legadas de lotería admiten selección manual), y carga oficial diaria validada.
-- El usuario acordó pausar FuerzaMarket SOLO en una ventana controlada; está restaurado y NO DEBE PAUSARSE hasta completar código, permisos GitHub y pruebas locales.
-- La aprobación administrativa de esta fase se atribuye a huella de sesión y no a cuenta de administrador nominativa; antes de producción exigir identidad administrativa individual y trazabilidad reforzada.
-- Los permisos GitHub 403 y la edición web con formateo involuntario impiden subir/desplegar automáticamente los archivos ahora. No dar por terminado hasta subida, revisión PR, staging funcional, prueba sandbox y rollback.
+## Migraciones aplicadas en staging, registradas en Supabase
+1. `20261018000035` `staging_daily_draws_admin_guard_20261017`; `20261018000050` fixture de calendario.
+2. `20261018013304` `staging_daily_activation_guard_20261017`; `20261018013306` `staging_daily_result_atomic_20261017`.
+3. `20261018013344` `staging_daily_activation_guard_hardened_20261017`: revocaciones inmutables con auditoría.
+4. `20261018013541` `staging_daily_result_atomic_hardened_20261017`: premios definitivos y códigos elegibles válidos sin duplicados.
+5. `20261018021632` `staging_daily_missing_activation_fail_closed_20261017`: pago completo sin códigos o activaciones bloquea resultado, incluso ante resultado sin ganador.
 
-## Comprobaciones antes de un futuro despliegue
-1. Actualizar rama desde `main` si evolucionó, no reemplazar avances nuevos.
-2. Confirmar diferencias aisladas respecto a main y reproducir `node --check index.js` y test Node.
-3. Aplicar las migraciones SOLO en Supabase staging, verificar columnas/PK/RLS y RPC; fixture calendario pendiente/privado.
-4. Confirmar las variables de Wompi Sandbox en Railway staging SIN revelarlas.
-5. Probar rutas protegidas con cliente HTTP autenticado, CSRF, acceso no admin, doble click de aprobación, revocación, pago parcial y webhook duplicado.
-6. Mantener Wompi PROD, campañas antiguas y resultados legado sin cambios.
-7. Dejar staging inactivo y FuerzaMarket `ACTIVE_HEALTHY` al concluir.
+Los archivos de migración en GitHub son las fuentes para nuevas instalaciones. **Estas migraciones ya están aplicadas en staging, no ejecutarlas otra vez allí**. El archivo de conciliación comprueba que no esté instalada, y se detiene si ya existe. Revalidar siempre historial y esquema antes de migrar.
+
+## Evidencia técnica de pruebas SQL realizadas con datos ficticios y ROLLBACK
+- Rechazados: pago parcial, pago aprobado insuficiente, fecha de activación retroactiva, activación duplicada, actualización indebida/reversión de revocación, aprobación sin autorización, resultado anticipado.
+- Aprobados: activación por pago completo; auditoría de activación y revocación; dos sorteos independientes (ganador y sin ganador); mismo código válido para sorteo posterior; doble resultado bloqueado.
+- Nueva conciliación: pago íntegro con menos códigos que `orders.qty` bloqueado; pago íntegro con códigos sin activación bloqueado; cinco códigos íntegros activados permiten ganador único; ninguna jornada finalizó de forma persistente al concluir pruebas.
+- Resultados SQL reales de staging, **no equivalentes a pruebas webhook Wompi ni a test E2E externo**.
+
+## Pendientes antes de producción
+- Conectar transacción autenticada de Wompi Sandbox a activación y asignación automática en backend (sin selección manual).
+- Sustituir `payments.updated_at` como prueba cronológica por eventos verificables e inmutables; idempotencia transaccional en DB para procesos paralelos e incidencias `VOIDED`.
+- Identidad nominativa administrativa para decisiones sensibles; verificación oficial del resultado y documentos regulatorios de modalidad diaria.
+- Completar pruebas HTTP autenticadas, CSRF, concurrencia, 31 jornadas consecutivas y regresión de campañas tradicionales.
+- GitHub Actions de esta rama ejecuta pruebas de código sin secretos; **un resultado CI exitoso no autoriza ventas**.
+- No cambiar Wompi de producción ni fusionar main sin autorización del usuario.

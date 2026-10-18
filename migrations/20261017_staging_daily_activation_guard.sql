@@ -25,15 +25,24 @@ BEGIN
     RAISE EXCEPTION 'La activación es inmutable: solo puede registrarse revocación';
  END IF;
  IF TG_OP='UPDATE' THEN
-   IF OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at THEN
-     RAISE EXCEPTION 'No se permite eliminar ni cambiar revocaciones anteriores';
+   -- Once revoked, the timestamp, reason and activation cannot be modified.
+   IF OLD.revoked_at IS NOT NULL THEN
+     RAISE EXCEPTION 'Una revocación registrada no puede alterarse';
    END IF;
-   IF NEW.revoked_at IS NOT NULL THEN
-     IF length(btrim(coalesce(NEW.revoked_reason,''))) < 15 THEN
-       RAISE EXCEPTION 'La revocación necesita motivo auditable';
-     END IF;
-     NEW.revoked_at:=clock_timestamp();
+   IF NEW.revoked_at IS NULL THEN
+     RAISE EXCEPTION 'Solo se permite actualizar una activación para revocarla';
    END IF;
+   IF length(btrim(coalesce(NEW.revoked_reason,''))) < 15 THEN
+     RAISE EXCEPTION 'La revocación necesita motivo auditable';
+   END IF;
+   NEW.revoked_reason:=btrim(NEW.revoked_reason);
+   NEW.revoked_at:=clock_timestamp();
+   INSERT INTO public.campaign_daily_audit(campaign_id,event_kind,actor_fingerprint,details)
+   VALUES(OLD.campaign_id,'activation_revoked',
+     encode(sha256(convert_to('SYSTEM_DAILY_REVOCATION','UTF8')),'hex'),
+     jsonb_build_object('ticket_id',OLD.ticket_id,'order_id',OLD.order_id,
+       'activated_at',OLD.activated_at,'revoked_at',NEW.revoked_at,
+       'reason',NEW.revoked_reason));
    RETURN NEW;
  END IF;
  SELECT * INTO v_ticket FROM public.tickets WHERE id=NEW.ticket_id FOR UPDATE;

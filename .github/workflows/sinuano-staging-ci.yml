@@ -1,0 +1,29 @@
+name: Sinuano staging - pruebas de seguridad sin credenciales
+on:
+  push:
+    branches:
+      - feature/sinuano-admin-staging-20261017
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit-and-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias sin secretos
+        run: npm ci --no-audit --no-fund
+      - name: Validar sintaxis
+        run: |
+          node --check index.js
+          node --check services/dailyDrawCalendar.mjs
+          node --check services/dailyDrawSimulation.mjs
+          node --check services/dailyDrawAdmin.mjs
+          node --check services/sinuanoAccess.mjs
+      - name: Pruebas locales sin acceso a Supabase ni Wompi
+        run: node --test test/*.mjs test/*.cjs

@@ -18,6 +18,8 @@ DECLARE
  v_campaign public.rifas%ROWTYPE;
  v_auth public.daily_draw_campaign_authorizations%ROWTYPE;
  v_result_count integer;
+ v_duplicate_count integer;
+ v_invalid_count integer;
  v_winner uuid;
  v_eligible integer;
  v_digest text;
@@ -40,6 +42,12 @@ BEGIN
   OR v_draw.cutoff_at>v_draw.scheduled_at OR clock_timestamp()<v_draw.scheduled_at THEN
    RAISE EXCEPTION 'No puede finalizarse antes del sorteo oficial';
  END IF;
+ -- Never publish results for a draft prize, even if status was incorrectly changed.
+ IF v_draw.prize_kind NOT IN ('money','physical') OR length(btrim(coalesce(v_draw.prize_description,''))) < 12
+ OR v_draw.prize_description ILIKE '%pendiente%' OR v_draw.prize_description ILIKE '%por definir%' THEN
+ RAISE EXCEPTION 'Premio sin definir: no puede adjudicarse esta jornada'; END IF;
+ IF v_draw.prize_kind='money' AND (v_draw.prize_amount IS NULL OR v_draw.prize_amount<=0) THEN
+ RAISE EXCEPTION 'Premio monetario sin valor positivo confirmado'; END IF;
  SELECT * INTO v_campaign FROM public.rifas WHERE id=v_draw.campaign_id FOR UPDATE;
  IF v_campaign.draw_provider<>'loteria_sinuano_noche'
    OR v_campaign.draw_mode<>'loteria_4_pleno'
@@ -79,11 +87,14 @@ BEGIN
  ), counters AS (
   SELECT count(*)::integer AS n,
     count(*) FILTER(WHERE combination=p_result)::integer AS matching_count,
+    (count(*)-count(DISTINCT combination))::integer AS duplicate_count,
+    count(*) FILTER(WHERE combination IS NULL OR combination !~ '^[0-9]{4}$')::integer AS invalid_count,
     min(id::text) FILTER(WHERE combination=p_result)::uuid AS match_id,
     encode(sha256(convert_to(coalesce(string_agg(id::text||':'||combination,',' ORDER BY id::text),''),'UTF8')),'hex') AS digest
   FROM eligible
  )
- SELECT n,matching_count,match_id,digest INTO v_eligible,v_result_count,v_winner,v_digest FROM counters;
+ SELECT n,matching_count,duplicate_count,invalid_count,match_id,digest INTO v_eligible,v_result_count,v_duplicate_count,v_invalid_count,v_winner,v_digest FROM counters;
+ IF v_duplicate_count>0 OR v_invalid_count>0 THEN RAISE EXCEPTION 'Códigos duplicados o inválidos: suspender adjudicación'; END IF;
  IF v_result_count>1 THEN RAISE EXCEPTION 'Más de un ganador; detener procesamiento'; END IF;
  IF v_result_count=0 THEN v_winner:=NULL; END IF;
  UPDATE public.campaign_daily_draws SET status='completed', official_result=p_result,
