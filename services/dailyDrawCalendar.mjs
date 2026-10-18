@@ -1,4 +1,4 @@
-import { validateDecemberSchedule } from './dailyDrawSimulation.mjs';
+import { validateMonthlySchedule } from './dailyDrawSimulation.mjs';
 import { DAILY_PROVIDER, IS_DAILY_COMMERCIALLY_ENABLED } from './sinuanoAccess.mjs';
 
 /**
@@ -40,7 +40,7 @@ export function registerDailyDrawCalendarRoutes(app,{supabase,escapeHtml}) {
       const d=await supabase.from('campaign_daily_draws').select('draw_date,status,major_prize,prize_kind,prize_description,cutoff_at,scheduled_at,outcome,official_result').eq('campaign_id',id).order('draw_date',{ascending:true}).limit(50);
       if(d.error)throw d.error;
       let consistency='El calendario está incompleto.';
-      try {validateDecemberSchedule(d.data||[],2026);consistency='Calendario de 31 jornadas íntegro.';}
+      try {const report=validateMonthlySchedule(d.data||[]);consistency=`Calendario de ${report.draws} jornadas íntegro: ${report.first} a ${report.last}.`;}
       catch {consistency='ATENCIÓN: verificar estructura y fechas del calendario antes de operar.';}
       const locked=c.data.status!=='active'||c.data.is_public!==true||(a.data?.approval_status!=='approved')||a.data?.regulatory_clearance!==true||a.data?.payment_provider_clearance!==true;
       const rows=(d.data||[]).map(item=>`<tr><td>${escape(item.draw_date)}</td><td>${item.major_prize?'Premio mayor':'Premio diario'}</td><td>${escape(item.prize_description)}</td><td>${escape(item.status)}</td><td>${escape(item.cutoff_at||'Pendiente')}</td><td>${escape(item.outcome||'—')}</td></tr>`).join('');

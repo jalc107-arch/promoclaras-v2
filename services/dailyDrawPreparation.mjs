@@ -57,7 +57,7 @@ export function registerDailyDrawPreparationRoutes(app,{supabase,escapeHtml}) {
    }).join('');
    const recent=messages.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.requirement_key)}</td><td>${esc(x.note)}<p class="small">${esc(x.evidence_reference||'Sin referencia')}</p></td></tr>`).join('');
    const idUrl=encodeURIComponent(id);
-   const readonlyNotice='<p class="caution"><b>Solo preparación interna.</b> Ninguna nota o propuesta constituye validación de Coljuegos o Wompi; no se cambia el calendario oficial, se asignan premios ni se habilitan ventas. Las 31 jornadas son un escenario técnico pendiente de viabilidad jurídica.</p>';
+   const readonlyNotice='<p class="caution"><b>Premio mayor único:</b> en la última jornada será dinero O especie, nunca ambos. Las propuestas son alternativas sin elegir. <b>Solo preparación interna.</b> Ninguna nota o propuesta constituye validación de Coljuegos o Wompi; no se cambia el calendario oficial, se asignan premios ni se habilitan ventas. Las 31 jornadas son un escenario técnico pendiente de viabilidad jurídica.</p>';
    const disabledForm=pending? `
     <section><h2>Agregar nota al expediente</h2>
     <form method="post" action="/admin/sorteos-diarios/${idUrl}/preparacion/notas">

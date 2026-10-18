@@ -86,18 +86,60 @@ export function previewWithVerifiedPayments({ draw, campaign, tickets=[], activa
 }
 
 /**
- * Same API used by the administrative preview: each date is an independent
- * event; 31 December is reserved for the single major prize.
+ * Flexible calendar: one exceptional campaign per full calendar month.
+ * Dates use UTC arithmetic to prevent timezone/DST shifts; operational draw
+ * times remain unconfigured until a source and jurisdiction are approved.
+ * Exactly ONE major draw on the last calendar day. Prize choice is exclusive.
  */
-export function validateDecemberSchedule(rows,year=2026) {
-  if (!Array.isArray(rows)||rows.length!==31)throw new Error('La campaña debe tener 31 sorteos');
-  const dates=new Set();
-  for(const row of rows){
-    const date=`${year}-12-${String(dates.size+1).padStart(2,'0')}`;
-    if(row.draw_date!==date||dates.has(date))throw new Error('Calendario incompleto, desordenado o duplicado');
-    if(Boolean(row.major_prize)!==(date===`${year}-12-31`))throw new Error('Solo el 31 tendrá el premio mayor');
-    if(row.status==='scheduled'&&(!row.cutoff_at||!row.scheduled_at))throw new Error('Falta hora de corte para jornada programada');
-    dates.add(date);
+export function buildMonthlyDraftSchedule(year,month) {
+  if(!Number.isInteger(year)||year<2026||year>2100||
+     !Number.isInteger(month)||month<1||month>12)
+    throw new Error('Año o mes de campaña inválido');
+  const days=new Date(Date.UTC(year,month,0)).getUTCDate();
+  const prefix=String(year)+'-'+String(month).padStart(2,'0')+'-';
+  return Object.freeze(Array.from({length:days},(_,i)=>Object.freeze({
+    draw_date:prefix+String(i+1).padStart(2,'0'),
+    major_prize:i===days-1,
+    status:'draft',
+    prize_kind:'undetermined',
+    prize_description:i===days-1
+      ? 'PREMIO MAYOR: elegir un único premio en especie O en dinero, sin autorización'
+      : 'PREMIO DIARIO: pendiente de definición',
+    prize_amount:null,cutoff_at:null,scheduled_at:null
+  })));
+}
+export function validateMonthlySchedule(rows,{year,month}={}) {
+  if(!Array.isArray(rows)||rows.length===0)
+    throw new Error('No hay jornadas del mes');
+  const firstDate=String(rows[0]?.draw_date??'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(firstDate))
+    throw new Error('Fecha inicial inválida');
+  const campaignYear=year??Number(firstDate.slice(0,4));
+  const campaignMonth=month??Number(firstDate.slice(5,7));
+  const expected=buildMonthlyDraftSchedule(campaignYear,campaignMonth);
+  if(rows.length!==expected.length)
+    throw new Error('El mes debe contener todas sus jornadas, sin omisiones');
+  for(let i=0;i<expected.length;i++){
+    const row=rows[i],wanted=expected[i];
+    if(row?.draw_date!==wanted.draw_date)
+      throw new Error('Jornadas desordenadas, duplicadas o fuera de mes');
+    if(row.major_prize!==wanted.major_prize)
+      throw new Error('El premio mayor es único y corresponde al último día del mes');
+    if(row.status==='scheduled'&&(!row.cutoff_at||!row.scheduled_at))
+      throw new Error('Jornada programada sin fecha-hora de corte y sorteo');
+    if(row.status==='completed'&&row.prize_kind==='undetermined')
+      throw new Error('Jornada cerrada sin premio definido');
+    if(row.major_prize && row.prize_kind !== 'undetermined'
+       && !['money','physical'].includes(row.prize_kind))
+      throw new Error('El premio mayor debe ser solo dinero O especie');
   }
-  return Object.freeze({draws:rows.length,majorPrizes:1,first:`${year}-12-01`,last:`${year}-12-31`});
+  return Object.freeze({
+    draws:expected.length,majorPrizes:1,
+    year:campaignYear,month:campaignMonth,
+    first:expected[0].draw_date,last:expected.at(-1).draw_date
+  });
+}
+/** Compatibility for existing December fixtures; new routes use monthly version. */
+export function validateDecemberSchedule(rows,year=2026){
+  return validateMonthlySchedule(rows,{year,month:12});
 }
