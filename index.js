@@ -6,6 +6,7 @@ import { handleSignedDailyWompiEvent } from "./services/dailyWompiWebhookLedger.
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
 import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mjs";
 import { registerDailyDrawPreparationRoutes } from "./services/dailyDrawPreparation.mjs";
+import { registerDailyMonthlyPreviewRoutes } from "./services/dailyMonthlyPreview.mjs";
 import session from "express-session";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -587,6 +588,7 @@ registerDailyDrawFailClosedGuards(app, { supabase });
 registerDailyDrawAdminRoutes(app, { supabase, escapeHtml });
 registerDailyDrawCalendarRoutes(app, { supabase, escapeHtml });
 registerDailyDrawPreparationRoutes(app, { supabase, escapeHtml });
+registerDailyMonthlyPreviewRoutes(app, { supabase, escapeHtml });
 
 const campaignAvailabilityService = createCampaignAvailabilityService({
   supabase

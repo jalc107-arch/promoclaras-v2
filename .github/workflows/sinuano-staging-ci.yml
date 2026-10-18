@@ -25,6 +25,7 @@ jobs:
           node --check services/dailyDrawSimulation.mjs
           node --check services/dailyDrawAdmin.mjs
           node --check services/dailyDrawPreparation.mjs
+          node --check services/dailyMonthlyPreview.mjs
           node --check services/sinuanoAccess.mjs
       - name: Pruebas locales sin acceso a Supabase ni Wompi
         run: node --test test/*.mjs test/*.cjs
