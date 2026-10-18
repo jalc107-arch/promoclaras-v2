@@ -20,11 +20,13 @@ CREATE TABLE IF NOT EXISTS public.campaign_daily_monthly_plan_drafts (
   (major_prize_kind IS NULL AND major_prize_description IS NULL
     AND major_prize_amount IS NULL AND major_prize_quantity IS NULL)
   OR
-  (major_prize_kind='money' AND length(btrim(major_prize_description)) BETWEEN 12 AND 800
-    AND major_prize_amount > 0 AND major_prize_quantity IS NULL)
+  (major_prize_kind IS NOT NULL AND major_prize_kind='money'
+    AND coalesce(length(btrim(major_prize_description)),0) BETWEEN 12 AND 800
+    AND major_prize_amount IS NOT NULL AND major_prize_amount > 0 AND major_prize_quantity IS NULL)
   OR
-  (major_prize_kind='physical' AND length(btrim(major_prize_description)) BETWEEN 12 AND 800
-    AND major_prize_amount IS NULL AND major_prize_quantity > 0)
+  (major_prize_kind IS NOT NULL AND major_prize_kind='physical'
+    AND coalesce(length(btrim(major_prize_description)),0) BETWEEN 12 AND 800
+    AND major_prize_amount IS NULL AND major_prize_quantity IS NOT NULL AND major_prize_quantity > 0)
  ),
  CONSTRAINT daily_monthly_last_date_correct CHECK (
   last_draw_date = (make_date(year_number,month_number,1)+interval '1 month - 1 day')::date
@@ -77,10 +79,12 @@ BEGIN
  END IF;
  IF NOT(
   (p_kind IS NULL AND v_description IS NULL AND p_amount IS NULL AND p_quantity IS NULL)
-  OR (p_kind='money' AND length(v_description) BETWEEN 12 AND 800
-      AND p_amount>0 AND p_quantity IS NULL)
-  OR (p_kind='physical' AND length(v_description) BETWEEN 12 AND 800
-      AND p_amount IS NULL AND p_quantity>0)
+  OR (p_kind IS NOT NULL AND p_kind='money'
+      AND coalesce(length(v_description),0) BETWEEN 12 AND 800
+      AND p_amount IS NOT NULL AND p_amount>0 AND p_quantity IS NULL)
+  OR (p_kind IS NOT NULL AND p_kind='physical'
+      AND coalesce(length(v_description),0) BETWEEN 12 AND 800
+      AND p_amount IS NULL AND p_quantity IS NOT NULL AND p_quantity>0)
  ) THEN
   RAISE EXCEPTION 'Se debe elegir un único premio mayor: dinero O especie, no ambos';
  END IF;
