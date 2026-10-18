@@ -71,8 +71,12 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261017_staging_daily_result_atomic.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_missing_activation_fail_closed_20261017.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_reversal_reconciliation_guard.sql
+      - name: Aplicar regla mensual de premio mayor en PostgreSQL
+        run: PGDATABASE=sinuano_daily_results psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_month_end_major_guard.sql
       - name: Probar 31 jornadas sin tocar Supabase
         run: PGDATABASE=sinuano_daily_results psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_results_cases.sql
+      - name: Confirmar el último día de cada mes y la exclusividad del premio
+        run: PGDATABASE=sinuano_daily_results psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_month_end_major_guard_cases.sql
       - name: Preparar tercera base temporal para pagos completos
         run: |
           createdb sinuano_atomic_payment
