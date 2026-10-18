@@ -83,4 +83,18 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_atomic_full_payment_activation.sql
       - name: Pago completo, idempotencia y proteccion de campañas tradicionales
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_cases.sql
+      - name: Dos pedidos aprobados simultaneamente, sin compartir códigos
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGDATABASE=sinuano_atomic_payment
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_concurrent_orders_setup.sql
+          psql -X -v ON_ERROR_STOP=1 -c "SELECT * FROM public.system_daily_finalize_full_payment_atomic('10101010-1010-4010-8010-101010101010','sandbox_concurrent_A_1010')" &
+          pid_a=$!
+          psql -X -v ON_ERROR_STOP=1 -c "SELECT * FROM public.system_daily_finalize_full_payment_atomic('20202020-2020-4020-8020-202020202020','sandbox_concurrent_B_2020')" &
+          pid_b=$!
+          wait "$pid_a"
+          wait "$pid_b"
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_concurrent_orders_assert.sql
+
 
