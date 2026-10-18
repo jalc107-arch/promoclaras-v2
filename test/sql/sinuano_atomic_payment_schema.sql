@@ -8,6 +8,7 @@ ALTER TABLE public.orders ADD COLUMN payment_mode text DEFAULT 'full';
 ALTER TABLE public.orders ADD COLUMN amount_paid numeric DEFAULT 0;
 ALTER TABLE public.payments ADD COLUMN installment_id uuid;
 ALTER TABLE public.tickets ADD COLUMN ticket_code text;
+ALTER TABLE public.tickets ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.tickets ADD COLUMN buyer_id uuid;
 ALTER TABLE public.campaign_daily_ticket_activations ADD COLUMN revoked_reason text;
 ALTER TABLE public.campaign_daily_ticket_activations ADD COLUMN created_at timestamptz DEFAULT now();
