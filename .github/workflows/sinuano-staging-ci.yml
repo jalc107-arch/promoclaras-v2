@@ -81,6 +81,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_schema.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261017_staging_daily_activation_guard.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_atomic_full_payment_activation.sql
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_commerce_gate.sql
       - name: Pago completo, idempotencia y proteccion de campañas tradicionales
         run: PGDATABASE=sinuano_atomic_payment psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_atomic_payment_cases.sql
       - name: Dos pedidos aprobados simultaneamente, sin compartir códigos

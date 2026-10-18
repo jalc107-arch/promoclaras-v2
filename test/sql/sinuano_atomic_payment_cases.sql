@@ -14,6 +14,24 @@ INSERT INTO public.orders(id,rifa_id,payment_status,subtotal,total_paid,balance_
 INSERT INTO public.payments(id,order_id,provider,status,provider_transaction_id,amount)
  VALUES('55555555-5555-4555-8555-555555555555','33333333-3333-4333-8333-333333333333',
  'wompi','approved','sandbox_test_payment_001',12500);
+-- The new database-level control is OFF by default, independent of UI.
+DO $gate_test$
+DECLARE blocked boolean:=false;
+BEGIN
+ BEGIN
+  PERFORM 1 FROM public.system_daily_finalize_full_payment_atomic(
+    '33333333-3333-4333-8333-333333333333','sandbox_test_payment_001');
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM LIKE '%Sinuano deshabilitado por control independiente%' THEN blocked:=true;
+  ELSE RAISE; END IF;
+ END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Database sales switch did not fail closed'; END IF;
+ IF EXISTS(SELECT 1 FROM public.tickets) THEN RAISE EXCEPTION 'Code created while disabled'; END IF;
+ RAISE NOTICE 'PASS: independent database commerce switch default false';
+END $gate_test$;
+-- ONLY in ephemeral CI; NEVER in Supabase staging without explicit approvals.
+UPDATE public.campaign_daily_commerce_controls SET sales_enabled=true
+ WHERE singleton=true;
 DO $cases$
 DECLARE result record; t_count integer; a_count integer; dup_count integer;
  rejected_partial boolean:=false; rejected_legacy boolean:=false;
