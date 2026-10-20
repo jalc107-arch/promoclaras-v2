@@ -8,6 +8,7 @@ import { registerDailyDrawCalendarRoutes } from "./services/dailyDrawCalendar.mj
 import { registerDailyDrawPreparationRoutes } from "./services/dailyDrawPreparation.mjs";
 import { registerDailyMonthlyPreviewRoutes } from "./services/dailyMonthlyPreview.mjs";
 import { registerDailyMonthlyDraftRoutes } from "./services/dailyMonthlyDraft.mjs";
+import { registerDailyDayPrizeAdminRoutes } from "./services/dailyDayPrizeAdmin.mjs";
 import session from "express-session";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -591,6 +592,7 @@ registerDailyDrawCalendarRoutes(app, { supabase, escapeHtml });
 registerDailyDrawPreparationRoutes(app, { supabase, escapeHtml });
 registerDailyMonthlyPreviewRoutes(app, { supabase, escapeHtml });
 registerDailyMonthlyDraftRoutes(app, { supabase });
+registerDailyDayPrizeAdminRoutes(app, { supabase, escapeHtml });
 
 const campaignAvailabilityService = createCampaignAvailabilityService({
   supabase

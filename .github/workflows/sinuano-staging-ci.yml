@@ -27,6 +27,7 @@ jobs:
           node --check services/dailyDrawPreparation.mjs
           node --check services/dailyMonthlyPreview.mjs
           node --check services/dailyMonthlyDraft.mjs
+          node --check services/dailyDayPrizeAdmin.mjs
           node --check services/sinuanoAccess.mjs
       - name: Pruebas locales sin acceso a Supabase ni Wompi
         run: node --test test/*.mjs test/*.cjs
@@ -125,6 +126,11 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_monthly_plan_fixture.sql
           psql -X -v ON_ERROR_STOP=1 -f migrations/20261018_staging_daily_monthly_plan_drafts.sql
           psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_monthly_plan_drafts_cases.sql
+      - name: Registrar premios diarios privados en laboratorio PostgreSQL
+        run: |
+          export PGDATABASE=sinuano_documentary
+          psql -X -v ON_ERROR_STOP=1 -f migrations/20261020_staging_daily_day_prize_drafts.sql
+          psql -X -v ON_ERROR_STOP=1 -f test/sql/sinuano_daily_day_prize_cases.sql
 
 
 
