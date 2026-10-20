@@ -33,7 +33,7 @@ GRANT SELECT,INSERT ON TABLE public.campaign_daily_day_prize_drafts TO service_r
 
 CREATE OR REPLACE FUNCTION public.daily_draft_no_mutation()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public','pg_temp' AS $f$
-BEGIN RAISE EXCEPTION 'Los borradores históricos no pueden editarse ni borrarse; cree otra revisión'; END $f$;
+BEGIN RAISE EXCEPTION 'Los borradores históricos son inmutables: cree otra revisión'; END $f$;
 REVOKE ALL ON FUNCTION public.daily_draft_no_mutation() FROM PUBLIC,anon,authenticated;
 DO $trg$
 BEGIN
