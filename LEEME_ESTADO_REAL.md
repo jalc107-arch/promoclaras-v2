@@ -37,3 +37,12 @@ Ambas puertas de comercialización siguen **DESACTIVADAS**: `IS_DAILY_COMMERCIAL
 Pronunciamiento regulatorio, modalidad autorizable y jurisdicción, aceptación expresa de Wompi, derechos de uso de resultados, reglas de premio no adjudicado, plan de premios definitivo, impuestos/garantías, horarios oficiales, pruebas externas verificables y revisión final de seguridad. Cualquier sustitución de diseño debe documentarse y contar con decisión expresa.
 
 **No reactivar FuerzaMarket, no alterar CampaClick producción, no levantar barreras de seguridad por pruebas ficticias y no fusionar con `main`.**
+
+## Actualización técnica 20 de octubre de 2026 — premios diarios
+
+- Se recuperó y comprobó escritura directa del conector de GitHub en la cuenta `jalc107-arch` (permiso admin/push).
+- Se agregó el editor privado de premios diarios `services/dailyDayPrizeAdmin.mjs` para una jornada o rango del mes, con tipos excluyentes dinero/especie y presupuestos estimados. Mantiene el último día reservado al único premio mayor configurado por separado.
+- Tabla append-only `public.campaign_daily_day_prize_drafts`, SQL `admin_daily_save_day_prize_drafts`, revocación de escritura pública, bloqueo de campaña pendiente sin permisos/ventas, historial de revisiones, idempotencia por `request_id` y auditoría. Migración `staging_daily_day_prize_drafts_20261020` aplicada **exclusivamente** a Supabase staging `xooxbkawxrdvlvbvkvjy`.
+- GitHub Actions `39469163033`: **162/162 pruebas Node aprobadas**, más pruebas SQL PostgreSQL 17, incluidas rango, revisiones solapadas, duplicados, jornada mayor protegida y campaña tradicional.
+- Commit de código validado: `a1a0dfd6f9d102a5eb0d61c0069dcc8c1b9f5d8c`. Railway staging recibió y confirmó un cambio de **configuración de fuente** apuntando a este SHA; **no se ha podido confirmar aún un nuevo deployment de ese commit**. El último deployment visible sigue `edc2a6e3-bcbe-4256-a99e-8563a82b2a2e` (commit `5f11e0121f02fdb4e0120a9d2e4bef8dc84b01c9`). **No afirmar que el editor diario está activo vía web hasta validar despliegue y prueba HTTP.**
+- Último estado de staging de la campaña: enero 2027 con una revisión mensual, cero premios diarios guardados, cero órdenes y activaciones; doble bloqueo de ventas vigente. FuerzaMarket `INACTIVE`, producción y `main` sin modificación.
