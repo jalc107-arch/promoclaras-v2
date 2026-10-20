@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import {buildMonthlyDraftSchedule} from './dailyDrawSimulation.mjs';
 import {DAILY_PROVIDER,IS_DAILY_COMMERCIALLY_ENABLED} from './sinuanoAccess.mjs';
-const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}-[a-f0-9]{12}$/i;
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MONTH=/^(?:[1-9]|1[0-2])$/;
 const MONEY=/^[1-9]\d{0,11}$/;
 const actor=req=>crypto.createHash('sha256').update(String(req.sessionID||'')).digest('hex');
