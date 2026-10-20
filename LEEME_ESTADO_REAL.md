@@ -38,6 +38,13 @@ Pronunciamiento regulatorio, modalidad autorizable y jurisdicción, aceptación 
 
 **No reactivar FuerzaMarket, no alterar CampaClick producción, no levantar barreras de seguridad por pruebas ficticias y no fusionar con `main`.**
 
+## Incidencia de despliegue staging (20 de octubre de 2026)
+
+- GitHub staging: la rama contiene los cambios y el CI de `1c375a4147edd8a0eb1e01ae98b142e1e7f41da3` aprobó. Código de la funcionalidad: `a1a0dfd6f9d102a5eb0d61c0069dcc8c1b9f5d8c`.
+- Railway: se encontró `source.commitSha` apuntando a un commit fijo antiguo; se retiró ese pin **solo en el ambiente staging** para seguir la rama. La operación de Railway fue aceptada, pero su historial de deployments aún informa como última versión operativa `5f11e0121f02fdb4e0120a9d2e4bef8dc84b01c9`.
+- Este commit documental permite comprobar si la entrega GitHub→Railway se activa con un nuevo push. Si no aparece un deployment más reciente, revisar el disparador GitHub/autodeploy del servicio y usar **Deploy Latest Commit** desde Railway. **No ejecutar `redeploy` sobre el deployment antiguo esperando actualizar código: reutiliza la compilación antigua.**
+- **No afirmar que la versión nueva está en línea hasta ver `SUCCESS` del SHA correcto y validar el editor autenticado.** Permisos, ventas y pagos siguen cerrados; FuerzaMarket sigue `INACTIVE`, producción y `main` intocados.
+
 ## Actualización técnica 20 de octubre de 2026 — premios diarios
 
 - Se recuperó y comprobó escritura directa del conector de GitHub en la cuenta `jalc107-arch` (permiso admin/push).
