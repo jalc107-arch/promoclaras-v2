@@ -6,6 +6,12 @@ export const IS_DAILY_COMMERCIALLY_ENABLED = false;
 
 export const isDailyCampaign = value => String(value?.draw_provider ?? value ?? '') === DAILY_PROVIDER;
 
+// Keep exceptional preparation pages private without hiding traditional
+// campaigns or preventing an authenticated administrator from previewing them.
+export function canViewCampaignDetails({campaign,isAdmin=false}={}) {
+  return !isDailyCampaign(campaign) || isAdmin === true;
+}
+
 export function dailyCampaignMayCollect({campaign,authorization,implemented=IS_DAILY_COMMERCIALLY_ENABLED}={}) {
   return implemented === true && isDailyCampaign(campaign) && campaign?.status === 'active'
     && campaign?.is_public === true && authorization?.approval_status === 'approved'

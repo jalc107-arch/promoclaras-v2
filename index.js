@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { registerDailyDrawFailClosedGuards, isDailyCampaign } from "./services/sinuanoAccess.mjs";
+import { registerDailyDrawFailClosedGuards, isDailyCampaign, canViewCampaignDetails } from "./services/sinuanoAccess.mjs";
 import { finalizeDailyPaidOrderIfEnabled } from "./services/dailyDrawPaymentFinalizer.mjs";
 import { handleSignedDailyWompiEvent } from "./services/dailyWompiWebhookLedger.mjs";
 import { registerDailyDrawAdminRoutes } from "./services/dailyDrawAdmin.mjs";
@@ -9871,6 +9871,13 @@ app.get("/campanas/:slug", async (req, res) => {
       .single();
 
     if (error || !campaign) {
+      return res.status(404).send("Campaña no encontrada");
+    }
+
+    // The exceptional daily campaign is a private preparation fixture.
+    // Its details must not be discoverable through a guessed/shared slug.
+    // Admins can still preview it while signed in; commerce is separately blocked.
+    if (!canViewCampaignDetails({ campaign, isAdmin: req.session?.isAdmin })) {
       return res.status(404).send("Campaña no encontrada");
     }
 
