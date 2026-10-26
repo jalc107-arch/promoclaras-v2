@@ -8,6 +8,9 @@
     "start": "node index.js",
     "test": "node --test"
   },
+  "overrides": {
+    "body-parser": "1.20.9"
+  },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@supabase/supabase-js": "^2.49.4",
