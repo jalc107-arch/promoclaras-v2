@@ -5,14 +5,14 @@ import {
   buildAvailabilitySnapshot,
   getAllLotteryNumbersByDrawMode,
   INFOGRAPHIC_CODE_STATUSES
-} from "../services/campaignAvailabilityService.js";
-import { splitInfographicSheets } from "../lib/infographic/sheetBuilder.js";
-import { validateInfographicData, validateRenderedSheet } from "../lib/infographic/validators.js";
-import { resolveTheme } from "../lib/infographic/themeEngine.js";
-import { renderInfographicSvg } from "../lib/infographic/svgRenderer.js";
-import { createValidatedQr } from "../services/qrService.js";
-import { buildShareText } from "../services/shareTextBuilder.js";
-import { createPromotionalContentService } from "../services/promotionalContentService.js";
+} from "./services/campaignAvailabilityService.js";
+import { splitInfographicSheets } from "./lib/infographic/sheetBuilder.js";
+import { validateInfographicData, validateRenderedSheet } from "./lib/infographic/validators.js";
+import { resolveTheme } from "./lib/infographic/themeEngine.js";
+import { renderInfographicSvg } from "./lib/infographic/svgRenderer.js";
+import { createValidatedQr } from "./services/qrService.js";
+import { buildShareText } from "./services/shareTextBuilder.js";
+import { createPromotionalContentService } from "./services/promotionalContentService.js";
 
 function makeModel(drawMode = "loteria_3_primeras", unavailable = []) {
   const codes = getAllLotteryNumbersByDrawMode(drawMode);
