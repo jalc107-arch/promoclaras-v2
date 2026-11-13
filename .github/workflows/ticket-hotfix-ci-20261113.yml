@@ -1,0 +1,24 @@
+name: Ticket hotfix validation (isolated)
+on:
+  push:
+    branches:
+      - fix/released-ticket-payment-finalization-20261113
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Validate Node syntax
+        run: node --check index.js
+      - name: Validate ticket regression tests
+        run: node --test tests/ticketAvailabilityService.test.js
+      - name: Run project tests
+        run: npm test
