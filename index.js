@@ -37,6 +37,7 @@ import {
   buildInstallmentReversalState,
   matchesApprovedWompiTransaction
 } from "./services/wompiPaymentStateService.js";
+import { shouldReconcileVerifiedApprovedPayment, shouldResendVerifiedOrderWhatsApp } from "./services/wompiApprovedReconciliation.js";
 import { buildTicketAvailability } from "./services/ticketAvailabilityService.js";
 
 const app = express();
@@ -14032,6 +14033,23 @@ if (transactionCurrency !== "COP") {
   }
 
   if (!claimedPayment) {
+    // Wompi was queried above using server-side credentials, with exact
+    // reference, amount and currency verified before entering this branch.
+    const recoveryContext = {
+      verifiedStatus: String(transactionStatus || ""),
+      verifiedTransactionId: wompiTransactionId,
+      paymentStatus: payment.status,
+      recordedTransactionId: String(payment.provider_transaction_id || ""),
+      orderStatus: order.payment_status,
+      whatsappSent: order.whatsapp_sent
+    };
+    if (shouldReconcileVerifiedApprovedPayment(recoveryContext)) {
+      await finalizePaidOrder(orderId);
+      await sendOrderCouponsWhatsApp(orderId);
+      await processReferralReward(orderId);
+    } else if (shouldResendVerifiedOrderWhatsApp(recoveryContext)) {
+      await sendOrderCouponsWhatsApp(orderId);
+    }
     return res.redirect(buildPublicOrderPath(orderId));
   }
 
