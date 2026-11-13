@@ -28,6 +28,7 @@ import {
   buildInstallmentReversalState,
   matchesApprovedWompiTransaction
 } from "./services/wompiPaymentStateService.js";
+import { buildTicketAvailability } from "./services/ticketAvailabilityService.js";
 
 const app = express();
 
@@ -2846,9 +2847,8 @@ const pageSize = 1000;
 while (true) {
   const { data: ticketsPage, error: existingError } = await supabase
     .from("tickets")
-    .select("ticket_code, combination")
+    .select("ticket_code, combination, status")
     .eq("rifa_id", orderData.rifa_id)
-    .in("status", ["active", "reserved_installment"])
     .range(from, from + pageSize - 1);
 
   if (existingError) throw existingError;
@@ -2862,13 +2862,7 @@ while (true) {
   from += pageSize;
 }
 
-  const usedTicketCodes = new Set(
-    (existingTickets || []).map(t => String(t.ticket_code))
-  );
-
-  const usedCombinations = new Set(
-    (existingTickets || []).map(t => String(t.combination))
-  );
+  const { usedTicketCodes, usedCombinations } = buildTicketAvailability(existingTickets);
 
   const assignedTickets = [];
   let current = 1;
