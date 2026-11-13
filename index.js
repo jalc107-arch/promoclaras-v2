@@ -28,6 +28,8 @@ import {
   buildInstallmentReversalState,
   matchesApprovedWompiTransaction
 } from "./services/wompiPaymentStateService.js";
+import { buildTicketAvailability } from "./services/ticketAvailabilityService.js";
+import { shouldReconcileVerifiedApprovedPayment, shouldResendVerifiedOrderWhatsApp } from "./services/wompiApprovedReconciliation.js";
 
 const app = express();
 
@@ -2846,9 +2848,8 @@ const pageSize = 1000;
 while (true) {
   const { data: ticketsPage, error: existingError } = await supabase
     .from("tickets")
-    .select("ticket_code, combination")
+    .select("ticket_code, combination, status")
     .eq("rifa_id", orderData.rifa_id)
-    .in("status", ["active", "reserved_installment"])
     .range(from, from + pageSize - 1);
 
   if (existingError) throw existingError;
@@ -2862,13 +2863,7 @@ while (true) {
   from += pageSize;
 }
 
-  const usedTicketCodes = new Set(
-    (existingTickets || []).map(t => String(t.ticket_code))
-  );
-
-  const usedCombinations = new Set(
-    (existingTickets || []).map(t => String(t.combination))
-  );
+  const { usedTicketCodes, usedCombinations } = buildTicketAvailability(existingTickets);
 
   const assignedTickets = [];
   let current = 1;
@@ -13996,6 +13991,23 @@ if (transactionCurrency !== "COP") {
   }
 
   if (!claimedPayment) {
+    // The server-side Wompi query above validated transaction reference,
+    // amount and currency. Never reconcile from a local approved flag alone.
+    const recoveryContext = {
+      verifiedStatus: String(transactionStatus || ""),
+      verifiedTransactionId: wompiTransactionId,
+      paymentStatus: payment.status,
+      recordedTransactionId: String(payment.provider_transaction_id || ""),
+      orderStatus: order.payment_status,
+      whatsappSent: order.whatsapp_sent
+    };
+    if (shouldReconcileVerifiedApprovedPayment(recoveryContext)) {
+      await finalizePaidOrder(orderId);
+      await sendOrderCouponsWhatsApp(orderId);
+      await processReferralReward(orderId);
+    } else if (shouldResendVerifiedOrderWhatsApp(recoveryContext)) {
+      await sendOrderCouponsWhatsApp(orderId);
+    }
     return res.redirect(buildPublicOrderPath(orderId));
   }
 
