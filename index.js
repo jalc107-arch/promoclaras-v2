@@ -17650,9 +17650,88 @@ async function cleanupPhoneVerificationChallenges() {
   if (error) throw error;
 }
 
+// One-time, date-scoped recovery for Wompi-approved public orders left pending
+// by the November 13 ticket uniqueness incident. Never trusts the DB flag alone.
+async function reconcileVerifiedNovember13Payments() {
+  // Do not run from Sandbox, staging, or unknown database projects.
+  if (!String(WOMPI_PUBLIC_KEY || "").startsWith("pub_prod_") ||
+      !String(SUPABASE_URL || "").includes("vrmctjgxvjyxepaefxzu") ||
+      !WOMPI_PRIVATE_KEY) return;
+
+  const { data: pending, error } = await supabase
+    .from("orders")
+    .select("id, qty, created_at, payment_status, order_source, rifas(*)")
+    .eq("payment_status", "created")
+    .eq("order_source", "public")
+    .gte("created_at", "2026-11-13T15:00:00Z")
+    .lt("created_at", "2026-11-13T19:00:00Z")
+    .limit(10);
+
+  if (error) throw error;
+
+  for (const order of pending || []) {
+    const ref = String(order.id).slice(0, 8);
+    try {
+      if (isDailyCampaign(order.rifas) || Number(order.qty) < 1) continue;
+      if (Date.now() - new Date(order.created_at).getTime() < 120000) continue;
+      const { data: payment, error: payError } = await supabase
+        .from("payments")
+        .select("id, order_id, amount, status, provider, external_reference, provider_transaction_id")
+        .eq("order_id", order.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (payError) throw payError;
+      if (!payment || payment.status !== "approved" || payment.provider !== "wompi") continue;
+      const txnId = String(payment.provider_transaction_id || "");
+      if (!/^[A-Za-z0-9_-]{1,100}$/.test(txnId)) continue;
+      const response = await fetch(
+        `https://production.wompi.co/v1/transactions/${encodeURIComponent(txnId)}`,
+        { headers: { Authorization: `Bearer ${WOMPI_PRIVATE_KEY}` }, redirect: "error", signal: AbortSignal.timeout(15000) }
+      );
+      if (!response.ok) {
+        console.error("Wompi recovery provider check failed", ref, response.status);
+        continue;
+      }
+      const data = (await response.json())?.data;
+      if (!data || String(data.id || "") !== txnId ||
+          String(data.status || "") !== "APPROVED" ||
+          String(data.reference || "") !== String(payment.external_reference || "") ||
+          String(data.currency || "") !== "COP" ||
+          Number(data.amount_in_cents || 0) !== Math.round(Number(payment.amount || 0) * 100)) {
+        console.error("Wompi recovery mismatch, skipped", ref);
+        continue;
+      }
+
+      // finalizePaidOrder uses an atomic DB assignment and checks existing tickets.
+      await finalizePaidOrder(order.id);
+      const { data: done, error: doneError } = await supabase
+        .from("orders").select("payment_status,qty").eq("id",order.id).single();
+      const { count: active, error: countError } = await supabase
+        .from("tickets").select("id", { count: "exact", head: true })
+        .eq("order_id", order.id).eq("status", "active");
+      if (doneError || countError || done?.payment_status !== "paid" || active !== Number(done.qty)) {
+        console.error("Wompi recovery finalization incomplete", ref);
+        continue;
+      }
+      const whatsapp = await sendOrderCouponsWhatsApp(order.id);
+      await processReferralReward(order.id);
+      console.log("Wompi verified recovery", ref, "active_codes", active, "whatsapp_ok", Boolean(whatsapp?.ok));
+    } catch (err) {
+      console.error("Wompi verified recovery error", ref, String(err?.message || err).slice(0,200));
+    }
+  }
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
 });
+
+setTimeout(() => {
+  reconcileVerifiedNovember13Payments().catch(error => {
+    console.error("November 13 verified recovery failed", String(error?.message || error).slice(0,200));
+  });
+}, 15000).unref();
 
 const installmentReminderInterval = setInterval(() => {
   processInstallmentReminders().catch(error => {
